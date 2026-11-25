@@ -29,6 +29,7 @@ export function PromptCard({ entry, botChat }: PromptCardProps) {
   const [freeTextKey, setFreeTextKey] = useState<string | null>(null);
   const [freeTextValue, setFreeTextValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   if (view.mode === "hidden" || view.prompt == null) return null;
   const prompt = view.prompt;
@@ -37,6 +38,7 @@ export function PromptCard({ entry, botChat }: PromptCardProps) {
   async function answer(action: "option" | "text" | "next" | "cancel", extra: { readonly key?: string; readonly text?: string } = {}) {
     if (botId == null || submitting) return;
     setSubmitting(true);
+    setErrorMessage("");
     try {
       await client.call("prompt.answer", { botId, signature: prompt.signature, action, ...extra });
       setFreeTextKey(null);
@@ -44,7 +46,9 @@ export function PromptCard({ entry, botChat }: PromptCardProps) {
     } catch (error) {
       // `prompt_changed`/`not_blocked`/`answer_in_flight` all resolve themselves once the chat's live
       // `pendingPrompt` updates and this view re-derives on the next render -- nothing else to do here.
-      if (!isAppApiError(error)) throw error;
+      if (!isAppApiError(error) || !["prompt_changed", "not_blocked", "answer_in_flight"].includes(error.code)) {
+        setErrorMessage(error instanceof Error ? error.message : String(error));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -85,6 +89,12 @@ export function PromptCard({ entry, botChat }: PromptCardProps) {
         {prompt.progress != null && <span className={styles["hb-prompt-progress"]}>{t("conversation.questionProgress", { done: prompt.progress.done, total: prompt.progress.total })}</span>}
       </div>
       <PromptBody body={prompt.body} />
+      {interactive && prompt.options.length === 0 && botId && (
+        <Button variant="secondary" size="sm" onClick={() => {
+          void client.call("bot.focus", { botId }).catch((error: unknown) => setErrorMessage(error instanceof Error ? error.message : String(error)));
+        }}>{t("conversation.openInHerdr")}</Button>
+      )}
+      {errorMessage && <div role="alert">{errorMessage}</div>}
 
       {view.mode === "inert" && <div className={styles["hb-prompt-inert"]}>{t("conversation.answeredInTerminal")}</div>}
 
