@@ -8,6 +8,10 @@ import "./styles/tokens.css";
 async function resolveBridge() {
   const isDemo = new URLSearchParams(window.location.search).has("demo");
   if (!isDemo && window.herdrBot != null) return window.herdrBot;
+  if (!isDemo && "__TAURI_INTERNALS__" in window) {
+    const { createTauriBridge } = await import("./data/tauri-bridge.ts");
+    return createTauriBridge();
+  }
   const { createFakeBridge } = await import("./dev/fake-bridge.ts");
   return createFakeBridge();
 }
@@ -28,4 +32,7 @@ async function main() {
   );
 }
 
-void main();
+void main().catch((error: unknown) => {
+  const root = document.getElementById("root");
+  if (root) root.textContent = "herdr-bot: " + String(error);
+});

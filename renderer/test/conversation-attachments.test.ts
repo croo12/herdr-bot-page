@@ -37,4 +37,5 @@ test("inferAttachmentKind maps common extensions", () => {
 test("attachmentFileName takes everything after the last slash", () => {
   assert.equal(attachmentFileName("/staged/demo-attach.txt"), "demo-attach.txt");
   assert.equal(attachmentFileName("bare.txt"), "bare.txt");
+  assert.equal(attachmentFileName("C:\\작업 폴더\\사진.png"), "사진.png");
 });

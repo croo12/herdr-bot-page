@@ -1,3 +1,17 @@
+## Windows desktop port
+
+The Windows x64 installer includes a Tauri 2 desktop app and a native Rust CLI. The Rust host stores chats in SQLite and runs agents through a local herdr session. Install herdr 0.9 or newer and sign in to the agent CLI you intend to use. Node.js is only needed to build the React frontend.
+
+To build on Windows, install Node.js 24+, stable Rust for MSVC, Visual Studio C++ Build Tools and WebView2. Run the following commands at the repository root.
+
+```powershell
+npm ci --workspace renderer --include-workspace-root
+npm run test:native
+npm run build
+```
+
+Run the installer under `src-tauri/target/release/bundle/nsis/`. Use `npm start` for development. The app installs its command-line client in `%USERPROFILE%\.herdr-bot\bin\herdr-bot.exe`. [한국어 사용 안내](README.ko.md#windows-데스크톱-앱)
+
 <div align="center">
 
 <img src="desktop/build/icon.png" width="112" alt="herdr-bot app icon">

@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Native window operations used by the local chat UI",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-minimize", "core:window:allow-toggle-maximize", "core:window:allow-close", "core:window:allow-set-size"]
+}

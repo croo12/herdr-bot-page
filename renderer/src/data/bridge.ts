@@ -36,6 +36,7 @@ export interface UpdateStatus {
 }
 
 export interface HerdrBridge {
+  readonly runtime?: "tauri";
   readonly api: AppApiTransport;
   readonly platform: NodeJS.Platform;
   readonly isDev: boolean;

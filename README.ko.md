@@ -27,6 +27,34 @@ herdr-bot은 [herdr](https://herdr.dev) 패인에서 돌아가는 에이전트�
 
 모든 것은 내 컴퓨터 안에서만 돌아갑니다. 클라우드 런타임도, 앱 안의 계정이나 결제도 없습니다.
 
+## Windows 데스크톱 앱
+
+이 브랜치의 Windows 앱은 Tauri 2와 WebView2를 사용합니다. 봇 엔진과 명령줄 도구는 Rust로 작성했습니다. 설치 파일에 두 실행 파일이 들어 있어 앱을 사용할 때 Node.js나 Rust를 따로 설치할 필요가 없습니다.
+
+1. Windows x64 설치 파일 `herdr-bot_1.3.0_x64-setup.exe`를 실행하고 시작 메뉴에서 **herdr-bot**을 엽니다.
+2. PowerShell에서 `herdr --version`이 동작하는지 확인합니다. 봇을 실행하려면 Windows용 herdr 0.9 이상과 사용할 에이전트 CLI가 필요합니다. 에이전트에 로그인한 다음 앱에서 **새 Bot 만들기**를 선택합니다.
+3. 프로바이더와 모델을 고르고 작업 폴더를 선택합니다. 첫 실행 때 에이전트가 로그인이나 폴더 신뢰를 요청하면 **herdr에서 열기**로 해당 터미널에서 마무리합니다.
+
+Rust 호스트는 봇, 방, 대화 기록을 `%USERPROFILE%\.herdr-bot\chat.sqlite3`에 저장합니다. 첨부 파일은 같은 폴더의 `attachments`에 있습니다. 데이터 폴더는 `HERDR_BOT_HOME`, herdr 실행 파일은 `HERDR_BIN_PATH`, 세션 이름은 `HERDR_BOT_SESSION`으로 지정할 수 있습니다. 앱을 한 번 실행한 뒤 PowerShell에서 다음 명령을 쓸 수 있습니다.
+
+```powershell
+& "$env:USERPROFILE\.herdr-bot\bin\herdr-bot.exe" status
+& "$env:USERPROFILE\.herdr-bot\bin\herdr-bot.exe" --help
+```
+
+### Windows에서 소스 빌드
+
+Node.js 24 이상, Rust stable MSVC, Visual Studio Build Tools의 **C++를 사용한 데스크톱 개발**, WebView2가 필요합니다. 이 체크아웃의 루트에서 실행합니다.
+
+```powershell
+npm ci --workspace renderer --include-workspace-root
+npm start              # Tauri 개발 모드
+npm run test:native    # Rust 엔진과 CLI 통합 테스트
+npm run build          # Windows x64에서 NSIS 설치 파일 생성
+```
+
+설치 파일은 `src-tauri\target\release\bundle\nsis\`에 생성됩니다. `native/`는 봇 엔진과 CLI, `src-tauri/`는 데스크톱 창과 파일 처리, `renderer/`는 React 화면입니다. 아래 Homebrew와 DMG 안내는 기존 macOS 배포판용입니다.
+
 ## 한눈에 보기
 
 - **DM과 방.** 봇 하나와 대화하거나, 최대 여섯 봇을 한 방에 넣으세요. 차례대로 말하고, `@멘션`으로 일을 넘기고, 더 할 말이 없으면 멈춥니다.

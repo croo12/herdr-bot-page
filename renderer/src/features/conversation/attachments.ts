@@ -68,6 +68,6 @@ export function inferAttachmentKind(path: string): AttachmentKind {
 /** The display filename for an attachment chip -- everything after the last `/` (paths are always
  * forward-slash, staged server-side; see desktop/src/attachments.ts). */
 export function attachmentFileName(path: string): string {
-  const index = path.lastIndexOf("/");
+  const index = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return index === -1 ? path : path.slice(index + 1);
 }

@@ -7,5 +7,11 @@ import type { Locale } from "../i18n/locale.ts";
 const INTL_LOCALE: Record<Locale, string> = { en: "en-US", ko: "ko-KR" };
 
 export function formatClockTime(timestampMs: number, locale: Locale): string {
-  return new Intl.DateTimeFormat(INTL_LOCALE[locale], { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(timestampMs));
+  const date = new Date(timestampMs);
+  // Some Windows ICU builds return literal AM/PM even with the ko-KR locale.
+  if (locale === "ko") {
+    const hours = date.getHours();
+    return `${hours < 12 ? "오전" : "오후"} ${hours % 12 || 12}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], { hour: "numeric", minute: "2-digit", hour12: true }).format(date);
 }

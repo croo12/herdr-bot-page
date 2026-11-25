@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useBridge } from "../../data/BridgeContext.tsx";
 import { useActiveChat } from "../../data/hooks/useActiveChat.ts";
 import { useStoreContext } from "../../data/store/StoreProvider.tsx";
 import { useT } from "../../i18n/TranslationProvider.tsx";
@@ -26,6 +27,7 @@ export interface QuickCreateBotProps {
  * sidebar's "+" button. Shared by the onboarding empty state and the "+"
  * menu's "Create a new Bot" action. */
 export function QuickCreateBot({ showExplainer = false, onAdvanced, onDone }: QuickCreateBotProps) {
+  const bridge = useBridge();
   const { client } = useStoreContext();
   const { setActiveChatId } = useActiveChat();
   const { t, locale } = useT();
@@ -39,7 +41,14 @@ export function QuickCreateBot({ showExplainer = false, onAdvanced, onDone }: Qu
     setBusy(true);
     setError(null);
     try {
+      let cwd: string | undefined;
+      if (bridge.runtime === "tauri" && !(await client.call("bot.defaults", undefined)).cwd) {
+        const selected = await bridge.pickDirectory();
+        if (!selected) return;
+        cwd = selected;
+      }
       const { chat } = await client.call("bot.quickCreate", {
+        cwd,
         requestId: crypto.randomUUID(),
         locale,
         provider: launch.provider,

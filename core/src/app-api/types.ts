@@ -223,7 +223,7 @@ export interface AppApiMethods {
   /** `provider` is required, as are `model`/`reasoningEffort` whenever that provider supports choosing
    * them (`bot.listModels`, `ProviderDescriptor.supportsReasoning`) -- quick create never picks defaults. */
   "bot.quickCreate": {
-    params: { readonly requestId: string; readonly locale: OnboardingLocale; readonly provider: string; readonly model?: string; readonly reasoningEffort?: ReasoningEffort; readonly name?: string; readonly avatarColor?: string };
+    params: { readonly requestId: string; readonly locale: OnboardingLocale; readonly provider: string; readonly model?: string; readonly reasoningEffort?: ReasoningEffort; readonly name?: string; readonly avatarColor?: string; readonly cwd?: string };
     result: { readonly chat: ChatSummary };
   };
   "bot.retrySetup": { params: { readonly botId: string }; result: { readonly chat: ChatSummary } };

@@ -95,6 +95,7 @@ export function SettingsDialog() {
           { value: "auto", label: t("dialogs.new.permissions.auto") },
         ]}
       />
+      {bridge.platform === "darwin" && bridge.runtime !== "tauri" && <>
       <Select
         layout="inline"
         label={t("dialogs.settings.terminal")}
@@ -110,6 +111,7 @@ export function SettingsDialog() {
         ]}
       />
       <p className={styles["hb-settings-help"]}>{t("dialogs.settings.terminalHelp")}</p>
+      </>}
 
       <div className={styles["hb-settings-version-row"]}>
         <span>{t("dialogs.settings.version", { version: version ?? "…" })}</span>
