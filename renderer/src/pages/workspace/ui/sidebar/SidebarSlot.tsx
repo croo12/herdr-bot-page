@@ -1,10 +1,10 @@
 import { Plus, Search, Settings } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { useActiveChat } from "../../model/useActiveChat.tsx";
-import { useChats } from "../../model/useChats.tsx";
+import { useChatsQuery } from "../../model/useChats.tsx";
 import { usePins } from "../../model/usePins.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
-import { Avatar } from "#shared/ui/index.tsx";
+import { Avatar, Button, Spinner } from "#shared/ui/index.tsx";
 import type { SidebarMode } from "../../model/layout/sidebar-width.tsx";
 import { useDialogs } from "../dialogs/useDialogs.tsx";
 import { requestPaletteOpen } from "../../model/palette/palette-bus.tsx";
@@ -25,7 +25,8 @@ export interface SidebarSlotProps {
 export function SidebarSlot({ mode }: SidebarSlotProps) {
   const { t, locale } = useT();
   const dialogs = useDialogs();
-  const chats = useChats();
+  const query = useChatsQuery();
+  const chats = query.data ?? [];
   const { activeChatId, setActiveChatId } = useActiveChat();
   const pins = usePins();
   const rail = mode === "rail";
@@ -56,7 +57,9 @@ export function SidebarSlot({ mode }: SidebarSlotProps) {
         )}
       </div>
 
-      {isEmpty ? (
+      {query.isPending ? <Spinner /> : query.isError && !query.data ? (
+        <div role="alert">{query.error.message} <Button onClick={() => void query.refetch()}>{t("common.retry")}</Button></div>
+      ) : isEmpty ? (
         <div className={styles["hb-sidebar-list"]}>
           <button type="button" className={`${styles["hb-sidebar-row"]} hb-no-drag`} onClick={() => dialogs.openNewChatMenu()}>
             <Avatar kind="user" label="+" size="md" />

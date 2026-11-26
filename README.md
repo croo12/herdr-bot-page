@@ -27,6 +27,8 @@ Windows x64 설치 파일은 `desktop/target/release/bundle/nsis/`에 생성됩�
 
 렌더러의 TypeScript 소스, 테스트, Vite 설정은 모두 `.tsx`로 작성합니다. `npm test --workspace renderer`로 확장자 규칙과 렌더러 테스트를 확인할 수 있습니다.
 
+봇·방 목록, 사용자 정보, 설정, 대화 기록은 TanStack Query가 캐시합니다. 대화 기록은 방별로 과거 페이지를 불러오며, Tauri 이벤트가 도착하면 해당 캐시를 갱신합니다. 이벤트 일련번호가 건너뛰면 열린 화면의 데이터를 다시 조회합니다. 선택한 대화와 작성 중인 초안은 화면의 로컬 상태로 관리합니다.
+
 `renderer/src/app`은 앱 진입점과 전역 프로바이더를, `pages/workspace`는 채팅 화면과 그 상태를 관리합니다. `features/compose-message`와 `features/answer-prompt`는 메시지 작성과 권한·질문 응답을 담당합니다. 페이지와 기능은 각 폴더의 `index.tsx`로 공개합니다. Tauri 통신, 공용 UI와 번역은 `shared`에 있습니다.
 
 ## Rust 코드 구조

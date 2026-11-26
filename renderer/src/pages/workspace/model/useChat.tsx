@@ -1,33 +1,19 @@
-import { useMemo, useSyncExternalStore } from "react";
-import { useStoreContext } from "./store/StoreProvider.tsx";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import type { ChatSummary } from "#shared/api/index.tsx";
+import { useStoreContext } from "./store/StoreProvider.tsx";
+import { chatsQuery } from "./store/queries.tsx";
 
-/** A single chat by id, or `null` if it doesn't exist (yet, or ever). Returns the exact `ChatSummary`
- * object from the store -- stable by reference until that chat's summary actually changes. */
 export function useChat(chatId: string | null): ChatSummary | null {
-  const { store } = useStoreContext();
-  return useSyncExternalStore(store.subscribe, () => {
-    if (chatId == null) return null;
-    return store.getState().chats.find((chat) => chat.id === chatId) ?? null;
-  });
+  const { client } = useStoreContext();
+  return useQuery({ ...chatsQuery(client), select: chats => chats.find(chat => chat.id === chatId) }).data ?? null;
 }
 
-/** Resolves a room's member ids to their `ChatSummary` rows (for the stacked avatar / presence strip).
- * Members that can't be found (e.g. a deleted bot) are silently skipped.
- *
- * Reads the raw `chats` array via `useSyncExternalStore` (a stable reference the store never mutates
- * in place) and derives the member list with `useMemo` -- `getSnapshot` itself must never allocate,
- * or React sees a "new" value on every render and tears/loops. */
 export function useChatMembers(chat: ChatSummary | null): readonly ChatSummary[] {
-  const { store } = useStoreContext();
-  const chats = useSyncExternalStore(store.subscribe, () => store.getState().chats);
+  const { client } = useStoreContext();
+  const { data: chats } = useQuery(chatsQuery(client));
   return useMemo(() => {
-    if (chat == null || chat.memberIds.length === 0) return [];
-    const members: ChatSummary[] = [];
-    for (const id of chat.memberIds) {
-      const member = chats.find((c) => c.id === id);
-      if (member != null) members.push(member);
-    }
-    return members;
+    if (!chat || !chats) return [];
+    return chat.memberIds.flatMap(id => chats.find(member => member.id === id) ?? []);
   }, [chat, chats]);
 }

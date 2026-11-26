@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useActiveChat } from "../../model/useActiveChat.tsx";
-import { useChats } from "../../model/useChats.tsx";
+import { useChatsQuery } from "../../model/useChats.tsx";
 import { dialogsStore } from "../../model/dialogs/dialogs-store.tsx";
 import { NewChatMenu } from "./NewChatMenu.tsx";
 import { OnboardingEmptyState } from "./OnboardingEmptyState.tsx";
@@ -27,11 +27,12 @@ import { OnboardingEmptyState } from "./OnboardingEmptyState.tsx";
  */
 export function useMainColumnOverride(): ReactNode | null {
   const newMenuOpen = useSyncExternalStore(dialogsStore.subscribe, () => dialogsStore.getState().newMenuOpen);
-  const chats = useChats();
+  const { data: chats } = useChatsQuery();
   const { activeChatId } = useActiveChat();
-  const activeChatExists = activeChatId != null && chats.some((chat) => chat.id === activeChatId);
 
   if (newMenuOpen) return <NewChatMenu />;
+  if (!chats) return null;
+  const activeChatExists = activeChatId != null && chats.some((chat) => chat.id === activeChatId);
   if (!activeChatExists && !chats.some((chat) => chat.kind === "bot")) return <OnboardingEmptyState />;
   return null;
 }

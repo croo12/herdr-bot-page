@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { settingsQuery } from "../../model/store/queries.tsx";
 import { useActiveChat } from "../../model/useActiveChat.tsx";
 import { useStoreContext } from "../../model/store/StoreProvider.tsx";
 import { useDialogHost } from "#shared/ui/DialogHost.tsx";
@@ -15,6 +17,7 @@ import styles from "./NewDialog.module.css";
 
 export function NewBotForm() {
   const { client } = useStoreContext();
+  const cache = useQueryClient();
   const { setActiveChatId } = useActiveChat();
   const dialogHost = useDialogHost();
   const { t } = useT();
@@ -27,14 +30,14 @@ export function NewBotForm() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([client.call("bot.defaults", undefined), client.call("settings.get", undefined)]).then(([defaults, settings]) => {
+    void Promise.all([client.call("bot.defaults", undefined), cache.fetchQuery(settingsQuery(client))]).then(([defaults, settings]) => {
       if (cancelled) return;
       setState(emptyBotFormState(resolveBotFormDefaults(defaults, settings)));
     });
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [cache, client]);
 
   if (state == null) return null;
 

@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChatMembers } from "../../model/useChat.tsx";
 import { useChats } from "../../model/useChats.tsx";
 import type { TranscriptHandle } from "../../model/useTranscript.tsx";
-import { Spinner } from "#shared/ui/index.tsx";
+import { Button, Spinner } from "#shared/ui/index.tsx";
+import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import type { ChatSummary, TranscriptEntry } from "#shared/api/index.tsx";
 import { DateSeparator } from "./DateSeparator.tsx";
 import { EmptyChat } from "./EmptyChat.tsx";
@@ -33,6 +34,7 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
   const members = useChatMembers(chat);
   const chats = useChats();
   const { client } = useStoreContext();
+  const { t } = useT();
   const jumpTarget = useJumpTarget(chatId);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,10 +121,15 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `transcript.loadOlder` is stable per chat; re-running on every entries change is intentional (that's how paging-until-found progresses).
   }, [jumpTarget, entriesById]);
 
+  const retry = transcript.error && (
+    <div role="alert">
+      {transcript.error.message} <Button onClick={() => void transcript.retry()}>{t("common.retry")}</Button>
+    </div>
+  );
   if (!transcript.loaded) {
     return (
       <div className={styles["hb-transcript"]}>
-        <Spinner />
+        {retry || <Spinner />}
       </div>
     );
   }
@@ -130,6 +137,7 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
   return (
     <div ref={containerRef} className={styles["hb-transcript"]} onScroll={handleScroll}>
       <div ref={contentRef} className={styles["hb-transcript-content"]}>
+        {retry}
         {transcript.loadingOlder && (
           <div className={styles["hb-transcript-loading-older"]}>
             <Spinner />

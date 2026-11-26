@@ -1,26 +1,19 @@
-import { useCallback, useSyncExternalStore } from "react";
-import { useStoreContext } from "./store/StoreProvider.tsx";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AppSettings } from "#shared/api/index.tsx";
+import { useStoreContext } from "./store/StoreProvider.tsx";
+import { settingsKey, settingsQuery } from "./store/queries.tsx";
 
-export interface SettingsHandle {
-  readonly settings: AppSettings | null;
-  update(patch: Partial<AppSettings>): Promise<AppSettings>;
-}
-
-/** App-wide defaults (`settings.get`/`settings.update`) -- the New Bot dialog and quick-create's
- * fallback values. An explicit `null` field clears it; an absent key leaves it unchanged. */
-export function useSettings(): SettingsHandle {
-  const { store, client } = useStoreContext();
-  const settings = useSyncExternalStore(store.subscribe, () => store.getState().settings);
-
-  const update = useCallback(
-    async (patch: Partial<AppSettings>) => {
-      const next = await client.call("settings.update", patch);
-      store.setState({ ...store.getState(), settings: next });
-      return next;
+export function useSettings() {
+  const { client } = useStoreContext();
+  const cache = useQueryClient();
+  const { data } = useQuery(settingsQuery(client));
+  const mutation = useMutation({
+    scope: { id: "workspace-settings" },
+    mutationFn: (patch: Partial<AppSettings>) => client.call("settings.update", patch),
+    onSuccess: async settings => {
+      await cache.cancelQueries({ queryKey: settingsKey });
+      cache.setQueryData(settingsKey, settings);
     },
-    [client, store],
-  );
-
-  return { settings, update };
+  });
+  return { settings: data ?? null, update: mutation.mutateAsync };
 }

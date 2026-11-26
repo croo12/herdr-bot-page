@@ -32,10 +32,8 @@ function matches<K extends AppApiEventType>(types: K | readonly K[] | "*", type:
 export function createAppClient(transport: AppApiTransport, options: AppApiClientOptions = {}): AppApiClient {
   let seen: number | null = null;
 
-  transport.subscribe((event) => {
-    if (seen !== null && event.seq !== seen + 1) options.onResyncNeeded?.();
-    seen = event.seq;
-  });
+  const listeners = new Set<(event: AppApiEvent) => void>();
+  let disconnect: (() => void) | undefined;
 
   return {
     async call(method, params) {
@@ -46,9 +44,23 @@ export function createAppClient(transport: AppApiTransport, options: AppApiClien
       }
     },
     subscribe(types, listener) {
-      return transport.subscribe((event) => {
+      const onEvent = (event: AppApiEvent) => {
         if (matches(types, event.type)) listener(event as never);
+      };
+      listeners.add(onEvent);
+      disconnect ??= transport.subscribe(event => {
+        const missedEvents = seen !== null && event.seq !== seen + 1;
+        seen = event.seq;
+        for (const notify of listeners) notify(event);
+        if (missedEvents) options.onResyncNeeded?.();
       });
+      return () => {
+        listeners.delete(onEvent);
+        if (listeners.size === 0) {
+          disconnect?.();
+          disconnect = undefined;
+        }
+      };
     },
     lastSeq() {
       return seen;

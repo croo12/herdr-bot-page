@@ -2,6 +2,7 @@
  * feature's own `i18n.tsx`, not here -- this file is only for genuinely cross-cutting vocabulary. */
 export const en = {
   "common.cancel": "Cancel",
+  "common.retry": "Retry",
   "common.close": "Close",
   "common.delete": "Delete",
   "common.choose": "Choose…",
@@ -13,6 +14,7 @@ export const en = {
 
 export const ko = {
   "common.cancel": "취소",
+  "common.retry": "다시 시도",
   "common.close": "닫기",
   "common.delete": "삭제",
   "common.choose": "선택…",
