@@ -49,14 +49,7 @@ fn serve_client(mut stream: TcpStream, engine: &Arc<Engine>, secret: &str) -> Re
         bail!("invalid token")
     }
     let method = v["method"].as_str().unwrap_or_default();
-    // A pane's permission decision is a reply to a specific room message.
-    let res = if method == "prompt.answer" {
-        Err(anyhow::anyhow!(
-            "invalid_args: this action requires the desktop app"
-        ))
-    } else {
-        engine.call(method, v["params"].clone())
-    };
+    let res = engine.call_from(super::Source::Ipc, method, v["params"].clone());
     let response = match res {
         Ok(value) => json!({"value":value}),
         Err(e) => json!({"error":wire_error(&e)}),

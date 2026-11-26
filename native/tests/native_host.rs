@@ -96,7 +96,32 @@ fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
         json!({"paneId":"w1:p1","chatId":id,"text":"late"}),
     );
     assert!(outsider.is_err());
+    let denied = ipc::request(
+        &home,
+        "prompt.answer",
+        json!({"signature":"private-marker"}),
+    );
+    assert!(denied
+        .unwrap_err()
+        .to_string()
+        .contains("requires the desktop app"));
     drop(host);
+    let log = std::fs::read_to_string(home.join("requests.jsonl")).unwrap();
+    assert!(!log.contains("private-marker"));
+    assert!(!log.contains("same-request"));
+    let records: Vec<Value> = log
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(records.iter().all(|row| row["source"] == "ipc"
+        && row["timestampMs"].as_u64().unwrap() > 0
+        && row["durationMs"].as_f64().unwrap() >= 0.0));
+    assert!(records
+        .iter()
+        .any(|row| row["method"] == "message.send" && row["ok"] == true));
+    assert!(records.iter().any(|row| row["method"] == "prompt.answer"
+        && row["ok"] == false
+        && row["errorCode"] == "invalid_args"));
     let _restart = start(&home, &fake);
     assert!(cli(&home, &["read", id]).contains("native-reply 안녕하세요"));
     assert_eq!(
