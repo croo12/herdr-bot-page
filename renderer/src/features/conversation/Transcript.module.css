@@ -1,8 +1,13 @@
 .hb-transcript {
+  min-height: 0;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+}
+
+.hb-prompt-history {
+  padding: var(--hb-space-2) var(--hb-space-5);
 }
 
 .hb-transcript-content {

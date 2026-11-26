@@ -12,6 +12,35 @@ use std::{
 };
 use wait_timeout::ChildExt;
 
+#[derive(Debug)]
+struct HerdrFailure {
+    code: String,
+    message: String,
+}
+
+impl HerdrFailure {
+    fn from_json(error: &V) -> Option<Self> {
+        Some(Self {
+            code: error["code"].as_str()?.to_owned(),
+            message: error["message"].as_str()?.to_owned(),
+        })
+    }
+}
+
+impl std::fmt::Display for HerdrFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for HerdrFailure {}
+
+pub(crate) fn is_herdr_timeout(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<HerdrFailure>()
+        .is_some_and(|failure| failure.code == "timeout")
+}
+
 pub fn command(file: impl AsRef<OsStr>) -> Command {
     let mut cmd = Command::new(file);
     #[cfg(windows)]
@@ -47,14 +76,17 @@ fn capture(cmd: &mut Command, seconds: u64) -> Result<String> {
     let out = out.join().map_err(|_| anyhow!("stdout reader stopped"))??;
     let err = err.join().map_err(|_| anyhow!("stderr reader stopped"))??;
     if !status.success() {
-        bail!(
-            "{}",
-            if err.trim().is_empty() {
-                out.trim()
-            } else {
-                err.trim()
+        let detail = if err.trim().is_empty() {
+            out.trim()
+        } else {
+            err.trim()
+        };
+        if let Ok(frame) = serde_json::from_str::<V>(detail) {
+            if let Some(failure) = HerdrFailure::from_json(&frame["error"]) {
+                return Err(failure.into());
             }
-        );
+        }
+        bail!("{detail}");
     }
     Ok(out)
 }
@@ -102,6 +134,11 @@ impl Herdr {
         let text = self.text(args, seconds)?;
         let v: V = serde_json::from_str(&text).context("herdr_error: invalid JSON from herdr")?;
         if !v["error"].is_null() {
+            if let Some(failure) = HerdrFailure::from_json(&v["error"]) {
+                return Err(
+                    anyhow!(failure).context(format!("herdr_error: herdr {} {}", args[0], args[1]))
+                );
+            }
             bail!("herdr_error: {}", v["error"]);
         }
         v.get("result")

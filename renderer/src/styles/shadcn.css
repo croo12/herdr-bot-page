@@ -1,0 +1,26 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "./reset.css" layer(base);
+@import "tw-animate-css";
+@import "tailwindcss/utilities.css" layer(utilities) source("../");
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-background: var(--hb-bg-app);
+  --color-foreground: var(--hb-text-primary);
+  --color-popover: var(--hb-bg-raised);
+  --color-popover-foreground: var(--hb-text-primary);
+  --color-primary: var(--hb-bubble-user-bg);
+  --color-primary-foreground: var(--hb-bubble-user-text);
+  --color-secondary: var(--hb-bubble-bot-bg);
+  --color-secondary-foreground: var(--hb-bubble-bot-text);
+  --color-muted: var(--hb-bg-sidebar);
+  --color-muted-foreground: var(--hb-text-secondary);
+  --color-accent: var(--hb-overlay-neutral-hover);
+  --color-accent-foreground: var(--hb-text-primary);
+  --color-border: var(--hb-border-hairline);
+  --color-input: var(--hb-border-hairline);
+  --color-ring: var(--hb-focus-ring);
+  --color-destructive: var(--hb-danger);
+}

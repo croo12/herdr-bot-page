@@ -44,7 +44,13 @@ pub fn open(home: &Path) -> Result<Connection> {
     CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS entries(chat TEXT REFERENCES chats(id) ON DELETE CASCADE, seq INTEGER, data TEXT NOT NULL, PRIMARY KEY(chat,seq));
     CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY,data TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS requests(key TEXT PRIMARY KEY, chat TEXT REFERENCES chats(id) ON DELETE CASCADE);")?;
+    CREATE TABLE IF NOT EXISTS requests(key TEXT PRIMARY KEY, chat TEXT REFERENCES chats(id) ON DELETE CASCADE);
+    CREATE TABLE IF NOT EXISTS permission_reviews(
+        ticket TEXT PRIMARY KEY, chat TEXT NOT NULL, seq INTEGER NOT NULL, signature TEXT NOT NULL,
+        target TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+        reviewer TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE, pane TEXT NOT NULL,
+        UNIQUE(chat,seq), FOREIGN KEY(chat,seq) REFERENCES entries(chat,seq) ON DELETE CASCADE
+    );")?;
     c.execute(
         "UPDATE chats SET data=json_set(data,'$.isRunning',json('false'),'$.currentActivity',null)
         WHERE json_extract(data,'$.kind')='room' AND json_extract(data,'$.isRunning')=1",

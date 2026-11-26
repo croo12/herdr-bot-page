@@ -100,6 +100,13 @@ export interface ChatSummary {
  * "message" (user), "send-message" (bot reply), "notice", "prompt" (an inline `PendingPrompt` card,
  * `entry.prompt`/`entry.status`). See docs/app-api.md for the field layout of each kind. */
 export interface TranscriptEntry {
+  readonly permissionDecision?: "approve" | "deny" | "human";
+  readonly permissionReview?: {
+    readonly reviewerId: string;
+    readonly name: string;
+    readonly decision: "pending" | "approve" | "deny" | "human" | "unavailable";
+    readonly reason?: string;
+  };
   readonly id: string;
   readonly kind: string;
   readonly seq: number;

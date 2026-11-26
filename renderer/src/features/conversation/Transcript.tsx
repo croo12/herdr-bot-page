@@ -140,7 +140,7 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
           if (row.type === "prompt") {
             const authorId = getAuthor(row.entry)?.id;
             const botChat = chat.kind === "bot" ? chat : (chats.find((candidate) => candidate.id === authorId) ?? null);
-            return <PromptCard key={row.key} entry={row.entry} botChat={botChat} />;
+            return <div key={row.key} data-entry-id={row.entry.id} className={styles["hb-prompt-history"]}><PromptCard entry={row.entry} botChat={botChat} showAuthor={chat.kind === "room"} /></div>;
           }
           return (
             <div key={row.key} data-entry-id={row.entry.id} className={highlightId === row.entry.id ? styles["hb-transcript-row--highlight"] : undefined}>

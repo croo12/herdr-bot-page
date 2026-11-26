@@ -1,3 +1,4 @@
+import { DialogTitle } from "../../components/ui/dialog.tsx";
 import { useState } from "react";
 import { useDialogHost } from "../../shell/DialogHost.tsx";
 import { useT } from "../../i18n/TranslationProvider.tsx";
@@ -35,7 +36,7 @@ export function RelaunchConfirmDialog({ name, onConfirm }: RelaunchConfirmDialog
 
   return (
     <div>
-      <p className={styles["hb-confirm-title"]}>{t("dialogs.relaunch.title", { name })}</p>
+      <DialogTitle className={styles["hb-confirm-title"]}>{t("dialogs.relaunch.title", { name })}</DialogTitle>
       <p className={styles["hb-confirm-body"]}>{t("dialogs.relaunch.body")}</p>
       {error != null && <p className={styles["hb-confirm-body"]}>{error}</p>}
       <div className={styles["hb-confirm-footer"]}>

@@ -7,6 +7,26 @@ use std::{path::PathBuf, sync::Arc};
 impl Engine {
     pub(crate) fn dispatch(self: &Arc<Self>, method: &str, p: V) -> Result<V> {
         match method {
+            "room.setMembers" => {
+                let _guard = self.roster.lock().unwrap();
+                return self.tx(|c, ev| self.data_call(c, ev, method, &p));
+            }
+            "cli.say" if !p["replyTo"].is_null() => {
+                let assigned = self.tx(|c, _| {
+                    Ok(c.query_row(
+                        "SELECT EXISTS(SELECT 1 FROM permission_reviews WHERE ticket=?)",
+                        [need(&p, "replyTo")?],
+                        |r| r.get::<_, bool>(0),
+                    )?)
+                })?;
+                if assigned || !p["decision"].is_null() {
+                    return self.review_reply(&p);
+                }
+                return self.bot_cli(method, p);
+            }
+            "cli.say" if !p["decision"].is_null() => {
+                bail!("invalid_args: reply to a permission request")
+            }
             "bot.create"
             | "bot.quickCreate"
             | "bot.retrySetup"
@@ -253,6 +273,7 @@ fn update_room(c: &rusqlite::Connection, ev: &mut Events, method: &str, p: &V) -
             bail!("unknown_room: expected a room")
         }
         room["memberIds"] = json!(members);
+        crate::reviews::revoke_removed_members(c, ev, &room)?;
         change(c, &room, ev)?;
         Ok(room)
     }

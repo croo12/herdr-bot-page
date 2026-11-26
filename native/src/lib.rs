@@ -3,6 +3,7 @@ mod bots;
 mod herdr;
 pub mod ipc;
 mod prompts;
+mod reviews;
 mod store;
 mod turns;
 

@@ -270,15 +270,16 @@ impl Engine {
                 }
             }
             self.tx(|c, ev| {
-                c.execute("DELETE FROM chats WHERE id=?", [&id])?;
                 for mut room in list(c)? {
                     let mut members = strings(&room["memberIds"]);
                     if members.contains(&id) {
                         members.retain(|x| x != &id);
                         room["memberIds"] = json!(members);
+                        crate::reviews::revoke_removed_members(c, ev, &room)?;
                         save(c, &room)?;
                     }
                 }
+                c.execute("DELETE FROM chats WHERE id=?", [&id])?;
                 ev.push(("chat.listChanged", json!(list(c)?)));
                 Ok(())
             })?;

@@ -10,6 +10,7 @@ pub(crate) struct Job {
 }
 pub(crate) struct Turn {
     pub chat: String,
+    pub task: String,
     depth: u8,
     spoken: u8,
     passed: bool,
@@ -91,6 +92,10 @@ impl Engine {
                     if room && !strings(&target_row["memberIds"]).contains(bot) {
                         continue;
                     }
+                    if self.tx(|c, _| crate::reviews::has_pending_review(c, bot))? {
+                        self.notice(target, &format!("{bot} is reviewing a permission request."));
+                        continue;
+                    }
                     let mut active = self.active.lock().unwrap();
                     if active.contains_key(bot) {
                         drop(active);
@@ -101,6 +106,7 @@ impl Engine {
                         bot.clone(),
                         Turn {
                             chat: target.into(),
+                            task: job.seed.clone(),
                             depth: job.depth,
                             spoken: 0,
                             passed: false,
@@ -142,8 +148,21 @@ impl Engine {
         }
         let history = entries
             .iter()
-            .filter(|e| matches!(s(e, "kind"), "message" | "send-message"))
-            .map(|e| format!("{}: {}", s(&e["author"], "name"), content(e)))
+            .filter(|e| matches!(s(e, "kind"), "message" | "send-message" | "prompt"))
+            .map(|e| {
+                let author = s(&e["author"], "name");
+                if e["kind"] == "prompt" {
+                    format!(
+                        "{author} requested permission or input: {} [{}]",
+                        content(e),
+                        s(e, "status")
+                    )
+                } else if let Some(decision) = e["permissionDecision"].as_str() {
+                    format!("{author} ({decision}): {}", content(e))
+                } else {
+                    format!("{author}: {}", content(e))
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n");
         let cli = self.herdr.cli.to_string_lossy().replace('\\', "/");
@@ -157,23 +176,58 @@ impl Engine {
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(180000)
             .clamp(1000, 3600000);
-        self.herdr.run_timeout(
+        let limit = timeout.to_string();
+        let command_timeout = timeout.div_ceil(1000) + 10;
+        let mut result = self.herdr.run_timeout(
             &[
                 "agent",
                 "prompt",
                 pane,
                 &prompt,
                 "--wait",
-                "--until",
-                "done",
-                "--until",
-                "idle",
                 "--timeout",
-                &timeout.to_string(),
+                &limit,
             ],
-            timeout / 1000 + 10,
-        )?;
-        Ok(())
+            command_timeout,
+        );
+        loop {
+            // Once submitted, a slow turn and an approval both retain their original
+            // chat and CLI reply channel. Only the status wait may be repeated.
+            let snapshot = match result {
+                Ok(snapshot) => snapshot,
+                Err(error) if crate::herdr::is_herdr_timeout(&error) => {
+                    let snapshot = self.herdr.run(&["agent", "get", pane])?;
+                    if snapshot["agent"]["agent_status"] == "unknown" {
+                        return Err(error);
+                    }
+                    snapshot
+                }
+                Err(error) => return Err(error),
+            };
+            let agent = &snapshot["agent"];
+            if agent["name"] != bot || agent["pane_id"] != pane {
+                bail!("bot_not_ready: pane has changed");
+            }
+            match s(agent, "agent_status") {
+                "done" | "idle" => return Ok(()),
+                "working" | "blocked" => {}
+                status => bail!("bot_not_ready: agent status is {status}"),
+            }
+            result = self.herdr.run_timeout(
+                &[
+                    "agent",
+                    "wait",
+                    pane,
+                    "--until",
+                    "done",
+                    "--until",
+                    "idle",
+                    "--timeout",
+                    &limit,
+                ],
+                command_timeout,
+            );
+        }
     }
     pub(crate) fn bot_cli(self: &Arc<Self>, method: &str, p: V) -> Result<V> {
         let pane = need(&p, "paneId")?;
@@ -219,7 +273,16 @@ impl Engine {
             return Ok(json!({"passed":true}));
         }
         let text = need(&p, "text")?;
-        let e=self.tx(|c,ev|append(c,target,json!({"kind":"send-message","message":{"type":"text","content":text},"author":{"id":bot_id,"name":bot["name"]}}),ev))?;
+        let e = self.tx(|c, ev| {
+            let mut entry = json!({"kind":"send-message","message":{"type":"text","content":text},"author":{"id":bot_id,"name":bot["name"]}});
+            if let Some(parent) = p["replyTo"].as_str() {
+                let exists: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM entries WHERE chat=? AND json_extract(data,'$.id')=?)",
+                    [target,parent], |r|r.get(0))?;
+                if !exists { bail!("invalid_args: reply target is not in this chat"); }
+                entry["replyTo"] = parent.into();
+            }
+            append(c,target,entry,ev)
+        })?;
         turn.spoken += 1;
         if cross {
             turn.delegated = true;

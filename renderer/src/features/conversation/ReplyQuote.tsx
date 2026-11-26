@@ -1,4 +1,4 @@
-import { getAuthor, getRawText } from "./entry-shapes.ts";
+import { getAuthor, getPrompt, getRawText } from "./entry-shapes.ts";
 import type { TranscriptEntry } from "../../data/types.ts";
 import styles from "./ReplyQuote.module.css";
 
@@ -23,7 +23,7 @@ export function ReplyQuote({ quotedEntry, missingLabel, mine = false }: ReplyQuo
     return <div className={rootClass}>{missingLabel}</div>;
   }
   const author = getAuthor(quotedEntry);
-  const text = getRawText(quotedEntry) ?? "";
+  const text = getPrompt(quotedEntry)?.question ?? getRawText(quotedEntry) ?? "";
   return (
     <div className={rootClass}>
       {author != null && <span className={styles["hb-reply-quote-author"]}>{author.name}</span>}

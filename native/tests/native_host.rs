@@ -103,4 +103,33 @@ fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
         ipc::request(&home, "host.status", Value::Null).unwrap()["bots"],
         1
     );
+    // A delivered prompt can outlive several Herdr status waits. Its bot can
+    // still reply to the original chat, and the prompt is submitted only once.
+    ipc::request(
+        &home,
+        "message.send",
+        json!({"chatId":"tester","clientNonce":"delayed","text":"simulate delayed turn"}),
+    )
+    .unwrap();
+    wait(|| home.join("waiting-for-reply").exists());
+    assert_eq!(
+        ipc::request(&home, "host.status", Value::Null).unwrap()["runningChatIds"],
+        json!(["tester"])
+    );
+    ipc::request(
+        &home,
+        "cli.say",
+        json!({"paneId":"w1:p1","chatId":"tester","text":"finished after approval"}),
+    )
+    .unwrap();
+    std::fs::write(home.join("reply-posted"), "").unwrap();
+    wait(|| {
+        ipc::request(&home, "host.status", Value::Null).unwrap()["runningChatIds"] == json!([])
+    });
+    let transcript = ipc::request(&home, "transcript.page", json!({"chatId":"tester"})).unwrap();
+    let entries = transcript["entries"].as_array().unwrap();
+    assert!(entries
+        .iter()
+        .any(|e| e["message"]["content"] == "finished after approval"));
+    assert!(!entries.iter().any(|e| e["kind"] == "notice"));
 }

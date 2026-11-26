@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Bubble, BubbleContent } from "../../components/ui/bubble.tsx";
+import { Message, MessageAvatar, MessageContent, MessageHeader } from "../../components/ui/message.tsx";
 import { useChats } from "../../data/hooks/useChats.ts";
 import { resolvePersonaColor, personaColorVar } from "../../data/avatar-colors.ts";
 import { formatClockTime } from "../../data/format-time.ts";
@@ -27,7 +29,7 @@ export interface MessageBubbleProps {
 }
 
 export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, entriesById }: MessageBubbleProps) {
-  const { locale } = useT();
+  const { locale, t } = useT();
   const chats = useChats();
   const [hovered, setHovered] = useState(false);
 
@@ -44,30 +46,32 @@ export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, 
   const personaColor = resolvePersonaColor(authorBot?.avatarColor ?? chat.avatarColor);
 
   return (
-    <div
-      className={`${styles["hb-message-row"]} ${mine ? styles["hb-message-row--mine"] : styles["hb-message-row--bot"]}`}
+    <Message
+      align={mine ? "end" : "start"}
+      className="px-5 py-px"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {!mine && (
-        <div className={styles["hb-message-avatar-slot"]}>{!grouped && <Avatar kind="bot" color={personaColor} name={author?.name ?? ""} size="sm" />}</div>
+        <MessageAvatar className="size-7 min-w-7 bg-transparent">{!grouped && <Avatar kind="bot" color={personaColor} name={author?.name ?? ""} size="sm" />}</MessageAvatar>
       )}
 
-      <div className={styles["hb-message-column"]}>
+      <MessageContent className={mine ? "max-w-[60%] items-end gap-1" : "max-w-[78%] gap-1"}>
         {!mine && !grouped && showAuthorLabel && (
-          <div className={styles["hb-message-author"]} style={{ color: personaColorVar(personaColor) }}>
+          <MessageHeader style={{ color: personaColorVar(personaColor) }}>
             {author?.name}
-          </div>
+          </MessageHeader>
         )}
 
         <MarkerBadges entry={entry} />
 
-        <div className={styles["hb-message-bubble-wrap"]}>
-          <div className={mine ? styles["hb-bubble-user"] : styles["hb-bubble-bot"]}>
+        <Bubble align={mine ? "end" : "start"} variant={mine ? "default" : "secondary"} className="max-w-full">
+          <BubbleContent>
             {quotedEntry != null && <ReplyQuote quotedEntry={quotedEntry} missingLabel="" mine={mine} />}
+            {entry.permissionDecision && <strong>{t(`conversation.decision.${entry.permissionDecision}`)}</strong>}
             <MarkdownView text={text} richText={richText} members={members} />
             <Attachments paths={attachmentPaths} />
-          </div>
+          </BubbleContent>
           <HoverActions
             chatId={chat.id}
             entryId={entry.id}
@@ -79,10 +83,10 @@ export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, 
           <time className={styles["hb-message-timestamp"]} dateTime={new Date(entry.timestampMs).toISOString()}>
             {formatClockTime(entry.timestampMs, locale)}
           </time>
-        </div>
+        </Bubble>
 
         <Reactions chatId={chat.id} entryId={entry.id} reactions={reactions} align={mine ? "end" : "start"} />
-      </div>
-    </div>
+      </MessageContent>
+    </Message>
   );
 }

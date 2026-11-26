@@ -1,6 +1,7 @@
 .hb-prompt-card {
   position: relative;
-  max-width: 85%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   background: var(--hb-bubble-bot-bg);
   color: var(--hb-bubble-bot-text);
   border-radius: var(--hb-radius-lg);
@@ -40,6 +41,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--hb-space-2);
+  max-height: 14vh;
+  overflow: auto;
 }
 
 .hb-prompt-command {

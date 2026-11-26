@@ -9,45 +9,95 @@ static ROW: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(❯|›)?\s*(\d+)\.\s+(?:\[([ ✔✓xX])\]\s*)?(.+)$").unwrap());
 static LETTER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(❯|›)?\s*([A-Z])\s+()(.+)$").unwrap());
+static QUESTION_HEADER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^Question (\d+)/(\d+)\b").unwrap());
+
 fn codex_menu(raw: &str) -> Option<V> {
     let lines: Vec<_> = raw
         .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
+        .map(str::trim_end)
+        .filter(|l| !l.is_empty())
         .collect();
-    let footer = *lines.last()?;
-    if !footer.starts_with("enter continue") || !footer.contains("esc ") {
+    let end = lines.len();
+    let footer_start = lines.iter().rposition(|line| {
+        let s = line.trim_start().to_ascii_lowercase();
+        s.starts_with("press enter to confirm")
+            || s.starts_with("enter continue")
+            || s.contains("enter to submit answer")
+            || s.contains("enter to submit all")
+    })?;
+    let footer = lines[footer_start..].join(" ").to_ascii_lowercase();
+    if !footer.contains("esc ") || end - footer_start > 3 {
         return None;
     }
-    let rows_end = lines.len() - 1;
-    let rows_start = lines[..rows_end]
+    let above = &lines[..footer_start];
+    let is_update = footer.trim_start().starts_with("enter continue");
+    let is_permission = footer.trim_start().starts_with("press enter to confirm");
+    let heading = above.iter().rposition(|line| {
+        let text = line.trim();
+        if is_update {
+            text.starts_with("Update available")
+        } else if is_permission {
+            text.starts_with("Would you like to ") || text.starts_with("Do you want to ")
+        } else {
+            QUESTION_HEADER.is_match(text)
+        }
+    })?;
+    let form = &above[heading..];
+    let header = form[0].trim();
+    let first = form
         .iter()
-        .rposition(|l| !ROW.is_match(l))
-        .map_or(0, |i| i + 1);
-    let heading = lines[..rows_start]
+        .position(|l| ROW.captures(l).is_some_and(|c| &c[2] == "1"));
+    let input = form
         .iter()
-        .rposition(|l| l.starts_with("Update available"))?;
-    let before = &lines[heading..rows_start];
-    let mut options = vec![];
-    for (index, line) in lines[rows_start..rows_end].iter().enumerate() {
-        let row = ROW.captures(line)?;
-        if row[2].parse::<usize>().ok()? != index + 1 {
+        .position(|l| l.trim().starts_with("› Type your answer"));
+    let start = first.or(input)?;
+    let context: Vec<_> = form[1..start].iter().map(|l| l.trim()).collect();
+    let (question, body) = if is_permission || is_update {
+        (header.to_owned(), context)
+    } else {
+        (context.join(" "), vec![])
+    };
+    if question.is_empty() {
+        return None;
+    }
+    let mut options: Vec<V> = vec![];
+    let mut free = V::Null;
+    let navigation = if first.is_some() {
+        for line in &form[start..] {
+            if let Some(row) = ROW.captures(line) {
+                if row[2].parse::<usize>().ok()? != options.len() + 1 {
+                    return None;
+                }
+                options.push(json!({"key":&row[2],"label":row[4].trim(),"detail":null,"checked":null,"selected":row.get(1).is_some()}));
+            } else if line.starts_with("    ") {
+                let last = options.last_mut()?;
+                last["label"] = format!("{} {}", last["label"].as_str()?, line.trim()).into();
+            } else {
+                return None;
+            }
+        }
+        if options.iter().filter(|o| o["selected"] == true).count() != 1 {
             return None;
         }
-        options.push(json!({"key":&row[2],"label":row[4].trim(),"detail":null,"checked":null,"selected":row.get(1).is_some()}));
-    }
-    if options.len() < 2 || options.iter().filter(|o| o["selected"] == true).count() != 1 {
-        return None;
-    }
-    let body = &before[1..];
+        "cursor"
+    } else {
+        if is_permission || is_update || start + 1 != form.len() {
+            return None;
+        }
+        free = json!("text");
+        options.push(json!({"key":"text","label":form[start].trim().trim_start_matches('›').trim(),"detail":null,"checked":null,"selected":false}));
+        "text"
+    };
     let labels: Vec<_> = options.iter().map(|o| (&o["key"], &o["label"])).collect();
-    let signature = json!(["codex-menu", before[0], body, labels]).to_string();
+    let signature = json!(["codex-menu", header, question, body, labels]).to_string();
     Some(
-        json!({"kind":"question","title":null,"header":null,"question":before[0],"body":body,
-        "progress":null,"options":options,"multiSelect":false,"freeTextKey":null,"signature":signature,"navigation":"cursor"}),
+        json!({"kind":if is_permission {"permission"} else {"question"},"title":null,
+        "header":if is_permission || is_update {None} else {Some(header)},
+        "question":question,"body":body,"progress":null,"options":options,"multiSelect":false,
+        "freeTextKey":free,"signature":signature,"navigation":navigation}),
     )
 }
-
 fn parse_screen(raw: &str, provider: &str) -> V {
     if provider == "codex" {
         if let Some(menu) = codex_menu(raw) {
@@ -61,10 +111,17 @@ fn parse_screen(raw: &str, provider: &str) -> V {
         .map(|s| s.to_vec())
         .collect();
     for lines in sections.iter().rev() {
+        if provider == "codex" {
+            break;
+        }
         let compact = lines
             .iter()
             .any(|l| l.contains("overrides auto mode for this command"));
-        let rx = if compact { &*LETTER } else { &*ROW };
+        let rx = if compact && !lines.iter().any(|line| ROW.is_match(line)) {
+            &*LETTER
+        } else {
+            &*ROW
+        };
         let Some(first) = lines.iter().position(|l| rx.is_match(l)) else {
             continue;
         };
@@ -141,6 +198,59 @@ mod tests {
     use super::*;
 
     const MENU: &str = "Update available · 0.169.0 → 0.172.0\nRelease notes: https://github.com/openai/codex/releases/latest\n› 1. Update now (runs `npm install -g @openai/codex`)\n  2. Skip\n  3. Skip until next version\nenter continue · esc skip";
+
+    #[test]
+    fn codex_approval_keeps_command_context_and_wrapped_choices() {
+        let screen = "previous chat?\n  Would you like to run the following command?\n\n  Reason: inspect the project\n  $ list files\n› 1. Yes, proceed (y)\n  2. Yes, and don't ask again for commands\n     that start with list (p)\n  3. No, and tell Codex what to do differently (esc)\n\n  Press enter to confirm or esc to cancel";
+        let first = parse_screen(screen, "codex");
+        assert_eq!(first["kind"], "permission");
+        assert_eq!(
+            first["question"],
+            "Would you like to run the following command?"
+        );
+        assert_eq!(
+            first["body"],
+            json!(["Reason: inspect the project", "$ list files"])
+        );
+        assert_eq!(
+            first["options"][1]["label"],
+            "Yes, and don't ask again for commands that start with list (p)"
+        );
+        let second = parse_screen(
+            &screen.replace("› 1.", "  1.").replace("  2.", "› 2."),
+            "codex",
+        );
+        let mut keys = Vec::new();
+        select_menu_option(
+            &first,
+            "2",
+            || Ok(second.clone()),
+            |key| {
+                keys.push(key.to_owned());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(keys, ["down", "enter"]);
+        let different = parse_screen(&screen.replace("$ list files", "$ list users"), "codex");
+        assert_ne!(different["signature"], first["signature"]);
+    }
+
+    #[test]
+    fn codex_questions_accept_numbered_choices_and_direct_text() {
+        let screen = "  Question 1/2 (2 unanswered)\n  Choose a color.\n  › 1. Red\n    2. Blue\n  tab to add notes | enter to submit answer\n  ←/→ to navigate questions | esc to interrupt";
+        let choices = parse_screen(screen, "codex");
+        assert_eq!(choices["question"], "Choose a color.");
+        assert_eq!(choices["options"][1]["label"], "Blue");
+        assert_eq!(choices["navigation"], "cursor");
+        let text = parse_screen("Question 2/2 (1 unanswered)\nShare details.\n› Type your answer (optional)\nenter to submit all | esc to interrupt", "codex");
+        assert_eq!(text["navigation"], "text");
+        assert_eq!(text["freeTextKey"], "text");
+        assert_eq!(
+            parse_screen(&screen.replace("› 1.", "  1."), "codex")["kind"],
+            "unknown"
+        );
+    }
 
     #[test]
     fn update_choices_follow_the_visible_cursor_before_confirming() {
@@ -248,7 +358,7 @@ impl Engine {
                     "--source",
                     "detection",
                     "--lines",
-                    "80",
+                    "240",
                 ],
                 8,
             )?,
@@ -278,17 +388,14 @@ impl Engine {
             } else {
                 V::Null
             };
-            let target = self
-                .active
-                .lock()
-                .unwrap()
-                .get(id)
-                .map(|t| t.chat.clone())
-                .unwrap_or_else(|| id.into());
+            let active_chat = self.active.lock().unwrap().get(id).map(|t| t.chat.clone());
             self.tx(|c,ev|{let mut row=chat(c,id)?;if row["bot"]["status"]==status && row["bot"]["pendingPrompt"]==prompt{return Ok(())}
                 let pending:Option<(String,V)>=c.query_row("SELECT chat,data FROM entries WHERE json_extract(data,'$.kind')='prompt' AND json_extract(data,'$.author.id')=? AND json_extract(data,'$.status')='pending' ORDER BY rowid DESC LIMIT 1",[id],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+                // The old menu can remain visible for a frame after Enter.
+                if pending.is_none() && !prompt.is_null() && row["bot"]["pendingPrompt"]["signature"]==prompt["signature"] { return Ok(()); }
+                let target = active_chat.as_deref().or_else(|| pending.as_ref().map(|(chat,_)|chat.as_str())).unwrap_or(id).to_owned();
                 let mut same=false;
-                if let Some((prev_chat,mut e))=pending{same=!prompt.is_null() && e["prompt"]["signature"]==prompt["signature"];
+                if let Some((prev_chat,mut e))=pending{same=!prompt.is_null() && (e["prompt"]["signature"]==prompt["signature"] || e["prompt"]["kind"]=="unknown");
                     if same{e["prompt"]=prompt.clone()}else{e["status"]="resolved".into()}update_entry(c,&prev_chat,&e,ev)?;}
                 if !same && !prompt.is_null(){append(c,&target,json!({"kind":"prompt","prompt":prompt,"status":"pending","author":{"id":id,"name":row["name"]}}),ev)?;row=chat(c,id)?;}
                 row["bot"]["status"]=status.into();row["bot"]["pendingPrompt"]=prompt;row["isRunning"]=(status=="working").into();
@@ -296,10 +403,16 @@ impl Engine {
                 row["awaitingUserResponse"]=match status{"blocked"=>json!({"reason":"approval"}),"offline"=>json!({"reason":"offline"}),_=>V::Null};change(c,&row,ev)
             })?;
         }
+        if chats.iter().any(|chat| chat["kind"] == "room") {
+            self.dispatch_reviews(&agents)?;
+        }
         Ok(())
     }
     pub(crate) fn answer(&self, p: &V) -> Result<V> {
         let _guard = self.roster.lock().unwrap();
+        self.answer_locked(p, None)
+    }
+    pub(crate) fn answer_locked(&self, p: &V, review: Option<&V>) -> Result<V> {
         let id = need(p, "botId")?;
         let row = self.tx(|c, _| chat(c, id))?;
         let pane = need(&row["bot"], "paneId")?;
@@ -307,10 +420,17 @@ impl Engine {
         if live["agent"]["agent_status"] != "blocked" || live["agent"]["name"] != id {
             bail!("not_blocked: agent is no longer waiting")
         }
-        let provider = s(&live["agent"], "agent");
+        let provider = need(&row["bot"], "provider")?;
         let prompt = self.read_prompt(pane, provider)?;
         if prompt["signature"] != p["signature"] {
             bail!("prompt_changed: form changed")
+        }
+        let pending = self.tx(|c, _| Ok(c.query_row(
+            "SELECT EXISTS(SELECT 1 FROM entries WHERE json_extract(data,'$.author.id')=? AND json_extract(data,'$.status')='pending' AND json_extract(data,'$.prompt.signature')=?)",
+            params![id, need(p, "signature")?], |r| r.get::<_, bool>(0),
+        )?))?;
+        if !pending {
+            bail!("prompt_changed: request already answered")
         }
         let press = |key: &str| self.herdr.run(&["agent", "send-keys", pane, key]);
         let answer = match need(p, "action")? {
@@ -344,8 +464,10 @@ impl Engine {
             }
             "text" if prompt["freeTextKey"].is_string() => {
                 let text = need(p, "text")?.lines().collect::<Vec<_>>().join(" ");
-                press(s(&prompt, "freeTextKey"))?;
-                thread::sleep(Duration::from_millis(500));
+                if prompt["navigation"] != "text" {
+                    press(s(&prompt, "freeTextKey"))?;
+                    thread::sleep(Duration::from_millis(500));
+                }
                 self.herdr.run(&["pane", "send-text", pane, &text])?;
                 thread::sleep(Duration::from_millis(500));
                 press("enter")?;
@@ -355,7 +477,22 @@ impl Engine {
         };
         self.tx(|c,ev|{if !answer.is_null() && prompt["multiSelect"]!=true{
             let pending:Option<(String,V)>=c.query_row("SELECT chat,data FROM entries WHERE json_extract(data,'$.author.id')=? AND json_extract(data,'$.status')='pending' AND json_extract(data,'$.prompt.signature')=? ORDER BY rowid DESC LIMIT 1",params![id,need(p,"signature")?],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
-            if let Some((target,mut entry))=pending{entry["answer"]=answer;entry["status"]="answered".into();update_entry(c,&target,&entry,ev)?;}
+            if let Some((target,mut entry))=pending{
+                if let Some(review) = review { entry["permissionReview"] = review.clone(); }
+                else if entry["permissionReview"]["decision"] == "pending" { entry.as_object_mut().unwrap().remove("permissionReview"); }
+                entry["answer"]=answer;entry["status"]="answered".into();update_entry(c,&target,&entry,ev)?;
+                if let Some(review)=review {
+                    crate::reviews::append_reply(c,ev,&target,&entry,review)?;
+                } else {
+                    let text = match entry["answer"]["kind"].as_str() {
+                        Some("option") => s(&entry["answer"],"label"),
+                        Some("text") => s(&entry["answer"],"text"),
+                        _ => "Esc",
+                    };
+                    append(c,&target,json!({"kind":"message","role":"user","author":{"id":"user","name":self.user},
+                        "content":text,"replyTo":entry["id"],"isStreaming":false}),ev)?;
+                }
+            }
         }Ok(json!({"chat":chat(c,id)?}))})
     }
 }

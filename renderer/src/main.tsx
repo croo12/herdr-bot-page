@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App.tsx";
 import { applyThemeAttribute } from "./data/hooks/useTheme.ts";
-import "./styles/reset.css";
+import "./styles/shadcn.css";
 import "./styles/tokens.css";
 
 async function resolveBridge() {

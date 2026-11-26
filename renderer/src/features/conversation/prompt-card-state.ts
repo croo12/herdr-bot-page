@@ -30,7 +30,7 @@ export function derivePromptCardView(entry: TranscriptEntry, livePendingPrompt: 
   const status = getPromptStatus(entry);
   if (status === "superseded") return HIDDEN;
 
-  if (livePendingPrompt != null && livePendingPrompt.signature === prompt.signature) {
+  if (status === "pending" && livePendingPrompt != null && livePendingPrompt.signature === prompt.signature) {
     return { mode: "live", prompt: livePendingPrompt, answer: null };
   }
 

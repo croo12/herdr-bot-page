@@ -1,3 +1,4 @@
+import { DialogTitle } from "../../components/ui/dialog.tsx";
 import { useState } from "react";
 import { useActiveChat } from "../../data/hooks/useActiveChat.ts";
 import { useStoreContext } from "../../data/store/StoreProvider.tsx";
@@ -38,7 +39,7 @@ export function DeleteConfirmDialog({ chatId, name }: DeleteConfirmDialogProps) 
 
   return (
     <div>
-      <p className={styles["hb-confirm-title"]}>{t("dialogs.delete.title", { name })}</p>
+      <DialogTitle className={styles["hb-confirm-title"]}>{t("dialogs.delete.title", { name })}</DialogTitle>
       <p className={styles["hb-confirm-body"]}>{t("dialogs.delete.body")}</p>
       {error != null && <p className={styles["hb-confirm-body"]}>{error}</p>}
       <div className={styles["hb-confirm-footer"]}>

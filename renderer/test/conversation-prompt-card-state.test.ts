@@ -49,6 +49,12 @@ test("inert when the bot has no live pendingPrompt at all", () => {
   assert.equal(view.mode, "inert");
 });
 
+test("a repeated terminal question leaves the earlier answered card closed", () => {
+  const entry = promptEntry("answered", "same", { answer: { kind: "option", key: "A", label: "Yes" } });
+  assert.equal(derivePromptCardView(entry, prompt("same")).mode, "answered");
+  assert.equal(derivePromptCardView(promptEntry("resolved", "same"), prompt("same")).mode, "inert");
+});
+
 test("answered when the entry carries a resolved answer and the signature no longer matches live", () => {
   const view = derivePromptCardView(promptEntry("answered", "sig-old", { answer: { kind: "option", key: "A", label: "Yes" } }), prompt("sig-new"));
   assert.equal(view.mode, "answered");

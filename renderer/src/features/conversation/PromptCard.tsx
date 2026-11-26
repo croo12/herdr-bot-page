@@ -14,6 +14,7 @@ export interface PromptCardProps {
    * blocked member resolved from `entry.author.id`, not the room's own summary (a room has no
    * `pendingPrompt` of its own). `null` if that bot can no longer be found (e.g. deleted). */
   readonly botChat: ChatSummary | null;
+  readonly showAuthor?: boolean;
 }
 
 /**
@@ -21,7 +22,7 @@ export interface PromptCardProps {
  * safe to answer inline (vs. the "Answered in the terminal" inert fallback) depends on comparing its
  * `signature` against the bot's *live* `botChat.bot.pendingPrompt` -- see prompt-card-state.ts.
  */
-export function PromptCard({ entry, botChat }: PromptCardProps) {
+export function PromptCard({ entry, botChat, showAuthor }: PromptCardProps) {
   const { client } = useStoreContext();
   const { t } = useT();
   const view = derivePromptCardView(entry, botChat?.bot?.pendingPrompt ?? null);
@@ -83,12 +84,18 @@ export function PromptCard({ entry, botChat }: PromptCardProps) {
           </IconButton>
         </div>
       )}
+      {showAuthor && <div className={styles["hb-prompt-title"]}>{botChat?.name}</div>}
       {prompt.title != null && <div className={styles["hb-prompt-title"]}>{prompt.title}</div>}
       <div className={styles["hb-prompt-question"]}>
         {prompt.question}
         {prompt.progress != null && <span className={styles["hb-prompt-progress"]}>{t("conversation.questionProgress", { done: prompt.progress.done, total: prompt.progress.total })}</span>}
       </div>
       <PromptBody body={prompt.body} />
+      {entry.permissionReview && (view.mode === "live" || entry.permissionReview.decision !== "pending") && (
+        <div className={styles["hb-prompt-description"]}>
+          {t(`conversation.review.${entry.permissionReview.decision}`, { name: entry.permissionReview.name })}
+        </div>
+      )}
       {interactive && prompt.options.length === 0 && botId && (
         <Button variant="secondary" size="sm" onClick={() => {
           void client.call("bot.focus", { botId }).catch((error: unknown) => setErrorMessage(error instanceof Error ? error.message : String(error)));
@@ -109,7 +116,7 @@ export function PromptCard({ entry, botChat }: PromptCardProps) {
               interactive={interactive}
               checked={checked[option.key] ?? option.checked ?? false}
               selected={view.mode === "answered" ? (view.answer?.kind === "option" ? view.answer.key === option.key : option.selected) : false}
-              isFreeTextOpen={freeTextKey === option.key}
+              isFreeTextOpen={view.mode === "live" && (freeTextKey === option.key || (prompt.options.length === 1 && prompt.freeTextKey === option.key))}
               freeTextValue={freeTextValue}
               onFreeTextChange={setFreeTextValue}
               onFreeTextSubmit={() => void answer("text", { text: freeTextValue })}
@@ -175,11 +182,11 @@ function PromptOptionRow({ option, badgeLabel, prompt, interactive, checked, sel
             placeholder={t("conversation.promptTextPlaceholder")}
             onChange={(event) => onFreeTextChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") onFreeTextSubmit();
+              if (event.key === "Enter" && !event.nativeEvent.isComposing && interactive) onFreeTextSubmit();
             }}
             autoFocus
           />
-          <Button size="sm" variant="primary" onClick={onFreeTextSubmit}>
+          <Button size="sm" variant="primary" disabled={!interactive} onClick={onFreeTextSubmit}>
             {t("conversation.promptSubmit")}
           </Button>
         </div>

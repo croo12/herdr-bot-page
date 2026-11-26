@@ -35,7 +35,14 @@ enum Action {
         command: Profile,
     },
     Send(Message),
-    Say(Message),
+    Say {
+        #[arg(long)]
+        reply_to: Option<String>,
+        #[arg(long, requires = "reply_to", value_parser = ["approve", "deny", "human"])]
+        decision: Option<String>,
+        #[command(flatten)]
+        message: Message,
+    },
     Message(Message),
     Pass {
         chat: String,
@@ -134,7 +141,14 @@ fn run() -> Result<()> {
         }
         Action::Status => call("host.status", V::Null)?,
         Action::Send(m) => message("message.send", m)?,
-        Action::Say(m) => message("cli.say", m)?,
+        Action::Say {
+            reply_to,
+            decision,
+            message: m,
+        } => call(
+            "cli.say",
+            json!({"paneId":pane,"chatId":m.chat,"text":m.text.join(" "),"replyTo":reply_to,"decision":decision}),
+        )?,
         Action::Message(m) => message("cli.message", m)?,
         Action::Pass { chat } => call("cli.pass", json!({"chatId":chat,"paneId":pane}))?,
         Action::Whoami => call("cli.whoami", json!({"paneId":pane}))?,

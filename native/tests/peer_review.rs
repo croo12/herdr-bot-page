@@ -1,0 +1,137 @@
+use herdr_engine::Engine;
+use serde_json::json;
+use std::{
+    fs,
+    path::Path,
+    process::Command,
+    time::{Duration, Instant},
+};
+
+fn wait(mut condition: impl FnMut() -> bool) {
+    let start = Instant::now();
+    while !condition() {
+        assert!(start.elapsed() < Duration::from_secs(15));
+        std::thread::sleep(Duration::from_millis(30));
+    }
+}
+
+#[test]
+fn only_assigned_peer_can_decide_the_current_request() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    let fake = home.join(format!("fake-herdr{}", std::env::consts::EXE_SUFFIX));
+    assert!(Command::new("rustc")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/review_herdr.rs"))
+        .arg("-o")
+        .arg(&fake)
+        .status()
+        .unwrap()
+        .success());
+    std::env::set_var("HERDR_BIN_PATH", fake);
+    std::env::set_var("HERDR_BOT_SESSION", "review-test");
+    let cli = Path::new(env!("CARGO_BIN_EXE_herdr-bot-cli"));
+    let engine = Engine::start(home.into(), cli, |_| {}).unwrap();
+    for (id, pane) in [("worker", "p1"), ("peer", "p2")] {
+        engine
+            .call("bot.create", json!({"id":id,"name":id,"adoptPaneId":pane}))
+            .unwrap();
+    }
+    let room = engine
+        .call(
+            "room.create",
+            json!({"name":"Project","memberIds":["worker","peer"]}),
+        )
+        .unwrap()["chat"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    for decision in ["approve", "deny", "human"] {
+        engine
+            .call(
+                "message.send",
+                json!({"chatId":room,"clientNonce":decision,"text":"Run the library tests"}),
+            )
+            .unwrap();
+        let ticket_path = home.join("ticket");
+        wait(|| ticket_path.exists());
+        let ticket = fs::read_to_string(&ticket_path).unwrap();
+        fs::remove_file(ticket_path).unwrap();
+        let decide = |pane: &str| {
+            Command::new(cli)
+                .env("HERDR_BOT_HOME", home)
+                .env("HERDR_PANE_ID", pane)
+                .args([
+                    "say",
+                    "--reply-to",
+                    &ticket,
+                    "--decision",
+                    decision,
+                    &room,
+                    "Test scope checked",
+                ])
+                .output()
+                .unwrap()
+        };
+        assert!(!decide("p1").status.success());
+        if decision == "approve" {
+            fs::write(home.join("blocked"), "--all-targets").unwrap();
+            assert!(!decide("p2").status.success());
+            assert!(!home.join("key").exists());
+            fs::write(home.join("blocked"), "--lib").unwrap();
+        }
+        let result = decide("p2");
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(!decide("p2").status.success());
+        let transcript = engine
+            .call("transcript.page", json!({"chatId":room}))
+            .unwrap();
+        let card = transcript["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|e| e["kind"] == "prompt")
+            .unwrap();
+        let replies: Vec<_> = transcript["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["replyTo"] == card["id"])
+            .collect();
+        assert_eq!(replies.len(), 1);
+        assert_eq!(replies[0]["message"]["content"], "Test scope checked");
+        assert_eq!(replies[0]["author"]["id"], "peer");
+        assert_eq!(replies[0]["permissionDecision"], decision);
+        assert_eq!(card["permissionReview"]["decision"], decision);
+        assert_eq!(card["permissionReview"]["reviewerId"], "peer");
+        assert_eq!(card["permissionReview"]["reason"], "Test scope checked");
+        if decision == "human" {
+            assert_eq!(card["status"], "pending");
+            assert!(!home.join("key").exists());
+            engine.call("prompt.answer",json!({"botId":"worker","signature":card["prompt"]["signature"],"action":"cancel"})).unwrap();
+        } else {
+            assert_eq!(card["status"], "answered");
+            assert_eq!(
+                fs::read_to_string(home.join("key")).unwrap(),
+                if decision == "approve" {
+                    "enter"
+                } else {
+                    "esc"
+                }
+            );
+        }
+        fs::remove_file(home.join("key")).unwrap();
+        // Let the mirror observe the end of this request before repeating it.
+        wait(|| {
+            let bots = engine.call("chat.list", json!({})).unwrap();
+            bots.as_array()
+                .unwrap()
+                .iter()
+                .any(|b| b["id"] == "worker" && b["bot"]["status"] == "idle")
+        });
+    }
+}
