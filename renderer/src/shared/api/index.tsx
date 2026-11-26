@@ -1,0 +1,41 @@
+/** Shared renderer imports for the native app API. */
+export type {
+  AdoptableAgent,
+  AppApiErrorCode,
+  AppApiErrorPayload,
+  AppApiEvent,
+  AppApiEventMap,
+  AppApiEventType,
+  AppApiMethod,
+  AppApiMethods,
+  AppApiParams,
+  AppApiResult,
+  AppSettings,
+  AwaitingReason,
+  BotDefaults,
+  BotFacts,
+  BotOnboardingState,
+  BotStatus,
+  ChatKind,
+  ChatSummary,
+  CreateBotParams,
+  DirectoryListing,
+  HostStatusSummary,
+  MessageSearchHit,
+  ModelCatalogResult,
+  Terminal,
+  ModelCatalogSource,
+  ModelEntry,
+  OnboardingLocale,
+  OnboardingStage,
+  PendingPrompt,
+  PendingPromptOption,
+  PermissionMode,
+  ReasoningEffort,
+  TranscriptEntry,
+  TranscriptPage,
+} from "./protocol/types.tsx";
+
+export { AppApiError, isAppApiError, toAppApiError } from "./protocol/errors.tsx";
+export { createAppClient } from "./protocol/client.tsx";
+export type { AppApiClient, AppApiClientOptions, AppApiTransport } from "./protocol/client.tsx";

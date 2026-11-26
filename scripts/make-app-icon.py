@@ -1,9 +1,9 @@
-"""Regenerate desktop/build/icon.icns and icon.png from desktop/build/icon-source.jpg.
+"""Regenerate desktop/icons/icon.icns and icon.png from desktop/icons/icon-source.jpg.
 
 Run by hand after changing the source artwork; needs Pillow (`pip install pillow`) and macOS's
 `iconutil`:
 
-    python3 scripts/make-app-icon.py && iconutil -c icns desktop/build/herdr-bot.iconset -o desktop/build/icon.icns
+    python3 scripts/make-app-icon.py && iconutil -c icns desktop/icons/herdr-bot.iconset -o desktop/icons/icon.icns
 
 The source is a flat black canvas with the white ram-head glyph placed off-centre inside it and a
 wide margin of bare black all around. `L, T, R, B` is a square crop centred on the glyph's own
@@ -23,7 +23,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter
 
-HERE = Path(__file__).resolve().parent.parent / "desktop" / "build"
+HERE = Path(__file__).resolve().parent.parent / "desktop" / "icons"
 SRC = HERE / "icon-source.jpg"
 ISET = HERE / "herdr-bot.iconset"
 L, T, R, B = 323, 274, 1179, 1130         # right/bottom exclusive

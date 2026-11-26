@@ -10,6 +10,6 @@ const ext = target.includes("windows") ? ".exe" : "";
 const dir = "native/target";
 execFileSync("cargo", ["build", "--locked", "--manifest-path", "native/Cargo.toml", "--target-dir", dir,
   "--target", target, "--bin", "herdr-bot-cli", ...(release ? ["--release"] : [])], { stdio: "inherit" });
-mkdirSync("src-tauri/binaries", { recursive: true });
+mkdirSync("desktop/binaries", { recursive: true });
 copyFileSync(join(dir, target, release ? "release" : "debug", "herdr-bot-cli" + ext),
-  join("src-tauri/binaries", "herdr-bot-cli-" + target + ext));
+  join("desktop/binaries", "herdr-bot-cli-" + target + ext));

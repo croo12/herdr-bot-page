@@ -22,56 +22,25 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci --workspace renderer --include-workspace-root
-      - run: npm run renderer:typecheck
-      - run: node --test "renderer/test/**/*.test.ts"
-      - run: npm run test:native
+      - run: npm ci
+      - run: npm run check
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:
           name: herdr-bot-windows-x64
-          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          path: desktop/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
 
-  check:
-    name: Typecheck, test and build
-    # The original Electron host uses macOS sockets and login-shell PATH discovery.
+  macos:
+    name: macOS native app and CLI
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
-
-      - name: Install
-        run: npm ci --no-audit --no-fund
-
-      - name: Typecheck and test
-        run: npm run check
-
-      - name: Build the app
-        run: npm run desktop:build
-
-  package:
-    name: Package (smoke test)
-    needs: check
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install
-        run: npm ci --no-audit --no-fund
-
-      - name: Build the app bundle
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npm run desktop:package:dir -- --publish never
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build -- --bundles app

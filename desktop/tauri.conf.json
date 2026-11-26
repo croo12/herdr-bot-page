@@ -1,0 +1,17 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "herdr-bot",
+  "version": "1.3.0",
+  "identifier": "dev.herdr.bot",
+  "build": {
+    "beforeDevCommand": "npm run tauri:frontend:dev",
+    "beforeBuildCommand": "npm run tauri:frontend:build",
+    "devUrl": "http://127.0.0.1:5173",
+    "frontendDist": "../renderer/dist"
+  },
+  "app": {
+    "windows": [{ "title": "herdr-bot", "width": 1040, "height": 760, "minWidth": 512, "minHeight": 520, "dragDropEnabled": false }],
+    "security": { "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost https://api.github.com; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'" }
+  },
+  "bundle": { "active": true, "externalBin": ["binaries/herdr-bot-cli"], "icon": ["icons/icon.ico","icons/icon.png","icons/icon.icns"] }
+}

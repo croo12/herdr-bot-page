@@ -15,13 +15,19 @@ herdr에서 실행하는 에이전트와 채팅하는 데스크톱 앱입니다.
 Windows 개발 환경에는 Node.js 24 이상, Rust stable MSVC, Visual Studio Build Tools의 **C++를 사용한 데스크톱 개발**, WebView2가 필요합니다. 저장소 루트에서 실행합니다.
 
 ```powershell
-npm ci --workspace renderer --include-workspace-root
+npm ci
 npm start              # 개발 모드로 실행
-npm run test:native    # Rust 엔진과 CLI 테스트
+npm test               # 화면, Rust 엔진과 CLI 테스트
 npm run build          # Windows 설치 파일 생성
 ```
 
-Windows x64 설치 파일은 `src-tauri/target/release/bundle/nsis/`에 생성됩니다.
+Windows x64 설치 파일은 `desktop/target/release/bundle/nsis/`에 생성됩니다.
+
+## 화면 코드 구조
+
+렌더러의 TypeScript 소스, 테스트, Vite 설정은 모두 `.tsx`로 작성합니다. `npm test --workspace renderer`로 확장자 규칙과 렌더러 테스트를 확인할 수 있습니다.
+
+`renderer/src/app`은 앱 진입점과 전역 프로바이더를, `pages/workspace`는 채팅 화면과 그 상태를 관리합니다. `features/compose-message`와 `features/answer-prompt`는 메시지 작성과 권한·질문 응답을 담당합니다. 페이지와 기능은 각 폴더의 `index.tsx`로 공개합니다. Tauri 통신, 공용 UI와 번역은 `shared`에 있습니다.
 
 ## CLI와 데이터
 

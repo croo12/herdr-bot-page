@@ -1,0 +1,39 @@
+import type { CSSProperties } from "react";
+import { Users } from "lucide-react";
+import { useChats } from "../../model/useChats.tsx";
+import { personaColorVar, resolvePersonaColor } from "#shared/ui/avatar-colors.tsx";
+import { useT } from "#shared/i18n/TranslationProvider.tsx";
+import { Avatar } from "#shared/ui/index.tsx";
+import styles from "./MentionChip.module.css";
+
+export interface MentionChipProps {
+  /** `null` for the synthesized "@everyone" mention. */
+  readonly id: string | null;
+  readonly name: string;
+}
+
+/** An inline mention (gray pill, avatar + name in the bot's colour), rendered identically while composing and once sent. Resolves
+ * the mentioned bot's *current* avatar live from the chat list on every render -- never from anything
+ * frozen into the message itself -- so a renamed/recolored bot's older mentions still show up to date. */
+export function MentionChip({ id, name }: MentionChipProps) {
+  const chats = useChats();
+  const { t } = useT();
+
+  if (id == null) {
+    return (
+      <span className={styles["hb-mention"]}>
+        <Users size={14} aria-hidden />
+        {t("conversation.everyone")}
+      </span>
+    );
+  }
+
+  const bot = chats.find((chat) => chat.id === id);
+  const hue = bot == null ? undefined : ({ "--hb-mention-hue": personaColorVar(resolvePersonaColor(bot.avatarColor)) } as CSSProperties);
+  return (
+    <span className={styles["hb-mention"]} style={hue}>
+      {bot != null ? <Avatar kind="bot" color={resolvePersonaColor(bot.avatarColor)} name={bot.name} size="2xs" /> : null}
+      {bot?.name ?? name}
+    </span>
+  );
+}
