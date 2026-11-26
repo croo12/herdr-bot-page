@@ -1,6 +1,6 @@
 // Stand-in for the external herdr process. A prompt invokes the real native CLI
 // inside a simulated pane, just as an agent posts its answer on Windows.
-use std::{env, fs, path::PathBuf, process::Command, time::Duration};
+use std::{env, fs, io::Write, path::PathBuf, process::Command, time::Duration};
 fn main() {
     let args: Vec<String> = env::args().skip(3).collect();
     let home = PathBuf::from(env::var_os("HERDR_BOT_HOME").unwrap());
@@ -26,6 +26,20 @@ fn main() {
         }
         (Some("agent"), Some("prompt")) => {
             let prompt = &args[3];
+            if prompt.contains("Current request:\nsimulate stalled turn\n") {
+                fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(home.join("prompt-count"))
+                    .unwrap()
+                    .write_all(b"1")
+                    .unwrap();
+                fs::write(stage, "done").unwrap();
+                eprintln!(
+                    r#"{{"error":{{"code":"agent_prompt_stalled","message":"agent prompt produced no observed working or blocked state within 5000 ms; current status is done"}}}}"#
+                );
+                std::process::exit(1);
+            }
             if prompt.contains("simulate delayed turn") {
                 assert!(fs::File::create_new(home.join("submitted-once")).is_ok());
                 fs::write(stage, "blocked").unwrap();
@@ -81,6 +95,25 @@ fn main() {
             println!(r#"{{"result":{{"agent":{agent}}}}}"#)
         }
         (Some("agent"), Some("wait")) => {
+            if args[3..7] == ["--until", "working", "--until", "blocked"] {
+                assert_eq!(args[2], "w1:p1");
+                fs::write(home.join("waiting-for-start"), "").unwrap();
+                for _ in 0..400 {
+                    if fs::read_to_string(&stage).unwrap() == "working" {
+                        println!(
+                            r#"{{"result":{{"agent":{}}}}}"#,
+                            agent.replace("done", "working")
+                        );
+                        return;
+                    }
+                    if home.join("reply-posted").exists() {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                println!(r#"{{"error":{{"code":"timeout","message":"wait timed out"}}}}"#);
+                return;
+            }
             assert_eq!(&args[3..7], ["--until", "done", "--until", "idle"]);
             if status == "blocked" {
                 fs::write(stage, "working").unwrap();

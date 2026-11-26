@@ -153,12 +153,7 @@ pub(crate) fn execute(
     let Some(step) = prepare(store, sessions, room, entry_id)? else {
         return Ok(());
     };
-    let result = run_or_resume_prompt(
-        &sessions.herdr,
-        &step.bot,
-        &step.pane,
-        step.prompt.as_deref(),
-    );
+    let result = run_or_resume_prompt(sessions, &step.bot, &step.pane, step.prompt.as_deref());
     sessions.active.lock().unwrap().remove(&step.bot);
     store.tx(|repos, events| {
         let mut entry = repos.transcript.by_id(room, entry_id)?;

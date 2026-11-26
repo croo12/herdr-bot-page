@@ -35,10 +35,10 @@ impl std::fmt::Display for HerdrFailure {
 
 impl std::error::Error for HerdrFailure {}
 
-pub(crate) fn is_herdr_timeout(error: &anyhow::Error) -> bool {
+pub(crate) fn has_error_code(error: &anyhow::Error, code: &str) -> bool {
     error
         .downcast_ref::<HerdrFailure>()
-        .is_some_and(|failure| failure.code == "timeout")
+        .is_some_and(|failure| failure.code == code)
 }
 
 pub fn command(file: impl AsRef<OsStr>) -> Command {

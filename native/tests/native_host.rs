@@ -47,13 +47,8 @@ fn wait(mut ok: impl FnMut() -> bool) {
         thread::sleep(Duration::from_millis(50));
     }
 }
-#[test]
-fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
-    let tmp = tempfile::tempdir().unwrap();
-    let home = tmp.path().join("테스트 home");
-    let fake = tmp
-        .path()
-        .join(format!("fake-herdr{}", std::env::consts::EXE_SUFFIX));
+fn compile_herdr_fixture(directory: &Path) -> PathBuf {
+    let fake = directory.join(format!("fake-herdr{}", std::env::consts::EXE_SUFFIX));
     let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/herdr.rs");
     assert!(Command::new("rustc")
         .arg(fixture)
@@ -62,6 +57,81 @@ fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
         .status()
         .unwrap()
         .success());
+    fake
+}
+
+#[test]
+fn stalled_prompt_keeps_the_original_turn_until_start_or_reply_is_confirmed() {
+    let directory = tempfile::tempdir().unwrap();
+    let fake = compile_herdr_fixture(directory.path());
+    for scenario in ["late-start", "missed-start", "never-started"] {
+        let home = directory.path().join(scenario);
+        let _host = start(&home, &fake);
+        cli(&home, &["bot", "adopt", "w1:p1", "tester"]);
+        ipc::request(
+            &home,
+            "message.send",
+            json!({"chatId":"tester","text":"simulate stalled turn"}),
+        )
+        .unwrap();
+        let finished = || {
+            ipc::request(&home, "host.status", Value::Null).unwrap()["runningChatIds"] == json!([])
+        };
+        let start_wait = home.join("waiting-for-start");
+        wait(|| start_wait.exists() || finished());
+        assert!(
+            start_wait.exists(),
+            "{scenario}: the host abandoned the stalled prompt"
+        );
+        match scenario {
+            "late-start" => {
+                std::fs::write(home.join("delayed-stage"), "working").unwrap();
+                wait(|| home.join("waiting-for-reply").exists());
+                let response = ipc::request(
+                    &home,
+                    "cli.pass",
+                    json!({"paneId":"w1:p1","chatId":"tester"}),
+                )
+                .unwrap();
+                assert_eq!(response["passed"], true);
+            }
+            "missed-start" => {
+                ipc::request(
+                    &home,
+                    "cli.say",
+                    json!({"paneId":"w1:p1","chatId":"tester","text":"late reply"}),
+                )
+                .unwrap();
+            }
+            _ => {}
+        }
+        std::fs::write(home.join("reply-posted"), "").unwrap();
+        wait(finished);
+        let page = ipc::request(&home, "transcript.page", json!({"chatId":"tester"})).unwrap();
+        let entries = page["entries"].as_array().unwrap();
+        match scenario {
+            "late-start" => assert_eq!(entries.len(), 1, "{entries:?}"),
+            "missed-start" => {
+                assert_eq!(entries.len(), 2, "{entries:?}");
+                assert_eq!(entries[1]["message"]["content"], "late reply");
+            }
+            _ => {
+                assert_eq!(entries.len(), 2, "{entries:?}");
+                assert!(entries[1]["content"]
+                    .as_str()
+                    .unwrap()
+                    .contains("agent_prompt_stalled"));
+            }
+        }
+        assert_eq!(std::fs::read(home.join("prompt-count")).unwrap(), b"1");
+    }
+}
+
+#[test]
+fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("테스트 home");
+    let fake = compile_herdr_fixture(tmp.path());
     let host = start(&home, &fake);
     cli(&home, &["bot", "adopt", "w1:p1", "tester"]);
     let room: Value = serde_json::from_str(&cli(
