@@ -15,6 +15,7 @@ import { MarkdownView } from "./MarkdownView.tsx";
 import { MarkerBadges } from "./MarkerBadges.tsx";
 import type { MentionCandidate } from "../../model/conversation/mentions.tsx";
 import { Reactions } from "./Reactions.tsx";
+import { MessageTaskPanel } from "./MessageTaskPanel.tsx";
 import { ReplyQuote } from "./ReplyQuote.tsx";
 import styles from "./MessageBubble.module.css";
 
@@ -32,6 +33,7 @@ export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, 
   const { locale, t } = useT();
   const chats = useChats();
   const [hovered, setHovered] = useState(false);
+  const [tracking, setTracking] = useState(false);
 
   const mine = isUserMessage(entry);
   const author = getAuthor(entry);
@@ -79,11 +81,15 @@ export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, 
             previewText={text}
             isMine={mine}
             hovered={hovered}
+            onTrack={mine && chat.kind === "room" && !entry.task && text.trim() ? () => setTracking(true) : undefined}
           />
           <time className={styles["hb-message-timestamp"]} dateTime={new Date(entry.timestampMs).toISOString()}>
             {formatClockTime(entry.timestampMs, locale)}
           </time>
         </Bubble>
+        {(tracking || entry.task) && (
+          <MessageTaskPanel chatId={chat.id} entry={entry} members={members} onClose={() => setTracking(false)} />
+        )}
 
         <Reactions chatId={chat.id} entryId={entry.id} reactions={reactions} align={mine ? "end" : "start"} />
       </MessageContent>

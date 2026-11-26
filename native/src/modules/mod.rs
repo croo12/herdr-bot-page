@@ -4,5 +4,6 @@ pub(crate) mod prompts;
 pub(crate) mod reviews;
 pub(crate) mod rooms;
 pub(crate) mod settings;
+pub(crate) mod tasks;
 pub(crate) mod transcript;
 pub(crate) mod turns;

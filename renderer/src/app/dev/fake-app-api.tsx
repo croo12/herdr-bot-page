@@ -37,6 +37,35 @@ export function createFakeAppApi(): AppApiTransport {
     return (entries[entries.length - 1]?.seq ?? 0) + 1;
   }
 
+  function setRoomMembers(chat: ChatSummary, memberIds: readonly string[]) {
+    for (const entry of roomEntries(chat.id)) {
+      const task = entry.task;
+      if (task?.assigneeId && task.status !== "completed" && !memberIds.includes(task.assigneeId)) {
+        updateTask(chat.id, entry.id, current => ({
+          ...current, task: { ...task, assigneeId: null, updatedAt: Date.now() },
+        }));
+      }
+    }
+    return putChat({ ...chat, memberIds });
+  }
+
+  function roomEntries(chatId: string) {
+    if (requireChat(chatId).kind !== "room") throw new AppApiError("invalid_args", "Tasks belong to a room");
+    return transcripts.get(chatId) ?? [];
+  }
+
+  function updateTask(chatId: string, entryId: string, update: (entry: TranscriptEntry) => TranscriptEntry) {
+    const entries = roomEntries(chatId);
+    const current = entries.find(entry => entry.id === entryId);
+    if (!current) throw new AppApiError("invalid_args", "Unknown message");
+    const entry = update(current);
+    if (entry !== current) {
+      transcripts.set(chatId, entries.map(item => item.id === entryId ? entry : item));
+      emit("transcript.entryUpdated", { chatId, entry });
+    }
+    return entry;
+  }
+
   function blankChat(overrides: Partial<ChatSummary> & Pick<ChatSummary, "id" | "kind" | "name">): ChatSummary {
     const now = Date.now();
     return {
@@ -68,6 +97,32 @@ export function createFakeAppApi(): AppApiTransport {
   }
 
   const methods: Record<string, (params: any) => unknown> = {
+    "task.list": ({ chatId }) => roomEntries(chatId).filter(entry => entry.task),
+    "task.run": () => { throw new AppApiError("bot_not_ready", "Task execution requires the desktop app."); },
+    "task.track": ({ chatId, entryId, assigneeId, criteria }) => updateTask(chatId, entryId, entry => {
+      const trimmed = typeof criteria === "string" ? criteria.trim() : "";
+      if (!trimmed || entry.kind !== "message" || !String(entry.content ?? "").trim()) throw new AppApiError("invalid_args", "A goal and completion criteria are required");
+      if (entry.task) {
+        if (entry.task.assigneeId === assigneeId && entry.task.criteria === trimmed) return entry;
+        throw new AppApiError("invalid_args", "This message already tracks a task");
+      }
+      if (assigneeId != null && !requireChat(chatId).memberIds.includes(assigneeId)) throw new AppApiError("invalid_args", "Choose a room member");
+      return { ...entry, task: { assigneeId, criteria: trimmed, status: "open", updatedAt: Date.now() } };
+    }),
+    "task.assign": ({ chatId, entryId, assigneeId, previousAssigneeId }) => updateTask(chatId, entryId, entry => {
+      const task = entry.task;
+      if (!task) throw new AppApiError("invalid_args", "Message has no task");
+      if (task.assigneeId === assigneeId) return entry;
+      if (task.assigneeId !== previousAssigneeId || task.status === "completed") throw new AppApiError("invalid_args", "Task has changed");
+      if (assigneeId !== null && !requireChat(chatId).memberIds.includes(assigneeId)) throw new AppApiError("invalid_args", "Choose a room member");
+      return { ...entry, task: { ...task, assigneeId, updatedAt: Date.now() } };
+    }),
+    "task.setStatus": ({ chatId, entryId, status, previousStatus }) => updateTask(chatId, entryId, entry => {
+      if (!entry.task || !["open", "in_progress", "completed"].includes(status)) throw new AppApiError("invalid_args", "Invalid task status");
+      if (status === entry.task.status) return entry;
+      if (previousStatus !== entry.task.status) throw new AppApiError("invalid_args", "Task status has changed");
+      return { ...entry, task: { ...entry.task, status, updatedAt: Date.now() } };
+    }),
     "chat.list": () => [...chats.values()],
     "chat.search": (params: { query?: string }) => {
       const needle = (params.query ?? "").toLowerCase();
@@ -103,6 +158,11 @@ export function createFakeAppApi(): AppApiTransport {
     },
     "chat.delete": (params: { chatIds: readonly string[] }) => {
       for (const id of params.chatIds) chats.delete(id);
+      for (const room of chats.values()) {
+        if (room.kind === "room" && room.memberIds.some(id => params.chatIds.includes(id))) {
+          setRoomMembers(room, room.memberIds.filter(id => !params.chatIds.includes(id)));
+        }
+      }
       emit("chat.listChanged", [...chats.values()]);
       return { deletedIds: [...params.chatIds] };
     },
@@ -226,7 +286,7 @@ export function createFakeAppApi(): AppApiTransport {
     },
     "room.setMembers": (params: { roomId: string; memberIds: readonly string[] }) => {
       const chat = requireChat(params.roomId);
-      return putChat({ ...chat, memberIds: params.memberIds });
+      return setRoomMembers(chat, params.memberIds);
     },
 
     "prompt.answer": (params: { botId: string; signature: string }) => {

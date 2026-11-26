@@ -17,6 +17,20 @@ pub(super) enum Action {
     Status,
     Serve,
     Rooms,
+    /// List tasks recorded on messages in a room.
+    Tasks {
+        room: String,
+    },
+    /// Post a checkpoint or verified result from the assigned pane.
+    TaskReport {
+        room: String,
+        entry_id: String,
+        attempt_id: String,
+        #[arg(value_parser = ["completed", "continue", "blocked"])]
+        outcome: String,
+        #[arg(required = true, num_args = 1..)]
+        summary: Vec<String>,
+    },
     Whoami,
     Bot {
         #[command(subcommand)]
@@ -58,6 +72,10 @@ pub(super) struct Message {
 #[derive(Subcommand)]
 pub(super) enum Bot {
     List,
+    /// Reconnect a bot without sending a message or interrupting a live pane.
+    Connect {
+        id: String,
+    },
     Adoptable,
     Delete {
         id: String,

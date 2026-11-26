@@ -25,6 +25,17 @@ fn run() -> Result<()> {
             }
         }
         Action::Status => call("host.status", Value::Null)?,
+        Action::TaskReport {
+            room,
+            entry_id,
+            attempt_id,
+            outcome,
+            summary,
+        } => call(
+            "cli.taskReport",
+            json!({"chatId":room,"entryId":entry_id,"attemptId":attempt_id,"paneId":pane,"outcome":outcome,"summary":summary.join(" ")}),
+        )?,
+        Action::Tasks { room } => call("task.list", json!({"chatId": room}))?,
         Action::Send(message_args) => message("message.send", message_args)?,
         Action::Say {
             reply_to,
@@ -66,6 +77,7 @@ fn run() -> Result<()> {
                 .collect::<Vec<_>>())
         }
         Action::Bot { command } => match command {
+            Bot::Connect { id } => call("bot.connect", json!({"botId":id}))?,
             Bot::Adoptable => call("bot.listAdoptable", Value::Null)?,
             Bot::Delete { id } => call("chat.delete", json!({"chatIds":[id]}))?,
             Bot::Adopt { pane, id, name } => call(

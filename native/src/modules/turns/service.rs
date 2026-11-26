@@ -12,6 +12,11 @@ pub(crate) struct Job {
     pub depth: u8,
     pub exclude: Option<String>,
 }
+pub(crate) enum QueueItem {
+    Chat(Job),
+    Task(String),
+}
+
 pub(crate) struct Turn {
     pub chat: String,
     pub task: String,
@@ -21,10 +26,36 @@ pub(crate) struct Turn {
     pub(super) delegated: bool,
 }
 
+impl Turn {
+    pub(crate) fn new(chat: &str, task: &str, depth: u8) -> Self {
+        Self {
+            chat: chat.into(),
+            task: task.into(),
+            depth,
+            spoken: 0,
+            passed: false,
+            delegated: false,
+        }
+    }
+}
+
 pub(crate) fn enqueue(engine: &Arc<Engine>, chat_id: &str, job: Job) {
+    enqueue_item(engine, chat_id, QueueItem::Chat(job));
+}
+
+pub(crate) fn enqueue_item(engine: &Arc<Engine>, chat_id: &str, job: QueueItem) {
     let mut queues = engine.queues.lock().unwrap();
     let start = !queues.contains_key(chat_id);
-    queues.entry(chat_id.into()).or_default().push_back(job);
+    let queue = queues.entry(chat_id.into()).or_default();
+    if let QueueItem::Task(entry_id) = &job {
+        if queue
+            .iter()
+            .any(|item| matches!(item, QueueItem::Task(id) if id == entry_id))
+        {
+            return;
+        }
+    }
+    queue.push_back(job);
     drop(queues);
     if !start {
         return;
@@ -43,7 +74,13 @@ pub(crate) fn enqueue(engine: &Arc<Engine>, chat_id: &str, job: Job) {
             }
         };
         room_activity(&engine, &target, true);
-        if let Err(err) = cycle(&engine, &target, job) {
+        let result = match job {
+            QueueItem::Chat(job) => cycle(&engine, &target, job),
+            QueueItem::Task(entry_id) => {
+                crate::modules::tasks::execute(&engine, &target, &entry_id)
+            }
+        };
+        if let Err(err) = result {
             notice(&engine, &target, &format!("{err:#}"));
         }
         room_activity(&engine, &target, false);
@@ -116,17 +153,7 @@ fn cycle(engine: &Engine, target: &str, job: Job) -> Result<()> {
                     notice(engine, target, &format!("{bot} is busy in another chat."));
                     continue;
                 }
-                active.insert(
-                    bot.clone(),
-                    Turn {
-                        chat: target.into(),
-                        task: job.seed.clone(),
-                        depth: job.depth,
-                        spoken: 0,
-                        passed: false,
-                        delegated: false,
-                    },
-                );
+                active.insert(bot.clone(), Turn::new(target, &job.seed, job.depth));
             }
             let result = prompt(engine, bot, target, &job.seed);
             let turn = engine.active.lock().unwrap().remove(bot);
@@ -158,16 +185,13 @@ fn prompt(engine: &Engine, bot: &str, target: &str, seed: &str) -> Result<()> {
             repos.chats.get(target)?,
         ))
     })?;
-    let pane = need(&profile["bot"], "paneId")?;
-    let live = engine.herdr.run(&["agent", "get", pane])?;
-    if live["agent"]["name"] != bot {
-        bail!("bot_not_ready: pane has changed")
-    }
-    if matches!(
-        string_field(&live["agent"], "agent_status"),
-        "working" | "blocked"
-    ) {
-        bail!("bot_not_ready: {}", live["agent"]["agent_status"])
+    let live = {
+        let _roster = engine.roster.lock().unwrap();
+        crate::modules::bots::connect_for_turn(engine, bot)?
+    };
+    let pane = need(&live, "pane_id")?;
+    if matches!(string_field(&live, "agent_status"), "working" | "blocked") {
+        bail!("bot_not_ready: {}", live["agent_status"])
     }
     let history = entries
         .iter()
@@ -199,6 +223,15 @@ fn prompt(engine: &Engine, bot: &str, target: &str, seed: &str) -> Result<()> {
         Call the CLI to post; terminal output is private. In PowerShell invoke a quoted path with &. \
         To delegate, use message <bot-or-room-id> \"task\". Do not repeat earlier replies.\n\
         Current request:\n{}\nRecent conversation:\n{}",string_field(&profile,"name"),string_field(&profile,"description"),room["memberIds"],seed,history);
+    run_or_resume_prompt(engine, bot, pane, Some(&prompt))
+}
+
+pub(crate) fn run_or_resume_prompt(
+    engine: &Engine,
+    bot: &str,
+    pane: &str,
+    prompt: Option<&str>,
+) -> Result<()> {
     let timeout = std::env::var("HERDR_BOT_TURN_TIMEOUT_MS")
         .ok()
         .and_then(|timeout| timeout.parse::<u64>().ok())
@@ -206,18 +239,13 @@ fn prompt(engine: &Engine, bot: &str, target: &str, seed: &str) -> Result<()> {
         .clamp(1000, 3600000);
     let limit = timeout.to_string();
     let command_timeout = timeout.div_ceil(1000) + 10;
-    let mut result = engine.herdr.run_timeout(
-        &[
-            "agent",
-            "prompt",
-            pane,
-            &prompt,
-            "--wait",
-            "--timeout",
-            &limit,
-        ],
-        command_timeout,
-    );
+    let mut result = match prompt {
+        Some(text) => engine.herdr.run_timeout(
+            &["agent", "prompt", pane, text, "--wait", "--timeout", &limit],
+            command_timeout,
+        ),
+        None => engine.herdr.run(&["agent", "get", pane]),
+    };
     loop {
         // Once submitted, a slow turn and an approval both retain their original
         // chat and CLI reply channel. Only the status wait may be repeated.

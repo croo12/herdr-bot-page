@@ -16,6 +16,10 @@ fn main() {
         (Some("session"), Some("list")) => {
             println!(r#"{{"sessions":[{{"name":"native-test","running":true}}]}}"#)
         }
+        (Some("agent"), Some("list")) if home.join("two-bots").exists() => {
+            let peer = agent.replace("tester", "peer").replace("w1:p1", "w1:p2");
+            println!(r#"{{"result":{{"agents":[{agent},{peer}]}}}}"#);
+        }
         (Some("agent"), Some("list")) => println!(r#"{{"result":{{"agents":[{agent}]}}}}"#),
         (Some("agent"), Some("get")) | (Some("agent"), Some("start")) => {
             println!(r#"{{"result":{{"agent":{agent}}}}}"#)
@@ -42,7 +46,23 @@ fn main() {
                 .join(format!("herdr-bot{}", env::consts::EXE_SUFFIX));
             let mut invoke = Command::new(cli);
             invoke.env("HERDR_PANE_ID", "w1:p1");
-            if prompt.contains("native-reply") && target.starts_with("room-") {
+            if let Some(report) = prompt.lines().find(|line| line.starts_with("task-report ")) {
+                assert!(prompt.contains("Completion criteria: Windows build passes"));
+                if prompt.contains("Previous checkpoint: Build fixed; verify on Windows") {
+                    // Leave the second turn live so the test can exercise pause and crash recovery.
+                    fs::File::create_new(home.join("second-step-submitted")).unwrap();
+                    fs::write(stage, "working").unwrap();
+                    println!(
+                        r#"{{"result":{{"agent":{}}}}}"#,
+                        agent.replace("idle", "working")
+                    );
+                    return;
+                }
+                fs::File::create_new(home.join("first-step-submitted")).unwrap();
+                invoke
+                    .args(report.split_whitespace().take(4))
+                    .args(["continue", "Build fixed; verify on Windows"]);
+            } else if prompt.contains("native-reply") && target.starts_with("room-") {
                 invoke.args(["pass", target]);
             } else {
                 invoke.args(["say", target, "native-reply 안녕하세요"]);

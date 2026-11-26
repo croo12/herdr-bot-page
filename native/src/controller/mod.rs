@@ -1,4 +1,4 @@
-use crate::modules::{bots, chats, prompts, rooms, settings, transcript, turns};
+use crate::modules::{bots, chats, prompts, rooms, settings, tasks, transcript, turns};
 pub mod ipc;
 use crate::{
     domain::{need, string_field},
@@ -42,7 +42,17 @@ impl Engine {
     }
 
     fn dispatch(self: &Arc<Self>, source: Source, method: &str, params: Value) -> Result<Value> {
-        if matches!(source, Source::Ipc) && method == "prompt.answer" {
+        if matches!(source, Source::Ipc)
+            && matches!(
+                method,
+                "prompt.answer"
+                    | "task.track"
+                    | "task.assign"
+                    | "task.setStatus"
+                    | "task.run"
+                    | "task.pause"
+            )
+        {
             bail!("invalid_args: this action requires the desktop app");
         }
         match method {
@@ -65,6 +75,12 @@ impl Engine {
             "transcript.thread" => transcript::transcript_thread(self, &params),
             "message.search" => transcript::search_messages(self, string_field(&params, "query")),
             "message.react" => transcript::react(self, &params),
+            "task.track" => tasks::track(self, &params),
+            "task.assign" => tasks::assign(self, &params),
+            "task.setStatus" => tasks::set_status(self, &params),
+            "task.list" => tasks::list(self, &params),
+            "task.run" | "task.pause" => tasks::control(self, &params, method == "task.pause"),
+            "cli.taskReport" => tasks::report(self, &params),
             "message.send" => transcript::send(self, &params),
             "bot.listModels" => bots::list_models(need(&params, "provider")?),
             "bot.create" | "bot.quickCreate" => {
@@ -73,6 +89,7 @@ impl Engine {
             "bot.retrySetup" | "bot.updateLaunchSettings" => bots::relaunch_bot(self, &params),
             "bot.listAdoptable" => bots::adoptable_bots(self),
             "bot.focus" => bots::focus_bot(self, &params),
+            "bot.connect" => bots::connect_bot(self, &params),
             "prompt.answer" => prompts::answer(self, &params),
             "cli.say" => turns::say(self, params),
             "cli.pass" => turns::agent_action(self, AgentAction::Pass, params),

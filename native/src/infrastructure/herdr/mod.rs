@@ -184,10 +184,10 @@ impl Herdr {
         bail!("herdr_error: session {} did not start", self.session)
     }
     pub fn agents(&self) -> Result<Vec<Value>> {
-        Ok(self.run(&["agent", "list"])?["agents"]
+        self.run(&["agent", "list"])?["agents"]
             .as_array()
             .cloned()
-            .unwrap_or_default())
+            .context("herdr_error: agent list has no agents array")
     }
     pub fn launch(&self, id: &str, bot: &Value) -> Result<Value> {
         let cwd = need(bot, "cwd")?;

@@ -54,6 +54,7 @@ fn update_room(
         }
         room["memberIds"] = json!(members);
         crate::modules::reviews::revoke_removed_members(repos, events, &room)?;
+        crate::modules::tasks::release_removed_members(repos, events, &room)?;
         change(repos, &room, events)?;
         Ok(room)
     }

@@ -33,6 +33,7 @@ export type {
   PermissionMode,
   ReasoningEffort,
   TranscriptEntry,
+  TaskStatus,
   TranscriptPage,
 } from "./protocol/types.tsx";
 

@@ -93,7 +93,31 @@ export interface ChatSummary {
 /** One transcript row. Open-ended by design (mirrors the host's `StoredEntry`): common `kind`s are
  * "message" (user), "send-message" (bot reply), "notice", "prompt" (an inline `PendingPrompt` card,
  * `entry.prompt`/`entry.status`). */
+export type TaskStatus = "open" | "in_progress" | "completed";
+interface TaskExecution {
+  readonly version: string;
+  readonly state: "queued" | "running" | "paused" | "blocked" | "completed";
+  readonly checkpoint?: string;
+  readonly detail?: string | null;
+  readonly pauseAfterStep?: boolean;
+}
+
+interface TaskControlParams {
+  chatId: string;
+  entryId: string;
+  version: string | null;
+}
+
+export interface MessageTask {
+  readonly execution?: TaskExecution;
+  readonly assigneeId: string | null;
+  readonly criteria: string;
+  readonly status: TaskStatus;
+  readonly updatedAt: number;
+}
+
 export interface TranscriptEntry {
+  readonly task?: MessageTask;
   readonly permissionDecision?: "approve" | "deny" | "human";
   readonly permissionReview?: {
     readonly reviewerId: string;
@@ -218,6 +242,12 @@ export interface AppApiMethods {
     result: { readonly entryId: string };
   };
   "message.react": { params: { readonly chatId: string; readonly entryId: string; readonly emoji: string }; result: { readonly entry: TranscriptEntry | null } };
+  "task.track": { params: { chatId: string; entryId: string; assigneeId: string | null; criteria: string }; result: TranscriptEntry };
+  "task.assign": { params: TaskControlParams & { previousAssigneeId: string | null; assigneeId: string | null }; result: TranscriptEntry };
+  "task.setStatus": { params: { chatId: string; entryId: string; previousStatus: TaskStatus; status: TaskStatus }; result: TranscriptEntry };
+  "task.list": { params: { chatId: string }; result: TranscriptEntry[] };
+  "task.run": { params: TaskControlParams & { assigneeId: string }; result: TranscriptEntry };
+  "task.pause": { params: TaskControlParams; result: TranscriptEntry };
   "message.search": { params: { readonly query?: string }; result: readonly MessageSearchHit[] };
 
   "bot.create": { params: CreateBotParams; result: { readonly chat: ChatSummary } };

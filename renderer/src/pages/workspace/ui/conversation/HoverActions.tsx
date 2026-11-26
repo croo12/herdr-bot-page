@@ -22,12 +22,13 @@ export interface HoverActionsProps {
    * `document.body` and would otherwise fall outside any `:hover`-based reveal the moment the pointer
    * moves onto the popover itself. */
   readonly hovered: boolean;
+  readonly onTrack?: () => void;
 }
 
 /** The floating 3-icon toolbar revealed on hover over a message bubble: react, reply, and a
  * "more" menu (Start a thread / Copy). Visibility is pure CSS (`:hover`/`:focus-within` in the row's own
  * stylesheet) -- this component only owns the popovers' open/closed state. */
-export function HoverActions({ chatId, entryId, authorName, previewText, isMine, hovered }: HoverActionsProps) {
+export function HoverActions({ chatId, entryId, authorName, previewText, isMine, hovered, onTrack }: HoverActionsProps) {
   const { client } = useStoreContext();
   const { t } = useT();
   // `IconButton` doesn't forward a ref, so each trigger is wrapped in a plain anchor span instead of
@@ -76,6 +77,7 @@ export function HoverActions({ chatId, entryId, authorName, previewText, isMine,
       )}
       {moreButtonRef.current != null && (
         <Menu open={openPopover === "more"} onClose={() => setOpenPopover(null)} anchor={{ kind: "element", element: moreButtonRef.current, placement: "bottom-end" }} aria-label={t("conversation.moreActions")}>
+          {onTrack && <MenuItem onSelect={() => { setOpenPopover(null); onTrack(); }}>{t("conversation.trackTask")}</MenuItem>}
           <MenuItem
             icon={<MessageSquarePlus size={14} />}
             onSelect={() => {

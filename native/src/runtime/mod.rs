@@ -2,7 +2,7 @@ use crate::{
     controller::ipc,
     domain::Events,
     infrastructure::{herdr::Herdr, request_log::RequestLog},
-    modules::turns::{Job, Turn},
+    modules::turns::{QueueItem, Turn},
     storage::{Database, Repositories},
 };
 use anyhow::{Context, Result};
@@ -30,7 +30,7 @@ pub struct Engine {
     emit: Box<dyn Fn(Value) + Send + Sync>,
     pub(crate) roster: Mutex<()>,
     pub(crate) active: Mutex<HashMap<String, Turn>>,
-    pub(crate) queues: Mutex<HashMap<String, VecDeque<Job>>>,
+    pub(crate) queues: Mutex<HashMap<String, VecDeque<QueueItem>>>,
     pub home: PathBuf,
     pub user: String,
 }
@@ -84,6 +84,7 @@ impl Engine {
                 let _ = engine.herdr.ensure();
             }
             while let Some(engine) = weak.upgrade() {
+                let _ = crate::modules::tasks::dispatch(&engine);
                 let _ = crate::modules::prompts::refresh(&engine);
                 drop(engine);
                 thread::sleep(Duration::from_secs(3));

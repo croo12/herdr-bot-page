@@ -2,7 +2,8 @@ use crate::{
     domain::Events,
     modules::{
         chats::repository::Chats, prompts::repository::Prompts, reviews::repository::Reviews,
-        settings::repository::Settings, transcript::repository::Transcript,
+        settings::repository::Settings, tasks::repository::Tasks,
+        transcript::repository::Transcript,
     },
 };
 use anyhow::Result;
@@ -12,6 +13,7 @@ use std::{path::Path, sync::Mutex};
 pub(crate) struct Repositories<'db> {
     pub chats: Chats<'db>,
     pub settings: Settings<'db>,
+    pub tasks: Tasks<'db>,
     pub transcript: Transcript<'db>,
     pub prompts: Prompts<'db>,
     pub reviews: Reviews<'db>,
@@ -24,6 +26,7 @@ impl Database {
     CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS entries(chat TEXT REFERENCES chats(id) ON DELETE CASCADE, seq INTEGER, data TEXT NOT NULL, PRIMARY KEY(chat,seq));
     CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY,data TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS room_tasks ON entries(chat,seq) WHERE json_type(data,'$.task')='object';
     CREATE TABLE IF NOT EXISTS requests(key TEXT PRIMARY KEY, chat TEXT REFERENCES chats(id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS permission_reviews(
         ticket TEXT PRIMARY KEY, chat TEXT NOT NULL, seq INTEGER NOT NULL, signature TEXT NOT NULL,
@@ -48,6 +51,7 @@ impl Database {
         let repositories = Repositories {
             chats: Chats::new(&tx),
             settings: Settings::new(&tx),
+            tasks: Tasks::new(&tx),
             transcript: Transcript::new(&tx),
             prompts: Prompts::new(&tx),
             reviews: Reviews::new(&tx),

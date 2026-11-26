@@ -41,6 +41,7 @@ pub(crate) fn delete_chats(engine: &Engine, params: &Value) -> Result<Value> {
                     members.retain(|member| member != &id);
                     room["memberIds"] = json!(members);
                     crate::modules::reviews::revoke_removed_members(repos, events, &room)?;
+                    crate::modules::tasks::release_removed_members(repos, events, &room)?;
                     repos.chats.save(&room)?;
                 }
             }
