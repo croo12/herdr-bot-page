@@ -49,14 +49,19 @@ function resolveMentionDisplayName(attrs: MentionAttrs, resolve: MentionNameReso
   return resolve(attrs.id) ?? attrs.label;
 }
 
-function hasMentionIdentity(attrs: Readonly<Record<string, unknown>> | undefined): attrs is Readonly<Record<string, unknown>> & { readonly id: string; readonly label: string } {
+function hasMentionIdentity(
+  attrs: Readonly<Record<string, unknown>> | undefined,
+): attrs is Readonly<Record<string, unknown>> & { readonly id: string; readonly label: string } {
   return attrs != null && typeof attrs["id"] === "string" && typeof attrs["label"] === "string";
 }
 
 /** Plain-text + cleaned-JSON runs for one inline node: `[plainText, richTextNode-or-null]`. A node this
  * module doesn't recognize (a future inline type) is dropped from both -- better to lose an unsupported
  * run than to crash the composer or mis-route a message. */
-function renderInline(node: InlineNode, resolve: MentionNameResolver): { readonly plain: string; readonly rich: InlineNode | null } {
+function renderInline(
+  node: InlineNode,
+  resolve: MentionNameResolver,
+): { readonly plain: string; readonly rich: InlineNode | null } {
   if (node.type === "text") {
     const text = node.text ?? "";
     return { plain: text, rich: { type: "text", text } };
@@ -65,10 +70,20 @@ function renderInline(node: InlineNode, resolve: MentionNameResolver): { readonl
     return { plain: "\n", rich: { type: "hardBreak" } };
   }
   if (node.type === "mention" && hasMentionIdentity(node.attrs)) {
-    const attrs: MentionAttrs = { id: node.attrs.id, label: node.attrs.label, everyone: node.attrs["everyone"] === true };
+    const attrs: MentionAttrs = {
+      id: node.attrs.id,
+      label: node.attrs.label,
+      everyone: node.attrs["everyone"] === true,
+    };
     const currentName = resolveMentionDisplayName(attrs, resolve);
     const plain = `@${attrs.everyone ? EVERYONE_TOKEN : squashHandle(currentName)}`;
-    return { plain, rich: { type: "mention", attrs: { id: attrs.id, label: currentName, everyone: attrs.everyone } } };
+    return {
+      plain,
+      rich: {
+        type: "mention",
+        attrs: { id: attrs.id, label: currentName, everyone: attrs.everyone },
+      },
+    };
   }
   return { plain: "", rich: null };
 }
@@ -77,7 +92,10 @@ function renderInline(node: InlineNode, resolve: MentionNameResolver): { readonl
  * document. `resolve` is called once per mention run to substitute the mentioned bot's CURRENT name
  * (both so a late rename doesn't silently break routing, and so the richText chip the conversation
  * slice renders matches what actually routed the message). */
-export function buildMessagePayload(doc: DocNode, resolve: MentionNameResolver): ComposerMessagePayload {
+export function buildMessagePayload(
+  doc: DocNode,
+  resolve: MentionNameResolver,
+): ComposerMessagePayload {
   const richBlocks: BlockLike[] = [];
   let plain = "";
   let sawMention = false;

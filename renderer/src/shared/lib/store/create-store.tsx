@@ -22,6 +22,7 @@ export function createStore<T>(initial: T): Store<T> {
     setState: (next) => {
       if (next === state) return;
       state = next;
+      // oxlint-disable-next-line unicorn/no-useless-spread -- Notify the subscriptions present at the start of this update.
       for (const listener of [...listeners]) listener();
     },
     subscribe: (listener) => {

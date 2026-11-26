@@ -1,17 +1,28 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clearJumpTarget, peekJumpTarget, requestJumpToMessage, resetJumpTargetForTests } from "../src/pages/workspace/model/jump-target.tsx";
+import {
+  clearJumpTarget,
+  peekJumpTarget,
+  requestJumpToMessage,
+  resetJumpTargetForTests,
+} from "../src/pages/workspace/model/jump-target.tsx";
 
 test("requestJumpToMessage records chatId/entryId and an increasing token", () => {
   resetJumpTargetForTests();
   requestJumpToMessage("chat-1", "entry-1");
   const first = peekJumpTarget();
-  assert.deepEqual(first && { chatId: first.chatId, entryId: first.entryId }, { chatId: "chat-1", entryId: "entry-1" });
+  assert.deepEqual(first && { chatId: first.chatId, entryId: first.entryId }, {
+    chatId: "chat-1",
+    entryId: "entry-1",
+  });
 
   requestJumpToMessage("chat-1", "entry-2");
   const second = peekJumpTarget();
   assert.equal(second?.entryId, "entry-2");
-  assert.ok(second != null && first != null && second.token > first.token, "token must strictly increase across requests");
+  assert.ok(
+    second != null && first != null && second.token > first.token,
+    "token must strictly increase across requests",
+  );
 });
 
 test("clearJumpTarget empties the current request and is idempotent", () => {

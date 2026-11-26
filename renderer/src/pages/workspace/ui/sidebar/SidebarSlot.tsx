@@ -38,30 +38,59 @@ export function SidebarSlot({ mode }: SidebarSlotProps) {
   const isEmpty = chats.length === 0;
 
   function onListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
+    if (
+      event.key !== "ArrowDown" &&
+      event.key !== "ArrowUp" &&
+      event.key !== "Home" &&
+      event.key !== "End"
+    )
+      return;
     const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')];
     if (items.length === 0) return;
     event.preventDefault();
     const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : moveIndex(currentIndex, event.key === "ArrowDown" ? 1 : -1, items.length);
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : moveIndex(currentIndex, event.key === "ArrowDown" ? 1 : -1, items.length);
     items[nextIndex]?.focus();
   }
 
   return (
-    <nav className={`${styles["hb-sidebar"]} ${rail ? styles["hb-sidebar--rail"] : ""}`} aria-label={t("shell.sidebar.ariaLabel")}>
+    <nav
+      className={`${styles["hb-sidebar"]} ${rail ? styles["hb-sidebar--rail"] : ""}`}
+      aria-label={t("shell.sidebar.ariaLabel")}
+    >
       <div className={`${styles["hb-sidebar-header"]} hb-drag`}>
         {!rail && (
-          <button type="button" className="hb-no-drag" title={t("sidebar.newChat")} aria-label={t("sidebar.newChat")} onClick={() => dialogs.openNewChatMenu()}>
+          <button
+            type="button"
+            className="hb-no-drag"
+            title={t("sidebar.newChat")}
+            aria-label={t("sidebar.newChat")}
+            onClick={() => dialogs.openNewChatMenu()}
+          >
             <Plus size={20} />
           </button>
         )}
       </div>
 
-      {query.isPending ? <Spinner /> : query.isError && !query.data ? (
-        <div role="alert">{query.error.message} <Button onClick={() => void query.refetch()}>{t("common.retry")}</Button></div>
+      {query.isPending ? (
+        <Spinner />
+      ) : query.isError && !query.data ? (
+        <div role="alert">
+          {query.error.message}{" "}
+          <Button onClick={() => void query.refetch()}>{t("common.retry")}</Button>
+        </div>
       ) : isEmpty ? (
         <div className={styles["hb-sidebar-list"]}>
-          <button type="button" className={`${styles["hb-sidebar-row"]} hb-no-drag`} onClick={() => dialogs.openNewChatMenu()}>
+          <button
+            type="button"
+            className={`${styles["hb-sidebar-row"]} hb-no-drag`}
+            onClick={() => dialogs.openNewChatMenu()}
+          >
             <Avatar kind="user" label="+" size="md" />
             <div className={styles["hb-sidebar-row-main"]}>
               <div className={styles["hb-sidebar-row-name"]}>{t("sidebar.createFirstBot")}</div>
@@ -71,14 +100,28 @@ export function SidebarSlot({ mode }: SidebarSlotProps) {
       ) : (
         <>
           {!rail && (
-            <button type="button" className={`${styles["hb-sidebar-search"]} hb-no-drag`} onClick={() => requestPaletteOpen()}>
+            <button
+              type="button"
+              className={`${styles["hb-sidebar-search"]} hb-no-drag`}
+              onClick={() => requestPaletteOpen()}
+            >
               <Search size={14} />
               <span>{t("sidebar.search")}</span>
             </button>
           )}
 
-          <div className={styles["hb-sidebar-list"]} role="listbox" aria-label={t("shell.sidebar.ariaLabel")} onKeyDown={onListKeyDown}>
-            {!rail && pinned.length > 0 && <div className={styles["hb-sidebar-section-label"]}>{t("sidebar.pinnedSectionLabel")}</div>}
+          <div
+            className={styles["hb-sidebar-list"]}
+            role="listbox"
+            tabIndex={-1}
+            aria-label={t("shell.sidebar.ariaLabel")}
+            onKeyDown={onListKeyDown}
+          >
+            {!rail && pinned.length > 0 && (
+              <div className={styles["hb-sidebar-section-label"]}>
+                {t("sidebar.pinnedSectionLabel")}
+              </div>
+            )}
             {pinned.map((chat) => (
               <SidebarRow
                 key={chat.id}
@@ -130,7 +173,12 @@ export function SidebarSlot({ mode }: SidebarSlotProps) {
             </button>
           </div>
         ) : (
-          <button type="button" className={`${styles["hb-sidebar-footer-button"]} hb-no-drag`} aria-label={t("sidebar.settings")} onClick={() => dialogs.openSettings()}>
+          <button
+            type="button"
+            className={`${styles["hb-sidebar-footer-button"]} hb-no-drag`}
+            aria-label={t("sidebar.settings")}
+            onClick={() => dialogs.openSettings()}
+          >
             <Settings size={16} />
             <span>{t("sidebar.settings")}</span>
           </button>

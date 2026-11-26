@@ -21,7 +21,10 @@ function sortedBySeq(entries: Iterable<TranscriptEntry>): TranscriptEntry[] {
  * older page fetched via `beforeSeq`). Later entries (by `id`) always replace earlier ones, since a
  * page can legitimately re-include an entry the caller already had (e.g. the boundary row of an older
  * page overlapping the newest page). */
-export function mergeTranscriptPage(existing: readonly TranscriptEntry[], page: readonly TranscriptEntry[]): TranscriptEntry[] {
+export function mergeTranscriptPage(
+  existing: readonly TranscriptEntry[],
+  page: readonly TranscriptEntry[],
+): TranscriptEntry[] {
   const merged = byId(existing);
   for (const entry of page) merged.set(entry.id, entry);
   return sortedBySeq(merged.values());
@@ -29,7 +32,10 @@ export function mergeTranscriptPage(existing: readonly TranscriptEntry[], page: 
 
 /** Applies a single `transcript.entryAppended`/`entryUpdated` event: inserts a new id in seq order, or
  * replaces an existing one in place. */
-export function applyTranscriptEntry(existing: readonly TranscriptEntry[], entry: TranscriptEntry): TranscriptEntry[] {
+export function applyTranscriptEntry(
+  existing: readonly TranscriptEntry[],
+  entry: TranscriptEntry,
+): TranscriptEntry[] {
   const index = existing.findIndex((candidate) => candidate.id === entry.id);
   if (index === -1) return sortedBySeq([...existing, entry]);
   const next = [...existing];

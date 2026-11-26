@@ -39,7 +39,9 @@ export function DeleteConfirmDialog({ chatId, name }: DeleteConfirmDialogProps) 
 
   return (
     <div>
-      <DialogTitle className={styles["hb-confirm-title"]}>{t("dialogs.delete.title", { name })}</DialogTitle>
+      <DialogTitle className={styles["hb-confirm-title"]}>
+        {t("dialogs.delete.title", { name })}
+      </DialogTitle>
       <p className={styles["hb-confirm-body"]}>{t("dialogs.delete.body")}</p>
       {error != null && <p className={styles["hb-confirm-body"]}>{error}</p>}
       <div className={styles["hb-confirm-footer"]}>

@@ -8,5 +8,11 @@ export interface DateSeparatorProps {
 
 export function DateSeparator({ timestampMs }: DateSeparatorProps) {
   const { t, locale } = useT();
-  return <div className={styles["hb-date-separator"]}>{formatDateSeparatorText(timestampMs, Date.now(), locale, t)}</div>;
+  // oxlint-disable-next-line react/purity -- Today and yesterday are relative to the current render.
+  const nowMs = Date.now();
+  return (
+    <div className={styles["hb-date-separator"]}>
+      {formatDateSeparatorText(timestampMs, nowMs, locale, t)}
+    </div>
+  );
 }

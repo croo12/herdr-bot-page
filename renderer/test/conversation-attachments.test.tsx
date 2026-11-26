@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { attachmentFileName, inferAttachmentKind, splitAttachments } from "../src/pages/workspace/model/conversation/attachments.tsx";
+import {
+  attachmentFileName,
+  inferAttachmentKind,
+  splitAttachments,
+} from "../src/pages/workspace/model/conversation/attachments.tsx";
 
 test("splitAttachments strips a single trailing attachment line", () => {
   const result = splitAttachments("Here's the file.\n\n(attached: /staged/demo.txt)");
@@ -21,9 +25,14 @@ test("splitAttachments leaves plain text with no attachment lines alone", () => 
 });
 
 test("splitAttachments does not false-positive on the literal text mid-message", () => {
-  const result = splitAttachments("The docs say (attached: foo) is deprecated syntax.\n\nReal content continues.");
+  const result = splitAttachments(
+    "The docs say (attached: foo) is deprecated syntax.\n\nReal content continues.",
+  );
   assert.deepEqual(result.attachmentPaths, []);
-  assert.equal(result.text, "The docs say (attached: foo) is deprecated syntax.\n\nReal content continues.");
+  assert.equal(
+    result.text,
+    "The docs say (attached: foo) is deprecated syntax.\n\nReal content continues.",
+  );
 });
 
 test("inferAttachmentKind maps common extensions", () => {

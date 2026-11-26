@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildMentionCandidates, filterMentionCandidates, EVERYONE_MENTION_ID } from "../src/features/compose-message/model/mention-candidates.tsx";
+import {
+  buildMentionCandidates,
+  filterMentionCandidates,
+  EVERYONE_MENTION_ID,
+} from "../src/features/compose-message/model/mention-candidates.tsx";
 
 const MEMBERS = [
   { id: "bot-forge", name: "Forge", avatarColor: "blue" },

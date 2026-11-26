@@ -30,7 +30,10 @@ export interface MentionListHandle {
   onKeyDown(args: { readonly event: KeyboardEvent }): boolean;
 }
 
-export const MentionList = forwardRef<MentionListHandle, MentionListProps>(function MentionList({ items, command }, ref) {
+export const MentionList = forwardRef<MentionListHandle, MentionListProps>(function MentionList(
+  { items, command },
+  ref,
+) {
   const [selected, setSelected] = useState(0);
 
   // The filtered set changes on every keystroke after `@` -- always re-highlight the first row rather
@@ -40,7 +43,11 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   function selectIndex(index: number): boolean {
     const item = items[index];
     if (item == null) return false;
-    command({ id: item.id, label: item.everyone ? EVERYONE_MENTION_ID : item.label, everyone: item.everyone });
+    command({
+      id: item.id,
+      label: item.everyone ? EVERYONE_MENTION_ID : item.label,
+      everyone: item.everyone,
+    });
     return true;
   }
 
@@ -77,7 +84,16 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
           onClick={() => selectIndex(index)}
         >
           <span className={styles["hb-mention-list-icon"]}>
-            {item.everyone ? <Users size={16} aria-hidden /> : <Avatar kind="bot" size="xs" color={resolvePersonaColor(item.avatarColor)} name={item.label} />}
+            {item.everyone ? (
+              <Users size={16} aria-hidden />
+            ) : (
+              <Avatar
+                kind="bot"
+                size="xs"
+                color={resolvePersonaColor(item.avatarColor)}
+                name={item.label}
+              />
+            )}
           </span>
           <span>{item.label}</span>
         </button>

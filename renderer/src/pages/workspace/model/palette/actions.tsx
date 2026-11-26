@@ -23,8 +23,14 @@ export const PALETTE_ACTIONS: readonly PaletteActionDef[] = [
 
 /** Actions are matched by their *resolved* label (already-translated text), not the i18n key, so
  * searching in Korean matches Korean copy -- the caller passes `label(action)` in. */
-export function filterActions(actions: readonly PaletteActionDef[], labels: ReadonlyMap<PaletteActionId, string>, query: string): readonly PaletteActionDef[] {
+export function filterActions(
+  actions: readonly PaletteActionDef[],
+  labels: ReadonlyMap<PaletteActionId, string>,
+  query: string,
+): readonly PaletteActionDef[] {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return actions;
-  return actions.filter((action) => (labels.get(action.id) ?? action.labelKey).toLowerCase().includes(needle));
+  return actions.filter((action) =>
+    (labels.get(action.id) ?? action.labelKey).toLowerCase().includes(needle),
+  );
 }

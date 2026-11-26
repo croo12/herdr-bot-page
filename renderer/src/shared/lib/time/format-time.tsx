@@ -13,5 +13,9 @@ export function formatClockTime(timestampMs: number, locale: Locale): string {
     const hours = date.getHours();
     return `${hours < 12 ? "오전" : "오후"} ${hours % 12 || 12}:${String(date.getMinutes()).padStart(2, "0")}`;
   }
-  return new Intl.DateTimeFormat(INTL_LOCALE[locale], { hour: "numeric", minute: "2-digit", hour12: true }).format(date);
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
 }

@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { Bubble, BubbleContent } from "#shared/ui/shadcn/bubble.tsx";
-import { Message, MessageAvatar, MessageContent, MessageHeader } from "#shared/ui/shadcn/message.tsx";
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+  MessageHeader,
+} from "#shared/ui/shadcn/message.tsx";
 import { useChats } from "../../model/useChats.tsx";
 import { resolvePersonaColor, personaColorVar } from "#shared/ui/avatar-colors.tsx";
 import { formatClockTime } from "#shared/lib/time/format-time.tsx";
@@ -9,7 +14,14 @@ import { Avatar } from "#shared/ui/index.tsx";
 import type { ChatSummary, TranscriptEntry } from "#shared/api/index.tsx";
 import { splitAttachments } from "../../model/conversation/attachments.tsx";
 import { Attachments } from "./Attachments.tsx";
-import { getAuthor, getRawText, getReactions, getReplyTo, getRichText, isUserMessage } from "#shared/api/transcript/entry-shapes.tsx";
+import {
+  getAuthor,
+  getRawText,
+  getReactions,
+  getReplyTo,
+  getRichText,
+  isUserMessage,
+} from "#shared/api/transcript/entry-shapes.tsx";
 import { HoverActions } from "./HoverActions.tsx";
 import { MarkdownView } from "./MarkdownView.tsx";
 import { MarkerBadges } from "./MarkerBadges.tsx";
@@ -29,7 +41,14 @@ export interface MessageBubbleProps {
   readonly entriesById: ReadonlyMap<string, TranscriptEntry>;
 }
 
-export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, entriesById }: MessageBubbleProps) {
+export function MessageBubble({
+  chat,
+  entry,
+  grouped,
+  showAuthorLabel,
+  members,
+  entriesById,
+}: MessageBubbleProps) {
   const { locale, t } = useT();
   const chats = useChats();
   const [hovered, setHovered] = useState(false);
@@ -55,7 +74,11 @@ export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, 
       onMouseLeave={() => setHovered(false)}
     >
       {!mine && (
-        <MessageAvatar className="size-7 min-w-7 bg-transparent">{!grouped && <Avatar kind="bot" color={personaColor} name={author?.name ?? ""} size="sm" />}</MessageAvatar>
+        <MessageAvatar className="size-7 min-w-7 bg-transparent">
+          {!grouped && (
+            <Avatar kind="bot" color={personaColor} name={author?.name ?? ""} size="sm" />
+          )}
+        </MessageAvatar>
       )}
 
       <MessageContent className={mine ? "max-w-[60%] items-end gap-1" : "max-w-[78%] gap-1"}>
@@ -67,10 +90,18 @@ export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, 
 
         <MarkerBadges entry={entry} />
 
-        <Bubble align={mine ? "end" : "start"} variant={mine ? "default" : "secondary"} className="max-w-full">
+        <Bubble
+          align={mine ? "end" : "start"}
+          variant={mine ? "default" : "secondary"}
+          className="max-w-full"
+        >
           <BubbleContent>
-            {quotedEntry != null && <ReplyQuote quotedEntry={quotedEntry} missingLabel="" mine={mine} />}
-            {entry.permissionDecision && <strong>{t(`conversation.decision.${entry.permissionDecision}`)}</strong>}
+            {quotedEntry != null && (
+              <ReplyQuote quotedEntry={quotedEntry} missingLabel="" mine={mine} />
+            )}
+            {entry.permissionDecision && (
+              <strong>{t(`conversation.decision.${entry.permissionDecision}`)}</strong>
+            )}
             <MarkdownView text={text} richText={richText} members={members} />
             <Attachments paths={attachmentPaths} />
           </BubbleContent>
@@ -81,17 +112,34 @@ export function MessageBubble({ chat, entry, grouped, showAuthorLabel, members, 
             previewText={text}
             isMine={mine}
             hovered={hovered}
-            onTrack={mine && chat.kind === "room" && !entry.task && text.trim() ? () => setTracking(true) : undefined}
+            onTrack={
+              mine && chat.kind === "room" && !entry.task && text.trim()
+                ? () => setTracking(true)
+                : undefined
+            }
           />
-          <time className={styles["hb-message-timestamp"]} dateTime={new Date(entry.timestampMs).toISOString()}>
+          <time
+            className={styles["hb-message-timestamp"]}
+            dateTime={new Date(entry.timestampMs).toISOString()}
+          >
             {formatClockTime(entry.timestampMs, locale)}
           </time>
         </Bubble>
         {(tracking || entry.task) && (
-          <MessageTaskPanel chatId={chat.id} entry={entry} members={members} onClose={() => setTracking(false)} />
+          <MessageTaskPanel
+            chatId={chat.id}
+            entry={entry}
+            members={members}
+            onClose={() => setTracking(false)}
+          />
         )}
 
-        <Reactions chatId={chat.id} entryId={entry.id} reactions={reactions} align={mine ? "end" : "start"} />
+        <Reactions
+          chatId={chat.id}
+          entryId={entry.id}
+          reactions={reactions}
+          align={mine ? "end" : "start"}
+        />
       </MessageContent>
     </Message>
   );

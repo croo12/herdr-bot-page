@@ -26,13 +26,17 @@ import { OnboardingEmptyState } from "./OnboardingEmptyState.tsx";
  * null chat -- a blank column, not a helpful one).
  */
 export function useMainColumnOverride(): ReactNode | null {
-  const newMenuOpen = useSyncExternalStore(dialogsStore.subscribe, () => dialogsStore.getState().newMenuOpen);
+  const newMenuOpen = useSyncExternalStore(
+    dialogsStore.subscribe,
+    () => dialogsStore.getState().newMenuOpen,
+  );
   const { data: chats } = useChatsQuery();
   const { activeChatId } = useActiveChat();
 
   if (newMenuOpen) return <NewChatMenu />;
   if (!chats) return null;
   const activeChatExists = activeChatId != null && chats.some((chat) => chat.id === activeChatId);
-  if (!activeChatExists && !chats.some((chat) => chat.kind === "bot")) return <OnboardingEmptyState />;
+  if (!activeChatExists && !chats.some((chat) => chat.kind === "bot"))
+    return <OnboardingEmptyState />;
   return null;
 }

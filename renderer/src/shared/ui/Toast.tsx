@@ -25,7 +25,10 @@ export function ToastProvider({ children }: { readonly children: ReactNode }) {
   const show = useCallback((message: string, durationMs = DEFAULT_DURATION_MS) => {
     const id = nextId.current++;
     setToasts((current) => [...current, { id, message }]);
-    setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), durationMs);
+    setTimeout(
+      () => setToasts((current) => current.filter((toast) => toast.id !== id)),
+      durationMs,
+    );
   }, []);
 
   const handle = useMemo<ToastHandle>(() => ({ show }), [show]);

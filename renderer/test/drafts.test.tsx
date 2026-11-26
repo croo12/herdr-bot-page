@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createDraftStore, createMemoryDraftStorage } from "../src/features/compose-message/model/drafts.tsx";
+import {
+  createDraftStore,
+  createMemoryDraftStorage,
+} from "../src/features/compose-message/model/drafts.tsx";
 
 test("get() returns empty string for a chat with no draft", () => {
   const store = createDraftStore(createMemoryDraftStorage());

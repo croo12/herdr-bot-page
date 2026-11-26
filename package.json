@@ -18,7 +18,14 @@
     "prepare": "husky",
     "test": "npm test --workspace renderer && npm run test:native",
     "typecheck": "npm run renderer:typecheck",
-    "check": "npm run check:architecture && npm run typecheck && npm test",
+    "fmt": "npm run fmt:renderer && npm run fmt:rust",
+    "fmt:renderer": "oxfmt --write \"renderer/{src,test}/**/*.{ts,tsx}\" renderer/vite.config.tsx",
+    "fmt:rust": "cargo fmt --manifest-path native/Cargo.toml && cargo fmt --manifest-path desktop/Cargo.toml",
+    "fmt:check": "oxfmt --check \"renderer/{src,test}/**/*.{ts,tsx}\" renderer/vite.config.tsx && cargo fmt --manifest-path native/Cargo.toml -- --check && cargo fmt --manifest-path desktop/Cargo.toml -- --check",
+    "lint": "oxlint --deny-warnings renderer/src renderer/test renderer/vite.config.tsx",
+    "lint:rust": "cargo clippy --locked --all-targets --manifest-path native/Cargo.toml -- -D warnings && cargo clippy --locked --all-targets --manifest-path desktop/Cargo.toml -- -D warnings",
+    "check:pre-commit": "npm run fmt:check && npm run lint && npm run check:architecture",
+    "check": "npm run check:pre-commit && npm run typecheck && npm test",
     "check:architecture": "depcruise --config scripts/architecture/renderer.mjs renderer/src && node --test scripts/architecture/*.test.mjs && cargo test --locked --manifest-path native/Cargo.toml --test architecture",
     "renderer:typecheck": "tsc -p renderer/tsconfig.json",
     "renderer:build": "npm run build -w @herdr-bot/renderer",
@@ -37,11 +44,13 @@
     "@types/node": "^24",
     "dependency-cruiser": "18.9.0",
     "husky": "9.1.7",
+    "oxfmt": "0.80.0",
+    "oxlint": "1.95.0",
     "typescript": "7.0.2"
   },
   "overrides": {
-    "@tiptap/extension-bubble-menu": "3.14.0",
-    "@tiptap/extension-floating-menu": "3.14.0",
-    "@tiptap/core": "3.14.0"
+    "@tiptap/extension-bubble-menu": "3.35.0",
+    "@tiptap/extension-floating-menu": "3.35.0",
+    "@tiptap/core": "3.35.0"
   }
 }

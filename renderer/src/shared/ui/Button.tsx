@@ -10,9 +10,19 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   readonly children: ReactNode;
 }
 
-export function Button({ variant = "secondary", size = "md", type = "button", children, ...rest }: ButtonProps) {
+export function Button({
+  variant = "secondary",
+  size = "md",
+  type = "button",
+  children,
+  ...rest
+}: ButtonProps) {
   return (
-    <button type={type} className={`${styles["hb-button"]} ${styles[`hb-button--${variant}`]} ${styles[`hb-button--${size}`]}`} {...rest}>
+    <button
+      type={type}
+      className={`${styles["hb-button"]} ${styles[`hb-button--${variant}`]} ${styles[`hb-button--${size}`]}`}
+      {...rest}
+    >
       {children}
     </button>
   );

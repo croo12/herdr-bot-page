@@ -11,7 +11,12 @@ export type MessageHitSubtitle =
   | { readonly kind: "dmFromBot"; readonly author: string }
   | { readonly kind: "dmFromYou"; readonly chatName: string };
 
-export function messageHitSubtitle(hit: Pick<MessageSearchHit, "role" | "author" | "chatName">, isRoom: boolean): MessageHitSubtitle {
+export function messageHitSubtitle(
+  hit: Pick<MessageSearchHit, "role" | "author" | "chatName">,
+  isRoom: boolean,
+): MessageHitSubtitle {
   if (isRoom) return { kind: "room", chatName: hit.chatName };
-  return hit.role === "assistant" ? { kind: "dmFromBot", author: hit.author } : { kind: "dmFromYou", chatName: hit.chatName };
+  return hit.role === "assistant"
+    ? { kind: "dmFromBot", author: hit.author }
+    : { kind: "dmFromYou", chatName: hit.chatName };
 }

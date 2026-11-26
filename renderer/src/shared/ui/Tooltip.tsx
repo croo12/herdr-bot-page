@@ -27,7 +27,12 @@ export function Tooltip({ label, children }: TooltipProps) {
     if (!open || anchorRef.current == null || panelRef.current == null) return;
     const rect = anchorRef.current.getBoundingClientRect();
     const panel = { width: panelRef.current.offsetWidth, height: panelRef.current.offsetHeight };
-    setStyle(placeNear(rect, panel, "bottom-start", { width: window.innerWidth, height: window.innerHeight }));
+    setStyle(
+      placeNear(rect, panel, "bottom-start", {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }),
+    );
   }, [open]);
 
   function show() {
@@ -49,7 +54,12 @@ export function Tooltip({ label, children }: TooltipProps) {
       } as never)}
       {open &&
         createPortal(
-          <div ref={panelRef} role="tooltip" className={styles["hb-tooltip"]} style={{ top: style?.top ?? -9999, left: style?.left ?? -9999 }}>
+          <div
+            ref={panelRef}
+            role="tooltip"
+            className={styles["hb-tooltip"]}
+            style={{ top: style?.top ?? -9999, left: style?.left ?? -9999 }}
+          >
             {label}
           </div>,
           document.body,

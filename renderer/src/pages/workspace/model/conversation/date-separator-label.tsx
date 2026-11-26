@@ -22,10 +22,19 @@ const INTL_LOCALE: Record<Locale, string> = { en: "en-US", ko: "ko-KR" };
  * (the time is only meaningful for the "burst of messages just now" today/yesterday cases; this acts
  * more like a last-activity timestamp than a pure date divider). */
 export function formatCalendarDate(timestampMs: number, locale: Locale): string {
-  return new Intl.DateTimeFormat(INTL_LOCALE[locale], { month: "long", day: "numeric", year: "numeric" }).format(new Date(timestampMs));
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(timestampMs));
 }
 
-export function formatDateSeparatorText(timestampMs: number, nowMs: number, locale: Locale, translate: (key: string, vars?: Record<string, string>) => string): string {
+export function formatDateSeparatorText(
+  timestampMs: number,
+  nowMs: number,
+  locale: Locale,
+  translate: (key: string, vars?: Record<string, string>) => string,
+): string {
   const kind = dateSeparatorKind(timestampMs, nowMs);
   const time = formatClockTime(timestampMs, locale);
   if (kind === "today") return translate("conversation.dateSeparator.today", { time });

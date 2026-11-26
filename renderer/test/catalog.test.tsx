@@ -19,7 +19,9 @@ test("translate falls back to English, then the bare key", () => {
 });
 
 test("translate interpolates {vars}", () => {
-  const catalog = mergeCatalog([{ en: { greet: "Hello, {name}!" }, ko: { greet: "안녕, {name}!" } }]);
+  const catalog = mergeCatalog([
+    { en: { greet: "Hello, {name}!" }, ko: { greet: "안녕, {name}!" } },
+  ]);
   assert.equal(translate(catalog, "en", "greet", { name: "Ray" }), "Hello, Ray!");
 });
 

@@ -14,7 +14,10 @@ import type { DraftStore } from "../model/drafts.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { IconButton, Spinner, useToast } from "#shared/ui/index.tsx";
 import { AttachmentChips } from "./AttachmentChips.tsx";
-import { attachmentErrorMessageKey, validateAttachmentCandidate } from "../model/attachment-validation.tsx";
+import {
+  attachmentErrorMessageKey,
+  validateAttachmentCandidate,
+} from "../model/attachment-validation.tsx";
 import { ComposerSendKeymap } from "./composer-keymap.tsx";
 import { decodeDraft, encodeDraft } from "../model/draft-codec.tsx";
 import type { ComposerDraftState, StagedAttachmentDraft } from "../model/draft-codec.tsx";
@@ -37,7 +40,14 @@ interface MessageComposerProps {
   readonly drafts: DraftStore;
 }
 
-export function MessageComposer({ chatId, chat, members, contacts, client, drafts }: MessageComposerProps) {
+export function MessageComposer({
+  chatId,
+  chat,
+  members,
+  contacts,
+  client,
+  drafts,
+}: MessageComposerProps) {
   const bridge = useBridge();
   const { t } = useT();
   const toast = useToast();
@@ -55,7 +65,9 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
   const membersRef = useRef<readonly MentionMember[]>([]);
   const placeholderRef = useRef("");
   const sendRef = useRef<() => void>(() => {});
-  const stageFilesRef = useRef<(files: FileList | readonly File[] | null | undefined) => void>(() => {});
+  const stageFilesRef = useRef<(files: FileList | readonly File[] | null | undefined) => void>(
+    () => {},
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   function persistDraft(doc: DocNode): void {
@@ -83,7 +95,10 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
           toast.show(t(attachmentErrorMessageKey(result.reason)));
           continue;
         }
-        setAttachments([...attachmentsRef.current, { path: result.path, filename: file.name, size: file.size }]);
+        setAttachments([
+          ...attachmentsRef.current,
+          { path: result.path, filename: file.name, size: file.size },
+        ]);
       } catch {
         toast.show(t(attachmentErrorMessageKey("failed")));
       }
@@ -108,12 +123,15 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
 
     setSending(true);
     try {
-      const resolveMentionName: MentionNameResolver = (id) => contacts.find((candidate) => candidate.id === id)?.name ?? null;
+      const resolveMentionName: MentionNameResolver = (id) =>
+        contacts.find((candidate) => candidate.id === id)?.name ?? null;
       const payload = buildMessagePayload(doc, resolveMentionName);
 
       let attachmentPaths: string[] | undefined;
       if (attachmentsRef.current.length > 0) {
-        const committed = await bridge.attachments.commit(attachmentsRef.current.map((attachment) => attachment.path));
+        const committed = await bridge.attachments.commit(
+          attachmentsRef.current.map((attachment) => attachment.path),
+        );
         if (committed == null) {
           toast.show(t(attachmentErrorMessageKey("failed")));
           return;
@@ -151,12 +169,19 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
         Text,
         HardBreak,
         UndoRedo,
+        /* oxlint-disable react/refs -- Tiptap stores these callbacks and invokes them later when editing. */
         Placeholder.configure({ placeholder: () => placeholderRef.current }),
-        ComposerMention.configure({ suggestion: createMentionSuggestion({ getMembers: () => membersRef.current }) }),
+        ComposerMention.configure({
+          suggestion: createMentionSuggestion({ getMembers: () => membersRef.current }),
+        }),
         ComposerSendKeymap.configure({ onSend: () => sendRef.current() }),
+        /* oxlint-enable react/refs */
       ],
       editorProps: {
-        attributes: { class: styles["hb-composer-editable"] ?? "", "aria-label": t("composer.input.ariaLabel") },
+        attributes: {
+          class: styles["hb-composer-editable"] ?? "",
+          "aria-label": t("composer.input.ariaLabel"),
+        },
         // Files win over Tiptap's default paste/drop handling (which would otherwise try to insert
         // whatever text representation the OS gives a dropped/pasted file); anything else -- plain text,
         // markdown-looking text -- falls through to the default, which is exactly "paste ... sensibly"
@@ -195,16 +220,21 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
   });
 
   useEffect(() => {
-    membersRef.current = members.map((member) => ({ id: member.id, name: member.name, avatarColor: member.avatarColor }));
+    membersRef.current = members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      avatarColor: member.avatarColor,
+    }));
   }, [members]);
 
   // Placeholder tracks the chat's CURRENT name/kind -- a rename updates it immediately rather than
   // waiting for the next keystroke. `updateState` forces Placeholder's decoration to recompute even
   // though no transaction happened (the ref alone wouldn't trigger a redraw on its own).
+  const placeholder = chat == null ? "" : t(placeholderKey(chat.kind), { chatName: chat.name });
   useEffect(() => {
-    placeholderRef.current = chat == null ? "" : t(placeholderKey(chat.kind), { chatName: chat.name });
+    placeholderRef.current = placeholder;
     editor.view.updateState(editor.view.state);
-  }, [editor, chat?.kind, chat?.name, t]);
+  }, [editor, placeholder]);
 
   // Restore this chat's draft on switching chats. Keyed on `chatId` alone -- deliberately
   // NOT on `chat` (a `ChatSummary` object that changes identity on almost any unrelated update, e.g. a
@@ -214,6 +244,7 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
     const decoded: ComposerDraftState = decodeDraft(drafts.get(chatId));
     editor.commands.setContent(decoded.doc as unknown as JSONContent, { emitUpdate: false });
     attachmentsRef.current = decoded.attachments;
+    // oxlint-disable-next-line react/set-state-in-effect -- Restore the draft and attachment UI together after switching chats.
     setAttachmentsState(decoded.attachments);
     setHasContent(!isDocEmpty(decoded.doc));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chatId drives this, not `drafts`/`editor` identity
@@ -229,7 +260,9 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
 
   return (
     <div className={styles["hb-composer-wrap"]}>
-      {replyHandle.target != null && <ReplyPreviewBar target={replyHandle.target} onClear={replyHandle.clear} />}
+      {replyHandle.target != null && (
+        <ReplyPreviewBar target={replyHandle.target} onClear={replyHandle.clear} />
+      )}
       {/* One unified bordered card holds both the staged-attachment chip row and the text/send row --
           they share a single outer rounded border, not two separate floating pills. */}
       <div
@@ -243,7 +276,10 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
           void stageFiles(event.dataTransfer?.files);
         }}
       >
-        <AttachmentChips attachments={attachments} onRemove={(path) => void removeAttachment(path)} />
+        <AttachmentChips
+          attachments={attachments}
+          onRemove={(path) => void removeAttachment(path)}
+        />
         <form
           className={styles["hb-composer"]}
           onSubmit={(event) => {
@@ -265,13 +301,22 @@ export function MessageComposer({ chatId, chat, members, contacts, client, draft
               void stageFiles(files);
             }}
           />
-          <IconButton aria-label={t("composer.attach")} onClick={() => fileInputRef.current?.click()} disabled={sending}>
+          <IconButton
+            aria-label={t("composer.attach")}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending}
+          >
             <Plus size={20} />
           </IconButton>
           <MentionContacts.Provider value={contacts}>
             <EditorContent editor={editor} className={styles["hb-composer-editor"]} />
           </MentionContacts.Provider>
-          <button type="submit" className={styles["hb-composer-send"]} aria-label={t("composer.send")} disabled={!canSend}>
+          <button
+            type="submit"
+            className={styles["hb-composer-send"]}
+            aria-label={t("composer.send")}
+            disabled={!canSend}
+          >
             {sending ? <Spinner size={16} label={t("composer.send")} /> : <ArrowUp size={18} />}
           </button>
         </form>

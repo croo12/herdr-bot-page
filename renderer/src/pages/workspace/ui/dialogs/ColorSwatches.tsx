@@ -23,7 +23,10 @@ export function ColorSwatches({ value, onChange, ...rest }: ColorSwatchesProps) 
           className={`${styles["hb-swatch"]} ${color === value ? styles["hb-swatch--selected"] : ""}`}
           onClick={() => onChange(color)}
         >
-          <span className={styles["hb-swatch-fill"]} style={{ background: personaColorVar(color) }} />
+          <span
+            className={styles["hb-swatch-fill"]}
+            style={{ background: personaColorVar(color) }}
+          />
         </button>
       ))}
     </div>

@@ -8,7 +8,11 @@
  * Pure, DOM-free -- unit tested directly with `node --test`.
  */
 import type { PendingPrompt } from "#shared/api/index.tsx";
-import { getPrompt, getPromptAnswer, getPromptStatus } from "#shared/api/transcript/entry-shapes.tsx";
+import {
+  getPrompt,
+  getPromptAnswer,
+  getPromptStatus,
+} from "#shared/api/transcript/entry-shapes.tsx";
 import type { PromptEntryAnswer } from "#shared/api/transcript/entry-shapes.tsx";
 import type { TranscriptEntry } from "#shared/api/index.tsx";
 
@@ -24,13 +28,20 @@ const HIDDEN: PromptCardView = { mode: "hidden", prompt: null, answer: null };
 
 /** `livePendingPrompt` is the chat's *current* `bot.pendingPrompt` (null if the chat isn't a bot, or the
  * bot isn't currently blocked on anything). */
-export function derivePromptCardView(entry: TranscriptEntry, livePendingPrompt: PendingPrompt | null): PromptCardView {
+export function derivePromptCardView(
+  entry: TranscriptEntry,
+  livePendingPrompt: PendingPrompt | null,
+): PromptCardView {
   const prompt = getPrompt(entry);
   if (prompt == null) return HIDDEN;
   const status = getPromptStatus(entry);
   if (status === "superseded") return HIDDEN;
 
-  if (status === "pending" && livePendingPrompt != null && livePendingPrompt.signature === prompt.signature) {
+  if (
+    status === "pending" &&
+    livePendingPrompt != null &&
+    livePendingPrompt.signature === prompt.signature
+  ) {
     return { mode: "live", prompt: livePendingPrompt, answer: null };
   }
 

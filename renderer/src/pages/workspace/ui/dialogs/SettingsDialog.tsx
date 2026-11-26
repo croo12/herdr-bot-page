@@ -88,37 +88,52 @@ export function SettingsDialog() {
         layout="inline"
         label={t("dialogs.settings.defaultPermissionMode")}
         value={settings?.defaultPermissionMode ?? ""}
-        onChange={(value) => void update({ defaultPermissionMode: value.length > 0 ? (value as "ask" | "auto") : null })}
+        onChange={(value) =>
+          void update({
+            defaultPermissionMode: value.length > 0 ? (value as "ask" | "auto") : null,
+          })
+        }
         options={[
           { value: "", label: t("dialogs.new.permissions.agentDefault") },
           { value: "ask", label: t("dialogs.new.permissions.ask") },
           { value: "auto", label: t("dialogs.new.permissions.auto") },
         ]}
       />
-      {bridge.platform === "darwin" && bridge.runtime !== "tauri" && <>
-      <Select
-        layout="inline"
-        label={t("dialogs.settings.terminal")}
-        value={settings?.terminal ?? ""}
-        onChange={(value) => void update({ terminal: value.length > 0 ? (value as Terminal) : null })}
-        options={[
-          { value: "", label: t("dialogs.settings.terminal.auto") },
-          { value: "kaku", label: "Kaku" },
-          { value: "wezterm", label: "WezTerm" },
-          { value: "ghostty", label: "Ghostty" },
-          { value: "iterm", label: "iTerm2" },
-          { value: "terminal", label: "Terminal" },
-        ]}
-      />
-      <p className={styles["hb-settings-help"]}>{t("dialogs.settings.terminalHelp")}</p>
-      </>}
+      {bridge.platform === "darwin" && bridge.runtime !== "tauri" && (
+        <>
+          <Select
+            layout="inline"
+            label={t("dialogs.settings.terminal")}
+            value={settings?.terminal ?? ""}
+            onChange={(value) =>
+              void update({ terminal: value.length > 0 ? (value as Terminal) : null })
+            }
+            options={[
+              { value: "", label: t("dialogs.settings.terminal.auto") },
+              { value: "kaku", label: "Kaku" },
+              { value: "wezterm", label: "WezTerm" },
+              { value: "ghostty", label: "Ghostty" },
+              { value: "iterm", label: "iTerm2" },
+              { value: "terminal", label: "Terminal" },
+            ]}
+          />
+          <p className={styles["hb-settings-help"]}>{t("dialogs.settings.terminalHelp")}</p>
+        </>
+      )}
 
       <div className={styles["hb-settings-version-row"]}>
         <span>{t("dialogs.settings.version", { version: version ?? "…" })}</span>
-        <UpdateControl state={state} checking={checking} onCheck={checkForUpdates} onInstall={() => void bridge.version.update.install()} />
+        <UpdateControl
+          state={state}
+          checking={checking}
+          onCheck={checkForUpdates}
+          onInstall={() => void bridge.version.update.install()}
+        />
       </div>
       {state?.type === "available" && state.installError != null && (
-        <p className={styles["hb-settings-help"]}>{t("dialogs.settings.updateFailed", { message: state.installError })}</p>
+        <p className={styles["hb-settings-help"]}>
+          {t("dialogs.settings.updateFailed", { message: state.installError })}
+        </p>
       )}
     </div>
   );
@@ -134,7 +149,14 @@ interface UpdateControlProps {
 /** The version row's right side: check, install a newer version, or that install's progress. */
 function UpdateControl({ state, checking, onCheck, onInstall }: UpdateControlProps) {
   const { t } = useT();
-  if (state?.type === "downloading") return <span>{t("dialogs.settings.updateDownloading", { percent: String(Math.round(state.progress * 100)) })}</span>;
+  if (state?.type === "downloading")
+    return (
+      <span>
+        {t("dialogs.settings.updateDownloading", {
+          percent: String(Math.round(state.progress * 100)),
+        })}
+      </span>
+    );
   if (state?.type === "restarting") return <span>{t("dialogs.settings.updateRestarting")}</span>;
   if (state?.type === "available") {
     return (

@@ -30,7 +30,10 @@ export function NewBotForm() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([client.call("bot.defaults", undefined), cache.fetchQuery(settingsQuery(client))]).then(([defaults, settings]) => {
+    void Promise.all([
+      client.call("bot.defaults", undefined),
+      cache.fetchQuery(settingsQuery(client)),
+    ]).then(([defaults, settings]) => {
       if (cancelled) return;
       setState(emptyBotFormState(resolveBotFormDefaults(defaults, settings)));
     });
@@ -61,7 +64,8 @@ export function NewBotForm() {
         cwd: adopting ? undefined : state.cwd,
         permissionMode: adopting || state.permissionMode == null ? undefined : state.permissionMode,
         model: adopting || state.model == null ? undefined : state.model,
-        reasoningEffort: adopting || state.reasoningEffort == null ? undefined : state.reasoningEffort,
+        reasoningEffort:
+          adopting || state.reasoningEffort == null ? undefined : state.reasoningEffort,
         adoptPaneId: state.adoptPaneId ?? undefined,
         allowHomeCwd,
       });
@@ -78,10 +82,24 @@ export function NewBotForm() {
 
   return (
     <div className={styles["hb-form"]}>
-      <TextField label={t("dialogs.new.name")} placeholder={t("dialogs.new.namePlaceholder")} value={state.name} onChange={(event) => patch({ name: event.target.value })} />
-      <TextArea label={t("dialogs.new.persona")} placeholder={t("dialogs.new.personaPlaceholder")} value={state.persona} onChange={(event) => patch({ persona: event.target.value })} />
+      <TextField
+        label={t("dialogs.new.name")}
+        placeholder={t("dialogs.new.namePlaceholder")}
+        value={state.name}
+        onChange={(event) => patch({ name: event.target.value })}
+      />
+      <TextArea
+        label={t("dialogs.new.persona")}
+        placeholder={t("dialogs.new.personaPlaceholder")}
+        value={state.persona}
+        onChange={(event) => patch({ persona: event.target.value })}
+      />
       <LaunchChoiceFields
-        value={{ provider: state.provider, model: state.model, reasoningEffort: state.reasoningEffort }}
+        value={{
+          provider: state.provider,
+          model: state.model,
+          reasoningEffort: state.reasoningEffort,
+        }}
         onChange={(choice) => patch(choice)}
         disabled={adopting}
       />
@@ -112,7 +130,9 @@ export function NewBotForm() {
         label={t("dialogs.new.permissions")}
         value={state.permissionMode ?? ""}
         disabled={adopting}
-        onChange={(value) => patch({ permissionMode: value.length === 0 ? null : (value as "ask" | "auto") })}
+        onChange={(value) =>
+          patch({ permissionMode: value.length === 0 ? null : (value as "ask" | "auto") })
+        }
         options={[
           { value: "", label: t("dialogs.new.permissions.agentDefault") },
           { value: "ask", label: t("dialogs.new.permissions.ask") },
@@ -120,7 +140,10 @@ export function NewBotForm() {
         ]}
       />
 
-      <AdoptAgentSection adoptPaneId={state.adoptPaneId} onChange={(adoptPaneId) => patch({ adoptPaneId })} />
+      <AdoptAgentSection
+        adoptPaneId={state.adoptPaneId}
+        onChange={(adoptPaneId) => patch({ adoptPaneId })}
+      />
 
       {error != null && <div className={styles["hb-form-error"]}>{error}</div>}
 
@@ -128,7 +151,12 @@ export function NewBotForm() {
         <Button type="button" variant="secondary" onClick={dialogHost.close}>
           {t("common.cancel")}
         </Button>
-        <Button type="button" variant="primary" disabled={!validation.canSubmit || submitting} onClick={submit}>
+        <Button
+          type="button"
+          variant="primary"
+          disabled={!validation.canSubmit || submitting}
+          onClick={submit}
+        >
           {t("dialogs.new.startBot")}
         </Button>
       </div>

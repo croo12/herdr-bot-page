@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useShortcut } from "#shared/lib/shortcuts/ShortcutsProvider.tsx";
-import { SIDEBAR_RAIL_WIDTH, SIDEBAR_WIDTH_DEFAULT, resolveSidebarDrag, widthForMode } from "./sidebar-width.tsx";
+import {
+  SIDEBAR_RAIL_WIDTH,
+  SIDEBAR_WIDTH_DEFAULT,
+  resolveSidebarDrag,
+  widthForMode,
+} from "./sidebar-width.tsx";
 import type { SidebarMode } from "./sidebar-width.tsx";
 
 const STORAGE_KEY = "herdr-bot.sidebar";
@@ -61,7 +66,11 @@ export function useSidebarLayout(): SidebarLayout {
       // with SIDEBAR_RAIL_WIDTH, or dragging back out past the snap threshold (or a later ⌘B) would
       // restore SIDEBAR_WIDTH_MIN instead of the width the user actually had before collapsing (see
       // `toggleCollapsed`'s own comment -- this is the same bug via the drag path instead of ⌘B).
-      setPersisted((prev) => (result.mode === "rail" ? { width: prev.width, mode: "rail" } : { width: result.width, mode: result.mode }));
+      setPersisted((prev) =>
+        result.mode === "rail"
+          ? { width: prev.width, mode: "rail" }
+          : { width: result.width, mode: result.mode },
+      );
       return null;
     });
   }, []);
@@ -82,8 +91,17 @@ export function useSidebarLayout(): SidebarLayout {
 
   useShortcut("shell.toggleSidebar", "mod+b", toggleCollapsed);
 
-  const width = liveWidth != null ? resolveSidebarDrag(liveWidth).width : widthForMode(persisted.mode, persisted.width);
+  const width =
+    liveWidth != null
+      ? resolveSidebarDrag(liveWidth).width
+      : widthForMode(persisted.mode, persisted.width);
   const mode = liveWidth != null ? resolveSidebarDrag(liveWidth).mode : persisted.mode;
 
-  return { width: mode === "rail" ? SIDEBAR_RAIL_WIDTH : width, mode, onDrag, onDragEnd, toggleCollapsed };
+  return {
+    width: mode === "rail" ? SIDEBAR_RAIL_WIDTH : width,
+    mode,
+    onDrag,
+    onDragEnd,
+    toggleCollapsed,
+  };
 }

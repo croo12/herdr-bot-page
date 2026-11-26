@@ -4,7 +4,13 @@ import type { HerdrBridge } from "./bridge.tsx";
 
 const BridgeContext = createContext<HerdrBridge | null>(null);
 
-export function BridgeProvider({ bridge, children }: { readonly bridge: HerdrBridge; readonly children: ReactNode }) {
+export function BridgeProvider({
+  bridge,
+  children,
+}: {
+  readonly bridge: HerdrBridge;
+  readonly children: ReactNode;
+}) {
   return <BridgeContext.Provider value={bridge}>{children}</BridgeContext.Provider>;
 }
 

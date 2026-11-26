@@ -50,7 +50,10 @@ export function AdoptAgentSection({ adoptPaneId, onChange }: AdoptAgentSectionPr
             label={t("dialogs.new.adoptPick")}
             value={adoptPaneId ?? agents[0]!.paneId}
             onChange={onChange}
-            options={agents.map((agent) => ({ value: agent.paneId, label: `${agent.name ?? agent.paneId} — ${agent.provider ?? "?"} (${agent.cwd ?? "?"})` }))}
+            options={agents.map((agent) => ({
+              value: agent.paneId,
+              label: `${agent.name ?? agent.paneId} — ${agent.provider ?? "?"} (${agent.cwd ?? "?"})`,
+            }))}
           />
         ))}
     </div>

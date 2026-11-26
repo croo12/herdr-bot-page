@@ -28,9 +28,13 @@ test("highlightSnippet with a match at the very end omits the trailing empty seg
 });
 
 test("highlightSnippet degrades to one plain segment when the query isn't literally present", () => {
-  assert.deepEqual(highlightSnippet("some snippet text", "nope"), [{ text: "some snippet text", match: false }]);
+  assert.deepEqual(highlightSnippet("some snippet text", "nope"), [
+    { text: "some snippet text", match: false },
+  ]);
 });
 
 test("highlightSnippet with an empty query returns the whole snippet unmatched", () => {
-  assert.deepEqual(highlightSnippet("some snippet text", ""), [{ text: "some snippet text", match: false }]);
+  assert.deepEqual(highlightSnippet("some snippet text", ""), [
+    { text: "some snippet text", match: false },
+  ]);
 });

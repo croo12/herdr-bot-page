@@ -58,7 +58,11 @@ Rust 엔진(`native/src`)은 다음 여섯 층위를 사용합니다. 표의 위
 
 ## 모듈 경계 검사
 
-`npm ci`를 실행하면 Husky가 Git 훅을 설치합니다. 커밋할 때마다 `pre-commit` 훅이 `npm run check:architecture`로 작업 트리 전체를 검사하며, 위반이 있으면 커밋이 중단됩니다. 부분 스테이징한 파일은 스테이징하지 않은 수정도 검사에 포함됩니다. Windows와 macOS의 PR CI는 `npm run check`의 첫 단계에서 같은 검사를 실행합니다.
+`npm ci`를 실행하면 Husky가 Git 훅을 설치합니다. 커밋마다 `npm run check:pre-commit`이 포맷, 렌더러 린트, 모듈 경계를 검사합니다. 훅은 작업 트리를 읽기만 하며 부분 스테이징한 파일의 나머지 수정도 검사에 포함됩니다. Windows와 macOS의 PR CI도 `npm run check`에서 같은 검사를 실행합니다.
+
+- `npm run fmt`는 렌더러 소스·테스트·Vite 설정의 TypeScript와 TSX를 Oxfmt로, `native`와 `desktop`의 Rust 코드를 rustfmt로 정렬합니다. `npm run fmt:check`로 변경 없이 확인할 수 있습니다.
+- `npm run lint`는 Oxlint의 TypeScript, React Hooks, JSX 접근성 규칙을 검사합니다. 복합 위젯은 명시적인 ARIA 역할을 허용합니다. Tauri SDK를 호출할 수 있는 위치는 기존 렌더러 모듈 경계 검사에서 검증합니다.
+- `npm run lint:rust`는 엔진·CLI와 Tauri 데스크톱 크레이트에 Clippy를 실행합니다. CI는 데스크톱 번들을 빌드한 뒤 릴리스 설정으로도 Clippy를 실행합니다.
 
 - 렌더러는 `app → pages → features → shared` 방향으로 하위 레이어를 참조할 수 있습니다. 다른 page나 feature 슬라이스의 내부 파일은 외부에 공개하지 않고, 같은 레이어의 서로 다른 슬라이스는 서로 import하지 않습니다. 다른 레이어에서 슬라이스를 사용할 때는 `index.tsx`를 거칩니다. Tauri SDK 호출은 `shared/api/desktop/tauri-bridge.tsx`에 둡니다. 검사기는 alias와 상대 경로를 해석하고 순환 import도 검사합니다. [렌더러 규칙](scripts/architecture/renderer.mjs)
 - Rust 기능 모듈은 구현 하위 모듈을 비공개로 두고 필요한 항목을 `mod.rs`에서 재공개합니다. 엔진 검사는 소스에 명시한 import와 함수 본문의 경로로 모듈 간 직접 의존을 수집합니다. 매크로가 생성하는 코드와 인자로 전달한 타입의 메서드 호출은 이 그래프의 범위 밖입니다. Cargo 메타데이터로는 로컬 패키지 의존 방향인 `desktop → native`를 별도로 확인합니다.

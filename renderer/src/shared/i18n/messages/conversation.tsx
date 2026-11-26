@@ -126,7 +126,8 @@ export const ko = {
   "conversation.review.approve": "{name} 봇이 이번 실행을 승인했습니다",
   "conversation.review.deny": "{name} 봇이 이번 실행을 거절했습니다",
   "conversation.review.human": "{name} 봇이 사용자에게 판단을 맡겼습니다",
-  "conversation.review.unavailable": "{name} 봇에게 요청을 전달하지 못했습니다. 여기서 직접 결정할 수 있습니다.",
+  "conversation.review.unavailable":
+    "{name} 봇에게 요청을 전달하지 못했습니다. 여기서 직접 결정할 수 있습니다.",
   "conversation.noticeRenamed": "{newName}(으)로 이름이 변경되었습니다",
   "conversation.noticeDelegated": "{name}에게 메시지를 보냈어요",
   "conversation.emptyChat.title": "아직 메시지가 없어요",

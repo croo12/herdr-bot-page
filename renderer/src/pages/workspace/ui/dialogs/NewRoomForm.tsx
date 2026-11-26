@@ -47,8 +47,18 @@ export function NewRoomForm() {
 
   return (
     <div className={styles["hb-form"]}>
-      <TextField label={t("dialogs.new.roomName")} placeholder={t("dialogs.new.roomNamePlaceholder")} value={state.name} onChange={(event) => setState({ ...state, name: event.target.value })} />
-      <TextArea label={t("dialogs.new.goal")} placeholder={t("dialogs.new.goalPlaceholder")} value={state.goal} onChange={(event) => setState({ ...state, goal: event.target.value })} />
+      <TextField
+        label={t("dialogs.new.roomName")}
+        placeholder={t("dialogs.new.roomNamePlaceholder")}
+        value={state.name}
+        onChange={(event) => setState({ ...state, name: event.target.value })}
+      />
+      <TextArea
+        label={t("dialogs.new.goal")}
+        placeholder={t("dialogs.new.goalPlaceholder")}
+        value={state.goal}
+        onChange={(event) => setState({ ...state, goal: event.target.value })}
+      />
       <MemberChecklist
         label={t("dialogs.new.members")}
         candidates={bots}
@@ -62,7 +72,12 @@ export function NewRoomForm() {
         <Button type="button" variant="secondary" onClick={dialogHost.close}>
           {t("common.cancel")}
         </Button>
-        <Button type="button" variant="primary" disabled={!validation.canSubmit || submitting} onClick={submit}>
+        <Button
+          type="button"
+          variant="primary"
+          disabled={!validation.canSubmit || submitting}
+          onClick={submit}
+        >
           {t("dialogs.new.createRoom")}
         </Button>
       </div>

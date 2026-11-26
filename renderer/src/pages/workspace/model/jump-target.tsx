@@ -34,13 +34,11 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-function getSnapshot(): JumpTarget | null {
-  return current;
-}
-
 /** `null` unless a jump was requested for exactly this `chatId` and hasn't been cleared yet. */
 export function useJumpTarget(chatId: string | null): JumpTarget | null {
-  return useSyncExternalStore(subscribe, () => (chatId != null && current?.chatId === chatId ? current : null));
+  return useSyncExternalStore(subscribe, () =>
+    chatId != null && current?.chatId === chatId ? current : null,
+  );
 }
 
 /** Test-only: reads the current request without a React subscription. */

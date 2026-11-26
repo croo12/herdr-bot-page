@@ -10,17 +10,23 @@ export function resyncEngineQueries(cache: QueryClient) {
 }
 
 function patchTranscript(data: TranscriptPages, entry: TranscriptEntry): TranscriptPages {
-  const pageIndex = data.pages.findIndex(page => page.entries.some(existing => existing.id === entry.id));
+  const pageIndex = data.pages.findIndex((page) =>
+    page.entries.some((existing) => existing.id === entry.id),
+  );
   const target = pageIndex < 0 ? 0 : pageIndex;
-  return { ...data, pages: data.pages.map((page, index) => index === target
-    ? { ...page, entries: applyTranscriptEntry(page.entries, entry) } : page) };
+  return {
+    ...data,
+    pages: data.pages.map((page, index) =>
+      index === target ? { ...page, entries: applyTranscriptEntry(page.entries, entry) } : page,
+    ),
+  };
 }
 
 export function subscribeToEngineQueries(cache: QueryClient, client: AppApiClient) {
   // A snapshot (including fetchNextPage) can finish after a newer engine event.
   // Replay only events received during that fetch once its snapshot is committed.
   const pending = new Map<string, (() => void)[]>();
-  const unsubscribeCache = cache.getQueryCache().subscribe(event => {
+  const unsubscribeCache = cache.getQueryCache().subscribe((event) => {
     const hash = event.query.queryHash;
     if (event.type === "removed") pending.delete(hash);
     if (event.type !== "updated") return;
@@ -29,13 +35,15 @@ export function subscribeToEngineQueries(cache: QueryClient, client: AppApiClien
     if (action.type !== "success" || action.manual) return;
     const updates = pending.get(hash);
     pending.delete(hash);
-    updates?.forEach(apply => apply());
+    updates?.forEach((apply) => apply());
   });
 
   function update<Data>(key: QueryKey, change: (current: Data | undefined) => Data | undefined) {
     const query = cache.getQueryCache().find({ queryKey: key, exact: true });
     if (!query) return; // Unopened chats will read the committed data when first opened.
-    const apply = () => { cache.setQueryData<Data>(key, change); };
+    const apply = () => {
+      cache.setQueryData<Data>(key, change);
+    };
     if (query.state.fetchStatus === "fetching") {
       const updates = pending.get(query.queryHash) ?? [];
       updates.push(apply);
@@ -47,15 +55,26 @@ export function subscribeToEngineQueries(cache: QueryClient, client: AppApiClien
 
   const cleanups = [
     unsubscribeCache,
-    client.subscribe("chat.listChanged", ({ payload }) => update<ChatSummary[]>(chatsKey, () => [...payload])),
-    client.subscribe("chat.changed", ({ payload }) => update<ChatSummary[]>(chatsKey, chats => {
-      if (!chats) return undefined;
-      return chats.some(chat => chat.id === payload.id)
-        ? chats.map(chat => chat.id === payload.id ? payload : chat) : [...chats, payload];
-    })),
+    client.subscribe("chat.listChanged", ({ payload }) =>
+      update<ChatSummary[]>(chatsKey, () => [...payload]),
+    ),
+    client.subscribe("chat.changed", ({ payload }) =>
+      update<ChatSummary[]>(chatsKey, (chats) => {
+        if (!chats) return undefined;
+        return chats.some((chat) => chat.id === payload.id)
+          ? chats.map((chat) => (chat.id === payload.id ? payload : chat))
+          : [...chats, payload];
+      }),
+    ),
     client.subscribe(["transcript.entryAppended", "transcript.entryUpdated"], ({ payload }) => {
-      update<TranscriptPages>(transcriptKey(payload.chatId), data => data && patchTranscript(data, payload.entry));
+      update<TranscriptPages>(
+        transcriptKey(payload.chatId),
+        (data) => data && patchTranscript(data, payload.entry),
+      );
     }),
   ];
-  return () => { cleanups.forEach(cleanup => cleanup()); pending.clear(); };
+  return () => {
+    cleanups.forEach((cleanup) => cleanup());
+    pending.clear();
+  };
 }

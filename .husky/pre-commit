@@ -1,1 +1,1 @@
-npm run check:architecture
+npm run check:pre-commit

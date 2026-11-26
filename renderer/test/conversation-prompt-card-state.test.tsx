@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { derivePromptCardView, optionBadgeLabel, seedCheckedOptions } from "../src/features/answer-prompt/model/prompt-card-state.tsx";
+import {
+  derivePromptCardView,
+  optionBadgeLabel,
+  seedCheckedOptions,
+} from "../src/features/answer-prompt/model/prompt-card-state.tsx";
 import type { PendingPrompt, TranscriptEntry } from "../src/shared/api/index.tsx";
 
 function prompt(signature: string, overrides: Partial<PendingPrompt> = {}): PendingPrompt {
@@ -19,12 +23,19 @@ function prompt(signature: string, overrides: Partial<PendingPrompt> = {}): Pend
   };
 }
 
-function promptEntry(status: string, sig: string, rest: Record<string, unknown> = {}): TranscriptEntry {
+function promptEntry(
+  status: string,
+  sig: string,
+  rest: Record<string, unknown> = {},
+): TranscriptEntry {
   return { id: "p1", kind: "prompt", seq: 1, timestampMs: 0, prompt: prompt(sig), status, ...rest };
 }
 
 test("hidden when the entry has no valid prompt payload", () => {
-  assert.equal(derivePromptCardView({ id: "x", kind: "prompt", seq: 1, timestampMs: 0 }, null).mode, "hidden");
+  assert.equal(
+    derivePromptCardView({ id: "x", kind: "prompt", seq: 1, timestampMs: 0 }, null).mode,
+    "hidden",
+  );
 });
 
 test("hidden for a superseded entry even if signatures would otherwise match", () => {
@@ -39,7 +50,7 @@ test("live when the entry's signature matches the chat's current live pendingPro
   assert.equal(view.prompt, live);
 });
 
-test("inert (\"answered in the terminal\") when signatures don't match and nothing is known about the answer", () => {
+test('inert ("answered in the terminal") when signatures don\'t match and nothing is known about the answer', () => {
   const view = derivePromptCardView(promptEntry("resolved", "sig-old"), prompt("sig-new"));
   assert.equal(view.mode, "inert");
 });
@@ -50,20 +61,34 @@ test("inert when the bot has no live pendingPrompt at all", () => {
 });
 
 test("a repeated terminal question leaves the earlier answered card closed", () => {
-  const entry = promptEntry("answered", "same", { answer: { kind: "option", key: "A", label: "Yes" } });
+  const entry = promptEntry("answered", "same", {
+    answer: { kind: "option", key: "A", label: "Yes" },
+  });
   assert.equal(derivePromptCardView(entry, prompt("same")).mode, "answered");
   assert.equal(derivePromptCardView(promptEntry("resolved", "same"), prompt("same")).mode, "inert");
 });
 
 test("answered when the entry carries a resolved answer and the signature no longer matches live", () => {
-  const view = derivePromptCardView(promptEntry("answered", "sig-old", { answer: { kind: "option", key: "A", label: "Yes" } }), prompt("sig-new"));
+  const view = derivePromptCardView(
+    promptEntry("answered", "sig-old", { answer: { kind: "option", key: "A", label: "Yes" } }),
+    prompt("sig-new"),
+  );
   assert.equal(view.mode, "answered");
   assert.deepEqual(view.answer, { kind: "option", key: "A", label: "Yes" });
 });
 
 test("answered from options[].selected when there is no separate answer field", () => {
-  const selectedPrompt = prompt("sig-old", { options: [{ key: "A", label: "Yes", detail: null, selected: true, checked: null }] });
-  const entry: TranscriptEntry = { id: "p1", kind: "prompt", seq: 1, timestampMs: 0, prompt: selectedPrompt, status: "answered" };
+  const selectedPrompt = prompt("sig-old", {
+    options: [{ key: "A", label: "Yes", detail: null, selected: true, checked: null }],
+  });
+  const entry: TranscriptEntry = {
+    id: "p1",
+    kind: "prompt",
+    seq: 1,
+    timestampMs: 0,
+    prompt: selectedPrompt,
+    status: "answered",
+  };
   const view = derivePromptCardView(entry, prompt("sig-new"));
   assert.equal(view.mode, "answered");
 });

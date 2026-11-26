@@ -29,10 +29,22 @@ export function MentionChip({ id, name }: MentionChipProps) {
   }
 
   const bot = chats.find((chat) => chat.id === id);
-  const hue = bot == null ? undefined : ({ "--hb-mention-hue": personaColorVar(resolvePersonaColor(bot.avatarColor)) } as CSSProperties);
+  const hue =
+    bot == null
+      ? undefined
+      : ({
+          "--hb-mention-hue": personaColorVar(resolvePersonaColor(bot.avatarColor)),
+        } as CSSProperties);
   return (
     <span className={styles["hb-mention"]} style={hue}>
-      {bot != null ? <Avatar kind="bot" color={resolvePersonaColor(bot.avatarColor)} name={bot.name} size="2xs" /> : null}
+      {bot != null ? (
+        <Avatar
+          kind="bot"
+          color={resolvePersonaColor(bot.avatarColor)}
+          name={bot.name}
+          size="2xs"
+        />
+      ) : null}
       {bot?.name ?? name}
     </span>
   );

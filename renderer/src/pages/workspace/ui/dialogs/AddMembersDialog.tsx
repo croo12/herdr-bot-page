@@ -30,7 +30,9 @@ export function AddMembersDialog({ roomId, currentMemberIds }: AddMembersDialogP
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const candidates = chats.filter((chat) => chat.kind === "bot" && !currentMemberIds.includes(chat.id));
+  const candidates = chats.filter(
+    (chat) => chat.kind === "bot" && !currentMemberIds.includes(chat.id),
+  );
   const remainingCapacity = Math.max(0, MAX_ROOM_MEMBERS - currentMemberIds.length);
 
   async function confirm() {
@@ -47,7 +49,13 @@ export function AddMembersDialog({ roomId, currentMemberIds }: AddMembersDialogP
 
   return (
     <div className={styles["hb-form"]}>
-      <MemberChecklist label={t("dialogs.new.members")} candidates={candidates} selected={toAdd} onToggle={(id) => setToAdd(toggleMember(toAdd, id, remainingCapacity))} max={remainingCapacity} />
+      <MemberChecklist
+        label={t("dialogs.new.members")}
+        candidates={candidates}
+        selected={toAdd}
+        onToggle={(id) => setToAdd(toggleMember(toAdd, id, remainingCapacity))}
+        max={remainingCapacity}
+      />
       {error != null && <div className={styles["hb-form-error"]}>{error}</div>}
       <div className={styles["hb-form-footer"]}>
         <Button variant="secondary" onClick={dialogHost.close}>

@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { filterChats, filterChatsByKind, matchesChatQuery } from "../src/pages/workspace/model/palette/filter-chats.tsx";
+import {
+  filterChats,
+  filterChatsByKind,
+  matchesChatQuery,
+} from "../src/pages/workspace/model/palette/filter-chats.tsx";
 import type { ChatSummary } from "../src/shared/api/index.tsx";
 
 function chat(id: string, kind: ChatSummary["kind"], name: string, description = ""): ChatSummary {
@@ -49,11 +53,20 @@ test("matchesChatQuery with an empty/whitespace query matches everything", () =>
 
 test("filterChats filters the whole list", () => {
   const chats = [chat("forge", "bot", "Forge"), chat("scout", "bot", "Scout")];
-  assert.deepEqual(filterChats(chats, "sco").map((c) => c.id), ["scout"]);
+  assert.deepEqual(
+    filterChats(chats, "sco").map((c) => c.id),
+    ["scout"],
+  );
 });
 
 test("filterChatsByKind filters by query, then by kind", () => {
   const chats = [chat("forge", "bot", "Forge"), chat("room-1", "room", "Forge's room")];
-  assert.deepEqual(filterChatsByKind(chats, "forge", "bot").map((c) => c.id), ["forge"]);
-  assert.deepEqual(filterChatsByKind(chats, "forge", "room").map((c) => c.id), ["room-1"]);
+  assert.deepEqual(
+    filterChatsByKind(chats, "forge", "bot").map((c) => c.id),
+    ["forge"],
+  );
+  assert.deepEqual(
+    filterChatsByKind(chats, "forge", "room").map((c) => c.id),
+    ["room-1"],
+  );
 });

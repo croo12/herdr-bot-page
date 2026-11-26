@@ -23,7 +23,10 @@ export function useLocale(): LocaleHandle {
     };
   }, [bridge]);
 
-  useEffect(() => bridge.locale.onChanged((value) => setLocaleState(parseLocale(value as string | null))), [bridge]);
+  useEffect(
+    () => bridge.locale.onChanged((value) => setLocaleState(parseLocale(value as string | null))),
+    [bridge],
+  );
 
   const setLocale = useCallback(
     (next: Locale) => {

@@ -37,7 +37,11 @@ function plainTextDoc(text: string): DocNode {
 function isStagedAttachmentDraft(value: unknown): value is StagedAttachmentDraft {
   if (value == null || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
-  return typeof candidate["path"] === "string" && typeof candidate["filename"] === "string" && typeof candidate["size"] === "number";
+  return (
+    typeof candidate["path"] === "string" &&
+    typeof candidate["filename"] === "string" &&
+    typeof candidate["size"] === "number"
+  );
 }
 
 function isComposerDraftState(value: unknown): value is ComposerDraftState {

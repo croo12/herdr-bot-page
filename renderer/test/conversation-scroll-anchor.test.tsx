@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isNearBottom, isNearTop, olderPageScrollAdjustment } from "../src/pages/workspace/model/conversation/scroll-anchor.tsx";
+import {
+  isNearBottom,
+  isNearTop,
+  olderPageScrollAdjustment,
+} from "../src/pages/workspace/model/conversation/scroll-anchor.tsx";
 
 test("isNearBottom: true when within the threshold of the bottom", () => {
   assert.equal(isNearBottom(900, 1000, 100), true); // 1000 - (900+100) = 0

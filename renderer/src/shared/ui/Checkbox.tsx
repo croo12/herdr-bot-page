@@ -1,7 +1,10 @@
 import type { InputHTMLAttributes, ReactNode } from "react";
 import styles from "./Checkbox.module.css";
 
-export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "type"> {
+export interface CheckboxProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "className" | "type"
+> {
   readonly children?: ReactNode;
 }
 

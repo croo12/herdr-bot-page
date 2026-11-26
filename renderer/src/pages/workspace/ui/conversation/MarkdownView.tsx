@@ -4,7 +4,11 @@ import { Check, Copy } from "lucide-react";
 import { useBridge } from "#shared/api/desktop/BridgeContext.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { IconButton } from "#shared/ui/index.tsx";
-import { expandMentionsInBlocks, isSafeLinkHref, parseMarkdown } from "../../model/conversation/markdown.tsx";
+import {
+  expandMentionsInBlocks,
+  isSafeLinkHref,
+  parseMarkdown,
+} from "../../model/conversation/markdown.tsx";
 import type { BlockNode, InlineNode } from "../../model/conversation/markdown.tsx";
 import type { MentionCandidate } from "../../model/conversation/mentions.tsx";
 import { MentionChip } from "./MentionChip.tsx";
@@ -94,23 +98,32 @@ function Inline({ nodes }: { readonly nodes: readonly InlineNode[] }) {
 function InlineSpan({ node }: { readonly node: InlineNode }): ReactNode {
   if (node.type === "text") return node.value;
   if (node.type === "break") return <br />;
-  if (node.type === "bold") return (
-    <strong>
-      <Inline nodes={node.children} />
-    </strong>
-  );
-  if (node.type === "italic") return (
-    <em>
-      <Inline nodes={node.children} />
-    </em>
-  );
-  if (node.type === "code") return <code className={styles["hb-markdown-inline-code"]}>{node.value}</code>;
+  if (node.type === "bold")
+    return (
+      <strong>
+        <Inline nodes={node.children} />
+      </strong>
+    );
+  if (node.type === "italic")
+    return (
+      <em>
+        <Inline nodes={node.children} />
+      </em>
+    );
+  if (node.type === "code")
+    return <code className={styles["hb-markdown-inline-code"]}>{node.value}</code>;
   if (node.type === "mention") return <MentionChip id={node.id} name={node.name} />;
   // link
   return <ExternalLink href={node.href} nodes={node.children} />;
 }
 
-function ExternalLink({ href, nodes }: { readonly href: string; readonly nodes: readonly InlineNode[] }) {
+function ExternalLink({
+  href,
+  nodes,
+}: {
+  readonly href: string;
+  readonly nodes: readonly InlineNode[];
+}) {
   const bridge = useBridge();
   if (!isSafeLinkHref(href)) return <Inline nodes={nodes} />;
   return (

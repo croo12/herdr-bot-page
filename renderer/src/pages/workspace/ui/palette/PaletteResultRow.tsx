@@ -36,7 +36,14 @@ export interface PaletteResultRowProps {
 /** One command-palette result row: a chat (name + description/members subtitle), a
  * message hit (host snippet, highlighted around the query, + a role-aware subtitle), or a static
  * action -- each optionally tagged with its ⌘-digit quick-pick badge. */
-export function PaletteResultRow({ result, query, selected, shortcutDigit, nowMs, onActivate }: PaletteResultRowProps) {
+export function PaletteResultRow({
+  result,
+  query,
+  selected,
+  shortcutDigit,
+  nowMs,
+  onActivate,
+}: PaletteResultRowProps) {
   const { t, locale } = useT();
 
   if (result.kind === "action") {
@@ -78,11 +85,18 @@ export function PaletteResultRow({ result, query, selected, shortcutDigit, nowMs
 
   return (
     <PaletteRowShell selected={selected} shortcutDigit={shortcutDigit} onActivate={onActivate}>
-      {chat != null ? <ChatAvatar chat={chat} /> : <Avatar kind="bot" color="gray" name={hit.chatName} size="sm" />}
+      {chat != null ? (
+        <ChatAvatar chat={chat} />
+      ) : (
+        <Avatar kind="bot" color="gray" name={hit.chatName} size="sm" />
+      )}
       <div className={styles["hb-palette-row-main"]}>
         <div className={styles["hb-palette-row-name"]}>
           {highlightSnippet(hit.snippet, query).map((segment, index) => (
-            <span key={index} className={segment.match ? styles["hb-palette-row-highlight"] : undefined}>
+            <span
+              key={index}
+              className={segment.match ? styles["hb-palette-row-highlight"] : undefined}
+            >
               {segment.text}
             </span>
           ))}
@@ -95,9 +109,17 @@ export function PaletteResultRow({ result, query, selected, shortcutDigit, nowMs
 
 function ChatAvatar({ chat }: { readonly chat: ChatSummary }) {
   const members = useChatMembers(chat);
-  const { t } = useT();
-  if (chat.kind === "room") return <Avatar kind="room" members={members.map((m) => ({ color: resolvePersonaColor(m.avatarColor), name: m.name }))} size="sm" />;
-  return <Avatar kind="bot" color={resolvePersonaColor(chat.avatarColor)} name={chat.name} size="sm" />;
+  if (chat.kind === "room")
+    return (
+      <Avatar
+        kind="room"
+        members={members.map((m) => ({ color: resolvePersonaColor(m.avatarColor), name: m.name }))}
+        size="sm"
+      />
+    );
+  return (
+    <Avatar kind="bot" color={resolvePersonaColor(chat.avatarColor)} name={chat.name} size="sm" />
+  );
 }
 
 function ChatSubtitle({ chat }: { readonly chat: ChatSummary }) {
@@ -129,6 +151,14 @@ function PaletteRowShell({
     <div
       ref={rowRef}
       role="option"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+          onActivate();
+        }
+      }}
       aria-selected={selected}
       className={`${styles["hb-palette-row"]} ${selected ? styles["hb-palette-row--selected"] : ""}`}
       onClick={onActivate}

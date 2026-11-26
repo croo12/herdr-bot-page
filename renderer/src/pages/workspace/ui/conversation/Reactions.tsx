@@ -21,7 +21,10 @@ export function Reactions({ chatId, entryId, reactions, align }: ReactionsProps)
   if (groups.length === 0) return null;
 
   return (
-    <div className={styles["hb-reactions"]} style={{ justifyContent: align === "end" ? "flex-end" : "flex-start" }}>
+    <div
+      className={styles["hb-reactions"]}
+      style={{ justifyContent: align === "end" ? "flex-end" : "flex-start" }}
+    >
       {groups.map((group) => (
         <Badge
           key={group.emoji}

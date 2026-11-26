@@ -5,7 +5,11 @@ import { Select } from "#shared/ui/index.tsx";
 import type { ModelCatalogResult, ReasoningEffort } from "#shared/api/index.tsx";
 import type { LaunchChoice } from "../../model/dialogs/bot-form.tsx";
 import { ProviderSelect } from "./ProviderSelect.tsx";
-import { isSelectableProvider, providerSupportsModel, providerSupportsReasoning } from "../../model/dialogs/provider-catalog.tsx";
+import {
+  isSelectableProvider,
+  providerSupportsModel,
+  providerSupportsReasoning,
+} from "../../model/dialogs/provider-catalog.tsx";
 import styles from "./NewDialog.module.css";
 
 const REASONING_LEVELS: readonly ReasoningEffort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -32,6 +36,7 @@ export function LaunchChoiceFields({ value, onChange, disabled = false }: Launch
   const supportsReasoning = selectable && providerSupportsReasoning(value.provider);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- Clear the previous provider's choices while its replacement is loading.
     setCatalog(null);
     if (!supportsModel) return;
     let cancelled = false;
@@ -41,7 +46,12 @@ export function LaunchChoiceFields({ value, onChange, disabled = false }: Launch
         if (!cancelled) setCatalog(result);
       })
       .catch((error: unknown) => {
-        if (!cancelled) setCatalog({ models: [], source: "unavailable", error: error instanceof Error ? error.message : String(error) });
+        if (!cancelled)
+          setCatalog({
+            models: [],
+            source: "unavailable",
+            error: error instanceof Error ? error.message : String(error),
+          });
       });
     return () => {
       cancelled = true;
@@ -64,13 +74,20 @@ export function LaunchChoiceFields({ value, onChange, disabled = false }: Launch
           label={t("dialogs.new.model")}
           disabled={disabled || catalog == null || modelsUnavailable}
           value={value.model ?? ""}
-          placeholder={catalog == null ? t("dialogs.new.model.loading") : t("dialogs.new.model.placeholder")}
+          placeholder={
+            catalog == null ? t("dialogs.new.model.loading") : t("dialogs.new.model.placeholder")
+          }
           onChange={(model) => onChange({ ...value, model: model.length === 0 ? null : model })}
-          options={(catalog?.models ?? []).map((model) => ({ value: model.id, label: model.label }))}
+          options={(catalog?.models ?? []).map((model) => ({
+            value: model.id,
+            label: model.label,
+          }))}
         />
       )}
       {supportsModel && modelsUnavailable && (
-        <div className={styles["hb-form-error"]}>{t("dialogs.new.model.unavailable", { error: catalog.error ?? "" })}</div>
+        <div className={styles["hb-form-error"]}>
+          {t("dialogs.new.model.unavailable", { error: catalog.error ?? "" })}
+        </div>
       )}
 
       {supportsReasoning && (
@@ -79,8 +96,16 @@ export function LaunchChoiceFields({ value, onChange, disabled = false }: Launch
           disabled={disabled}
           value={value.reasoningEffort ?? ""}
           placeholder={t("dialogs.new.reasoning.placeholder")}
-          onChange={(level) => onChange({ ...value, reasoningEffort: level.length === 0 ? null : (level as ReasoningEffort) })}
-          options={REASONING_LEVELS.map((level) => ({ value: level, label: t(`dialogs.new.reasoning.${level}`) }))}
+          onChange={(level) =>
+            onChange({
+              ...value,
+              reasoningEffort: level.length === 0 ? null : (level as ReasoningEffort),
+            })
+          }
+          options={REASONING_LEVELS.map((level) => ({
+            value: level,
+            label: t(`dialogs.new.reasoning.${level}`),
+          }))}
         />
       )}
     </>

@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { placeAtPoint, placeNear, resolveVerticalPlacement } from "../src/shared/ui/popover-position.tsx";
+import {
+  placeAtPoint,
+  placeNear,
+  resolveVerticalPlacement,
+} from "../src/shared/ui/popover-position.tsx";
 
 const viewport = { width: 1000, height: 800 };
 
@@ -34,30 +38,53 @@ test("placeAtPoint clamps a context-menu point near the corner", () => {
 
 test("resolveVerticalPlacement: keeps the preferred bottom placement when it fits", () => {
   const anchor = { top: 100, left: 50, width: 200, height: 30 };
-  assert.equal(resolveVerticalPlacement(anchor, { width: 180, height: 120 }, "bottom-start", viewport), "bottom-start");
+  assert.equal(
+    resolveVerticalPlacement(anchor, { width: 180, height: 120 }, "bottom-start", viewport),
+    "bottom-start",
+  );
 });
 
 test("resolveVerticalPlacement: flips to top when bottom doesn't fit but top does", () => {
   const anchor = { top: 700, left: 50, width: 200, height: 30 }; // bottom edge at 730, 70px of room below
-  const result = resolveVerticalPlacement(anchor, { width: 180, height: 300 }, "bottom-start", viewport);
+  const result = resolveVerticalPlacement(
+    anchor,
+    { width: 180, height: 300 },
+    "bottom-start",
+    viewport,
+  );
   assert.equal(result, "top-start");
 });
 
 test("resolveVerticalPlacement: keeps the horizontal half (start/end) unchanged when it flips", () => {
   const anchor = { top: 700, left: 50, width: 200, height: 30 };
-  const result = resolveVerticalPlacement(anchor, { width: 180, height: 300 }, "bottom-end", viewport);
+  const result = resolveVerticalPlacement(
+    anchor,
+    { width: 180, height: 300 },
+    "bottom-end",
+    viewport,
+  );
   assert.equal(result, "top-end");
 });
 
 test("resolveVerticalPlacement: does not flip when neither side fits (the clamp handles it instead)", () => {
   const anchor = { top: 400, left: 50, width: 200, height: 30 };
   // panel taller than either half of an 800px-tall viewport
-  const result = resolveVerticalPlacement(anchor, { width: 180, height: 790 }, "bottom-start", viewport);
+  const result = resolveVerticalPlacement(
+    anchor,
+    { width: 180, height: 790 },
+    "bottom-start",
+    viewport,
+  );
   assert.equal(result, "bottom-start");
 });
 
 test("resolveVerticalPlacement: flips from top back to bottom when top doesn't fit but bottom does", () => {
   const anchor = { top: 20, left: 50, width: 200, height: 30 }; // only 20px of room above
-  const result = resolveVerticalPlacement(anchor, { width: 180, height: 120 }, "top-start", viewport);
+  const result = resolveVerticalPlacement(
+    anchor,
+    { width: 180, height: 120 },
+    "top-start",
+    viewport,
+  );
   assert.equal(result, "bottom-start");
 });

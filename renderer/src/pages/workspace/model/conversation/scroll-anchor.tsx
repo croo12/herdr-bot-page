@@ -8,7 +8,12 @@
 /** True when the viewport's bottom edge is within `threshold`px of the content's bottom -- the
  * "currently pinned to the latest message" test used to decide whether a new/growing entry should
  * auto-scroll the view down, or leave it alone (the user scrolled up to read history). */
-export function isNearBottom(scrollTop: number, scrollHeight: number, clientHeight: number, threshold = 80): boolean {
+export function isNearBottom(
+  scrollTop: number,
+  scrollHeight: number,
+  clientHeight: number,
+  threshold = 80,
+): boolean {
   return scrollHeight - (scrollTop + clientHeight) <= threshold;
 }
 
@@ -16,7 +21,10 @@ export function isNearBottom(scrollTop: number, scrollHeight: number, clientHeig
  * fixed -- which visually yanks the reader down into content they'd already scrolled past. The fix is to
  * add back exactly the height the prepend grew the content by, computed from a `scrollHeight` measured
  * just before and just after the prepend. */
-export function olderPageScrollAdjustment(prevScrollHeight: number, nextScrollHeight: number): number {
+export function olderPageScrollAdjustment(
+  prevScrollHeight: number,
+  nextScrollHeight: number,
+): number {
   return Math.max(0, nextScrollHeight - prevScrollHeight);
 }
 

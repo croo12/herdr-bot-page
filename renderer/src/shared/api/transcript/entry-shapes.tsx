@@ -44,7 +44,9 @@ export function isRenderableMessage(entry: TranscriptEntry): boolean {
 
 export function getAuthor(entry: TranscriptEntry): EntryAuthor | null {
   const value = entry.author;
-  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" ? { id: value.id, name: value.name } : null;
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string"
+    ? { id: value.id, name: value.name }
+    : null;
 }
 
 /** The raw, unprocessed text of a message/notice entry -- for a `send-message`, drills into
@@ -66,7 +68,8 @@ export function getReactions(entry: TranscriptEntry): readonly EntryReaction[] {
   if (!Array.isArray(value)) return [];
   const result: EntryReaction[] = [];
   for (const item of value) {
-    if (isRecord(item) && typeof item.emoji === "string" && typeof item.by === "string") result.push({ emoji: item.emoji, by: item.by });
+    if (isRecord(item) && typeof item.emoji === "string" && typeof item.by === "string")
+      result.push({ emoji: item.emoji, by: item.by });
   }
   return result;
 }
@@ -146,11 +149,25 @@ export function getStaleFor(entry: TranscriptEntry): string | null {
 export function getNoticeEvent(entry: TranscriptEntry): BotSystemEvent | null {
   const value = entry.event;
   if (!isRecord(value)) return null;
-  if (value.type === "bot-renamed" && typeof value.oldName === "string" && typeof value.newName === "string") {
+  if (
+    value.type === "bot-renamed" &&
+    typeof value.oldName === "string" &&
+    typeof value.newName === "string"
+  ) {
     return { type: "bot-renamed", oldName: value.oldName, newName: value.newName };
   }
-  if (value.type === "bot-message-sent" && typeof value.targetChatId === "string" && typeof value.targetName === "string" && (value.targetKind === "bot" || value.targetKind === "room")) {
-    return { type: "bot-message-sent", targetChatId: value.targetChatId, targetName: value.targetName, targetKind: value.targetKind };
+  if (
+    value.type === "bot-message-sent" &&
+    typeof value.targetChatId === "string" &&
+    typeof value.targetName === "string" &&
+    (value.targetKind === "bot" || value.targetKind === "room")
+  ) {
+    return {
+      type: "bot-message-sent",
+      targetChatId: value.targetChatId,
+      targetName: value.targetName,
+      targetKind: value.targetKind,
+    };
   }
   return null;
 }
@@ -159,7 +176,12 @@ export function getNoticeEvent(entry: TranscriptEntry): BotSystemEvent | null {
 export function getPrompt(entry: TranscriptEntry): PendingPrompt | null {
   const value = entry.prompt;
   if (!isRecord(value)) return null;
-  if (typeof value.question !== "string" || !Array.isArray(value.options) || typeof value.signature !== "string") return null;
+  if (
+    typeof value.question !== "string" ||
+    !Array.isArray(value.options) ||
+    typeof value.signature !== "string"
+  )
+    return null;
   return value as unknown as PendingPrompt;
 }
 
@@ -167,16 +189,26 @@ export type PromptEntryStatus = "pending" | "answered" | "resolved" | "supersede
 
 export function getPromptStatus(entry: TranscriptEntry): PromptEntryStatus | null {
   const value = entry.status;
-  return value === "pending" || value === "answered" || value === "resolved" || value === "superseded" ? value : null;
+  return value === "pending" ||
+    value === "answered" ||
+    value === "resolved" ||
+    value === "superseded"
+    ? value
+    : null;
 }
 
-export type PromptEntryAnswer = { readonly kind: "option"; readonly key: string; readonly label: string } | { readonly kind: "text"; readonly text: string } | { readonly kind: "cancelled" };
+export type PromptEntryAnswer =
+  | { readonly kind: "option"; readonly key: string; readonly label: string }
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "cancelled" };
 
 export function getPromptAnswer(entry: TranscriptEntry): PromptEntryAnswer | null {
   const value = entry.answer;
   if (!isRecord(value)) return null;
-  if (value.kind === "option" && typeof value.key === "string" && typeof value.label === "string") return { kind: "option", key: value.key, label: value.label };
-  if (value.kind === "text" && typeof value.text === "string") return { kind: "text", text: value.text };
+  if (value.kind === "option" && typeof value.key === "string" && typeof value.label === "string")
+    return { kind: "option", key: value.key, label: value.label };
+  if (value.kind === "text" && typeof value.text === "string")
+    return { kind: "text", text: value.text };
   if (value.kind === "cancelled") return { kind: "cancelled" };
   return null;
 }

@@ -13,12 +13,31 @@ export interface WindowState {
   readonly isMaximized: boolean;
 }
 
-export type StageAttachmentResult = { readonly ok: true; readonly path: string } | { readonly ok: false; readonly reason: "empty" | "too-large" | "failed" };
+export type StageAttachmentResult =
+  | { readonly ok: true; readonly path: string }
+  | { readonly ok: false; readonly reason: "empty" | "too-large" | "failed" };
 
 export type UpdateCheckState =
-  | { readonly type: "idle"; readonly lastCheck?: { readonly at: number; readonly result: "up-to-date" | "error"; readonly errorMessage?: string } }
-  | { readonly type: "available"; readonly version: string; readonly releaseUrl: string; readonly installError?: string }
-  | { readonly type: "downloading"; readonly version: string; readonly releaseUrl: string; readonly progress: number }
+  | {
+      readonly type: "idle";
+      readonly lastCheck?: {
+        readonly at: number;
+        readonly result: "up-to-date" | "error";
+        readonly errorMessage?: string;
+      };
+    }
+  | {
+      readonly type: "available";
+      readonly version: string;
+      readonly releaseUrl: string;
+      readonly installError?: string;
+    }
+  | {
+      readonly type: "downloading";
+      readonly version: string;
+      readonly releaseUrl: string;
+      readonly progress: number;
+    }
   | { readonly type: "restarting"; readonly version: string };
 export interface UpdateStatus {
   readonly state: UpdateCheckState;

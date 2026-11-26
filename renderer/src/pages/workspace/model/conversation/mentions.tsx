@@ -14,7 +14,9 @@ export interface MentionCandidate {
   readonly name: string;
 }
 
-export type MentionToken = { readonly type: "text"; readonly value: string } | { readonly type: "mention"; readonly id: string | null; readonly name: string };
+export type MentionToken =
+  | { readonly type: "text"; readonly value: string }
+  | { readonly type: "mention"; readonly id: string | null; readonly name: string };
 
 const EVERYONE_RE = /^everyone\b/i;
 
@@ -55,7 +57,9 @@ export function parseMentions(text: string, members: readonly MentionCandidate[]
       continue;
     }
 
-    const candidate = byLength.find((member) => rest.startsWith(member.name) && !/[\w]/.test(rest[member.name.length] ?? ""));
+    const candidate = byLength.find(
+      (member) => rest.startsWith(member.name) && !/[\w]/.test(rest[member.name.length] ?? ""),
+    );
     if (candidate != null) {
       flushBuffer();
       tokens.push({ type: "mention", id: candidate.id, name: candidate.name });

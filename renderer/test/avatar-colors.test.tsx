@@ -1,9 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_PERSONA_COLOR, PERSONA_COLORS, personaColorForId, resolvePersonaColor } from "../src/shared/ui/avatar-colors.tsx";
+import {
+  DEFAULT_PERSONA_COLOR,
+  PERSONA_COLORS,
+  personaColorForId,
+  resolvePersonaColor,
+} from "../src/shared/ui/avatar-colors.tsx";
 
 test("PERSONA_COLORS has the 11 fixed swatches in picker order", () => {
-  assert.deepEqual(PERSONA_COLORS, ["black", "brown", "red", "orange", "yellow", "green", "cyan", "blue", "violet", "magenta", "gray"]);
+  assert.deepEqual(PERSONA_COLORS, [
+    "black",
+    "brown",
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "cyan",
+    "blue",
+    "violet",
+    "magenta",
+    "gray",
+  ]);
 });
 
 test("resolvePersonaColor passes through a known color", () => {

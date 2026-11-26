@@ -19,7 +19,13 @@ export interface SidebarRowMenuProps {
  * no other UI surface anywhere in the app) and "Open in herdr" for a bot via
  * `bot.focus`. Edit Profile and Delete route through `useDialogs()` -- the real bot/room info panel and
  * delete confirmation the workspace manages -- rather than anything built locally in this folder. */
-export function SidebarRowMenu({ chat, state, isPinned, onTogglePin, onStartRename }: SidebarRowMenuProps) {
+export function SidebarRowMenu({
+  chat,
+  state,
+  isPinned,
+  onTogglePin,
+  onStartRename,
+}: SidebarRowMenuProps) {
   const { t } = useT();
   const { client } = useStoreContext();
   const dialogs = useDialogs();
@@ -44,12 +50,21 @@ export function SidebarRowMenu({ chat, state, isPinned, onTogglePin, onStartRena
   function openInHerdr() {
     state.close();
     client.call("bot.focus", { botId: chat.id }).catch((error: unknown) => {
-      toast.show(t("sidebar.contextMenu.openInHerdrFailed", { message: error instanceof Error ? error.message : String(error) }));
+      toast.show(
+        t("sidebar.contextMenu.openInHerdrFailed", {
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
     });
   }
 
   return (
-    <ContextMenu state={state} label={t(chat.kind === "bot" ? "sidebar.contextMenu.renameBot" : "sidebar.contextMenu.renameRoom")}>
+    <ContextMenu
+      state={state}
+      label={t(
+        chat.kind === "bot" ? "sidebar.contextMenu.renameBot" : "sidebar.contextMenu.renameRoom",
+      )}
+    >
       <MenuItem
         icon={isPinned ? <PinOff size={16} /> : <Pin size={16} />}
         onSelect={() => {
@@ -66,12 +81,17 @@ export function SidebarRowMenu({ chat, state, isPinned, onTogglePin, onStartRena
           onStartRename();
         }}
       >
-        {t(chat.kind === "bot" ? "sidebar.contextMenu.renameBot" : "sidebar.contextMenu.renameRoom")}
+        {t(
+          chat.kind === "bot" ? "sidebar.contextMenu.renameBot" : "sidebar.contextMenu.renameRoom",
+        )}
       </MenuItem>
       <MenuItem icon={<Pencil size={16} />} onSelect={openEditProfile}>
         {t("sidebar.contextMenu.editProfile")}
       </MenuItem>
-      <MenuItem icon={chat.isHiddenFromSidebar ? <Eye size={16} /> : <EyeOff size={16} />} onSelect={toggleHidden}>
+      <MenuItem
+        icon={chat.isHiddenFromSidebar ? <Eye size={16} /> : <EyeOff size={16} />}
+        onSelect={toggleHidden}
+      >
         {t(chat.isHiddenFromSidebar ? "sidebar.contextMenu.show" : "sidebar.contextMenu.hide")}
       </MenuItem>
       {chat.kind === "bot" && (

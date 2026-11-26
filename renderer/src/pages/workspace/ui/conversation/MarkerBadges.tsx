@@ -1,7 +1,12 @@
 import { useChats } from "../../model/useChats.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { Badge } from "#shared/ui/index.tsx";
-import { getAnswersHeld, getHeldFor, getLateInfo, getStaleFor } from "#shared/api/transcript/entry-shapes.tsx";
+import {
+  getAnswersHeld,
+  getHeldFor,
+  getLateInfo,
+  getStaleFor,
+} from "#shared/api/transcript/entry-shapes.tsx";
 import type { TranscriptEntry } from "#shared/api/index.tsx";
 import { formatDurationShort } from "../../model/conversation/format-duration.tsx";
 import styles from "./MarkerBadges.module.css";
@@ -25,7 +30,14 @@ export function MarkerBadges({ entry }: MarkerBadgesProps) {
 
   return (
     <div className={styles["hb-marker-badges"]}>
-      {late.late && <Badge tone="late">{t("conversation.lateReply", { duration: late.lateAfterMs != null ? formatDurationShort(late.lateAfterMs, locale) : "0s" })}</Badge>}
+      {late.late && (
+        <Badge tone="late">
+          {t("conversation.lateReply", {
+            duration:
+              late.lateAfterMs != null ? formatDurationShort(late.lateAfterMs, locale) : "0s",
+          })}
+        </Badge>
+      )}
       {late.late && answersHeld != null && (
         <button type="button" className={styles["hb-marker-link"]}>
           {t("conversation.answersHeld")}

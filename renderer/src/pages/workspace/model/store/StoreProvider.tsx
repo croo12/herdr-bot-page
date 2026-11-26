@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useBridge } from "#shared/api/desktop/BridgeContext.tsx";
 import { createRendererClient } from "#shared/api/client.tsx";
@@ -29,24 +36,36 @@ export function useStoreContext(): StoreContextValue {
 
 export function StoreProvider({ children }: { readonly children: ReactNode }) {
   const bridge = useBridge();
-  const cache = useMemo(() => createWorkspaceQueryClient(), [bridge]);
-  const client = useMemo(() => createRendererClient(bridge.api, {
-    onResyncNeeded: () => resyncEngineQueries(cache),
-  }), [bridge, cache]);
-  const store = useMemo(() => createStore<WorkspaceUiState>({ activeChatId: null, pinnedChatIds: [] }), [bridge]);
-  const drafts = useMemo(() => createDraftStore(), [bridge]);
-  const value = useMemo(() => ({ client, drafts, store }), [client, drafts, store]);
+  const { cache, value } = useMemo(() => {
+    const cache = createWorkspaceQueryClient();
+    const client = createRendererClient(bridge.api, {
+      onResyncNeeded: () => resyncEngineQueries(cache),
+    });
+    const store = createStore<WorkspaceUiState>({ activeChatId: null, pinnedChatIds: [] });
+    return { cache, value: { client, drafts: createDraftStore(), store } };
+  }, [bridge]);
+  const { client, store } = value;
 
   useLayoutEffect(() => subscribeToEngineQueries(cache, client), [cache, client]);
   useEffect(() => {
     let active = true;
     const original = store.getState().pinnedChatIds;
-    void bridge.pins.get().then(pinnedChatIds => {
-      if (active && store.getState().pinnedChatIds === original) store.setState({ ...store.getState(), pinnedChatIds });
+    void bridge.pins.get().then((pinnedChatIds) => {
+      if (active && store.getState().pinnedChatIds === original)
+        store.setState({ ...store.getState(), pinnedChatIds });
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [bridge, store]);
 
-  useQuery({ queryKey: [...engineKey, "identity"], queryFn: () => client.call("identity.get", undefined) }, cache);
-  return <QueryClientProvider client={cache}><StoreContext.Provider value={value}>{children}</StoreContext.Provider></QueryClientProvider>;
+  useQuery(
+    { queryKey: [...engineKey, "identity"], queryFn: () => client.call("identity.get", undefined) },
+    cache,
+  );
+  return (
+    <QueryClientProvider client={cache}>
+      <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+    </QueryClientProvider>
+  );
 }

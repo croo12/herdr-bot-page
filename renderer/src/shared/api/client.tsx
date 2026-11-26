@@ -6,6 +6,9 @@ export interface CreateRendererClientOptions {
   readonly onResyncNeeded?: () => void;
 }
 
-export function createRendererClient(transport: AppApiTransport, options: CreateRendererClientOptions = {}): AppApiClient {
+export function createRendererClient(
+  transport: AppApiTransport,
+  options: CreateRendererClientOptions = {},
+): AppApiClient {
   return createAppClient(transport, options);
 }

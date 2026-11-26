@@ -26,7 +26,15 @@ export interface DirectoryFieldProps {
 /** The Working directory field: a text input + native "Choose…" picker, with live
  * `directory.list`-backed existence validation and a lightweight path-suggestion dropdown. Shared by the
  * New Bot form and the bot info panel's launch settings. */
-export function DirectoryField({ label, value, onChange, onCheckChange, invalidMessage, disabled = false, placeholder }: DirectoryFieldProps) {
+export function DirectoryField({
+  label,
+  value,
+  onChange,
+  onCheckChange,
+  invalidMessage,
+  disabled = false,
+  placeholder,
+}: DirectoryFieldProps) {
   const { client } = useStoreContext();
   const bridge = useBridge();
   const { t } = useT();
@@ -88,7 +96,15 @@ export function DirectoryField({ label, value, onChange, onCheckChange, invalidM
           {showSuggestions && (
             <div className={styles["hb-directory-suggestions"]} role="listbox" aria-label={label}>
               {suggestions.slice(0, 20).map((entry) => (
-                <button key={entry} type="button" role="option" aria-selected={false} className={styles["hb-directory-suggestion"]} onMouseDown={(event) => event.preventDefault()} onClick={() => onChange(entry)}>
+                <button
+                  key={entry}
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  className={styles["hb-directory-suggestion"]}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onChange(entry)}
+                >
                   {entry}
                 </button>
               ))}
@@ -100,7 +116,10 @@ export function DirectoryField({ label, value, onChange, onCheckChange, invalidM
         </Button>
       </div>
       {invalidMessage != null && (
-        <div id={helperId} className={`${fieldStyles["hb-field-helper"]} ${fieldStyles["hb-field-helper--invalid"]}`}>
+        <div
+          id={helperId}
+          className={`${fieldStyles["hb-field-helper"]} ${fieldStyles["hb-field-helper--invalid"]}`}
+        >
           {invalidMessage}
         </div>
       )}

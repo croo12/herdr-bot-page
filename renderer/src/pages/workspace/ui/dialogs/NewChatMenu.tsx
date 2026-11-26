@@ -51,15 +51,33 @@ export function NewChatMenu() {
     closeNewMenu();
   }
 
-  useShortcut("dialogs.newMenu.1", "mod+1", () => (view === "menu" ? setView("quick-bot") : undefined));
-  useShortcut("dialogs.newMenu.2", "mod+2", () => (view === "menu" ? openAdvanced("room") : undefined));
-  useShortcut("dialogs.newMenu.3", "mod+3", () => (view === "menu" ? openAdvanced("bot") : undefined));
-  useShortcut("dialogs.newMenu.4", "mod+4", () => (view === "menu" && bots[0] != null ? openBot(bots[0].id) : undefined));
-  useShortcut("dialogs.newMenu.5", "mod+5", () => (view === "menu" && bots[1] != null ? openBot(bots[1].id) : undefined));
-  useShortcut("dialogs.newMenu.6", "mod+6", () => (view === "menu" && bots[2] != null ? openBot(bots[2].id) : undefined));
-  useShortcut("dialogs.newMenu.7", "mod+7", () => (view === "menu" && bots[3] != null ? openBot(bots[3].id) : undefined));
-  useShortcut("dialogs.newMenu.8", "mod+8", () => (view === "menu" && bots[4] != null ? openBot(bots[4].id) : undefined));
-  useShortcut("dialogs.newMenu.9", "mod+9", () => (view === "menu" && bots[5] != null ? openBot(bots[5].id) : undefined));
+  useShortcut("dialogs.newMenu.1", "mod+1", () =>
+    view === "menu" ? setView("quick-bot") : undefined,
+  );
+  useShortcut("dialogs.newMenu.2", "mod+2", () =>
+    view === "menu" ? openAdvanced("room") : undefined,
+  );
+  useShortcut("dialogs.newMenu.3", "mod+3", () =>
+    view === "menu" ? openAdvanced("bot") : undefined,
+  );
+  useShortcut("dialogs.newMenu.4", "mod+4", () =>
+    view === "menu" && bots[0] != null ? openBot(bots[0].id) : undefined,
+  );
+  useShortcut("dialogs.newMenu.5", "mod+5", () =>
+    view === "menu" && bots[1] != null ? openBot(bots[1].id) : undefined,
+  );
+  useShortcut("dialogs.newMenu.6", "mod+6", () =>
+    view === "menu" && bots[2] != null ? openBot(bots[2].id) : undefined,
+  );
+  useShortcut("dialogs.newMenu.7", "mod+7", () =>
+    view === "menu" && bots[3] != null ? openBot(bots[3].id) : undefined,
+  );
+  useShortcut("dialogs.newMenu.8", "mod+8", () =>
+    view === "menu" && bots[4] != null ? openBot(bots[4].id) : undefined,
+  );
+  useShortcut("dialogs.newMenu.9", "mod+9", () =>
+    view === "menu" && bots[5] != null ? openBot(bots[5].id) : undefined,
+  );
 
   if (view === "quick-bot") {
     return <QuickCreateBot onAdvanced={() => openAdvanced("bot")} onDone={() => closeNewMenu()} />;
@@ -69,13 +87,19 @@ export function NewChatMenu() {
     <div>
       <div className={styles["hb-new-menu-header"]}>
         <span>{t("dialogs.newMenu.to")}</span>
-        <span className={styles["hb-new-menu-placeholder"]}>{t("dialogs.newMenu.searchPlaceholder")}</span>
+        <span className={styles["hb-new-menu-placeholder"]}>
+          {t("dialogs.newMenu.searchPlaceholder")}
+        </span>
         <IconButton size="sm" aria-label={t("common.close")} onClick={() => closeNewMenu()}>
           <X size={16} />
         </IconButton>
       </div>
       <div className={styles["hb-new-menu-list"]}>
-        <button type="button" className={styles["hb-new-menu-row"]} onClick={() => setView("quick-bot")}>
+        <button
+          type="button"
+          className={styles["hb-new-menu-row"]}
+          onClick={() => setView("quick-bot")}
+        >
           <span className={styles["hb-new-menu-icon"]}>
             <Plus size={16} />
           </span>
@@ -85,7 +109,11 @@ export function NewChatMenu() {
             <Kbd>1</Kbd>
           </span>
         </button>
-        <button type="button" className={styles["hb-new-menu-row"]} onClick={() => openAdvanced("room")}>
+        <button
+          type="button"
+          className={styles["hb-new-menu-row"]}
+          onClick={() => openAdvanced("room")}
+        >
           <span className={styles["hb-new-menu-icon"]}>
             <Users size={16} />
           </span>
@@ -95,7 +123,11 @@ export function NewChatMenu() {
             <Kbd>2</Kbd>
           </span>
         </button>
-        <button type="button" className={styles["hb-new-menu-row"]} onClick={() => openAdvanced("bot")}>
+        <button
+          type="button"
+          className={styles["hb-new-menu-row"]}
+          onClick={() => openAdvanced("bot")}
+        >
           <span className={styles["hb-new-menu-icon"]}>
             <SlidersHorizontal size={16} />
           </span>
@@ -106,8 +138,18 @@ export function NewChatMenu() {
           </span>
         </button>
         {bots.map((bot, index) => (
-          <button key={bot.id} type="button" className={styles["hb-new-menu-row"]} onClick={() => openBot(bot.id)}>
-            <Avatar kind="bot" color={resolvePersonaColor(bot.avatarColor)} name={bot.name} size="sm" />
+          <button
+            key={bot.id}
+            type="button"
+            className={styles["hb-new-menu-row"]}
+            onClick={() => openBot(bot.id)}
+          >
+            <Avatar
+              kind="bot"
+              color={resolvePersonaColor(bot.avatarColor)}
+              name={bot.name}
+              size="sm"
+            />
             <span className={styles["hb-new-menu-label"]}>{bot.name}</span>
             <span className={styles["hb-new-menu-kbd"]}>
               <Kbd>⌘</Kbd>

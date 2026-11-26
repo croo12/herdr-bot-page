@@ -21,12 +21,18 @@ export function PanelHost({ children }: { readonly children: ReactNode }) {
   const close = useCallback(() => setNode(null), []);
   const open = useCallback((next: ReactNode) => setNode(next), []);
 
-  const handle = useMemo<PanelHandle>(() => ({ open, close, isOpen: node != null }), [open, close, node]);
+  const handle = useMemo<PanelHandle>(
+    () => ({ open, close, isOpen: node != null }),
+    [open, close, node],
+  );
 
   return (
     <PanelHostContext.Provider value={handle}>
       {children}
-      <aside className={`${styles["hb-panel"]} ${node != null ? styles["hb-panel--open"] : ""}`} aria-hidden={node == null}>
+      <aside
+        className={`${styles["hb-panel"]} ${node != null ? styles["hb-panel--open"] : ""}`}
+        aria-hidden={node == null}
+      >
         <div className={styles["hb-panel-inner"]}>{node}</div>
       </aside>
     </PanelHostContext.Provider>

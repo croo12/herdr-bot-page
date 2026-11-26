@@ -4,7 +4,34 @@ import { planStackedAvatar } from "../src/pages/workspace/model/room-avatar.tsx"
 import type { ChatSummary } from "../src/shared/api/index.tsx";
 
 function member(id: string): ChatSummary {
-  return { id, kind: "bot", name: id, description: "", title: "", avatarShape: null, avatarColor: null, createdAt: 0, updatedAt: 0, isRunning: false, currentActivity: null, lastMessagePreview: null, lastMessageId: null, hasUnread: false, unreadCount: 0, lastViewedAt: 0, lastActivityAt: 0, lastReadSeq: 0, lastIncomingSeq: 0, lastMessageAt: 0, awaitingUserResponse: null, notifyOnUpdatesEnabled: true, isHiddenFromSidebar: false, isGroup: false, memberIds: [], bot: null };
+  return {
+    id,
+    kind: "bot",
+    name: id,
+    description: "",
+    title: "",
+    avatarShape: null,
+    avatarColor: null,
+    createdAt: 0,
+    updatedAt: 0,
+    isRunning: false,
+    currentActivity: null,
+    lastMessagePreview: null,
+    lastMessageId: null,
+    hasUnread: false,
+    unreadCount: 0,
+    lastViewedAt: 0,
+    lastActivityAt: 0,
+    lastReadSeq: 0,
+    lastIncomingSeq: 0,
+    lastMessageAt: 0,
+    awaitingUserResponse: null,
+    notifyOnUpdatesEnabled: true,
+    isHiddenFromSidebar: false,
+    isGroup: false,
+    memberIds: [],
+    bot: null,
+  };
 }
 
 test("3 or fewer members: all shown, no overflow", () => {

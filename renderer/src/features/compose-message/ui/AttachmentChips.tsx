@@ -32,7 +32,12 @@ export function AttachmentChips({ attachments, onRemove }: AttachmentChipsProps)
             {attachment.filename}
           </span>
           <span className={styles["hb-attachment-chip-size"]}>{formatBytes(attachment.size)}</span>
-          <button type="button" className={styles["hb-attachment-chip-remove"]} aria-label={t("composer.attachment.remove", { filename: attachment.filename })} onClick={() => onRemove(attachment.path)}>
+          <button
+            type="button"
+            className={styles["hb-attachment-chip-remove"]}
+            aria-label={t("composer.attachment.remove", { filename: attachment.filename })}
+            onClick={() => onRemove(attachment.path)}
+          >
             <X size={12} />
           </button>
         </div>

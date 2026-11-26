@@ -1,6 +1,15 @@
 /** Public components for the renderer UI kit. */
 export { Avatar } from "./Avatar.tsx";
-export type { AvatarProps, AvatarShape, AvatarSize, AvatarStatusTone, BotAvatarProps, RoomAvatarProps, StackMember, UserAvatarProps } from "./Avatar.tsx";
+export type {
+  AvatarProps,
+  AvatarShape,
+  AvatarSize,
+  AvatarStatusTone,
+  BotAvatarProps,
+  RoomAvatarProps,
+  StackMember,
+  UserAvatarProps,
+} from "./Avatar.tsx";
 export { Badge } from "./Badge.tsx";
 export type { BadgeProps, BadgeTone } from "./Badge.tsx";
 export { Button } from "./Button.tsx";

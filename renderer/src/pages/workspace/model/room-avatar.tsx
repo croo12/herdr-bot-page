@@ -17,5 +17,8 @@ export interface StackedAvatarPlan {
 
 export function planStackedAvatar(members: readonly ChatSummary[]): StackedAvatarPlan {
   if (members.length <= MAX_STACKED) return { shown: members, overflowCount: 0 };
-  return { shown: members.slice(0, SHOWN_WITH_OVERFLOW), overflowCount: members.length - SHOWN_WITH_OVERFLOW };
+  return {
+    shown: members.slice(0, SHOWN_WITH_OVERFLOW),
+    overflowCount: members.length - SHOWN_WITH_OVERFLOW,
+  };
 }

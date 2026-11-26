@@ -9,6 +9,8 @@
 import type { ChatKind } from "#shared/api/index.tsx";
 
 /** Which `composer.i18n.tsx` key to use for a given chat's placeholder, per the particle rule above. */
-export function placeholderKey(kind: ChatKind): "composer.placeholder.bot" | "composer.placeholder.room" {
+export function placeholderKey(
+  kind: ChatKind,
+): "composer.placeholder.bot" | "composer.placeholder.room" {
   return kind === "bot" ? "composer.placeholder.bot" : "composer.placeholder.room";
 }

@@ -7,16 +7,25 @@
  */
 import type { ChatSummary } from "#shared/api/index.tsx";
 
-export function matchesChatQuery(chat: Pick<ChatSummary, "name" | "description">, query: string): boolean {
+export function matchesChatQuery(
+  chat: Pick<ChatSummary, "name" | "description">,
+  query: string,
+): boolean {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return true;
-  return chat.name.toLowerCase().includes(needle) || chat.description.toLowerCase().includes(needle);
+  return (
+    chat.name.toLowerCase().includes(needle) || chat.description.toLowerCase().includes(needle)
+  );
 }
 
 export function filterChats(chats: readonly ChatSummary[], query: string): readonly ChatSummary[] {
   return chats.filter((chat) => matchesChatQuery(chat, query));
 }
 
-export function filterChatsByKind(chats: readonly ChatSummary[], query: string, kind: ChatSummary["kind"]): readonly ChatSummary[] {
+export function filterChatsByKind(
+  chats: readonly ChatSummary[],
+  query: string,
+  kind: ChatSummary["kind"],
+): readonly ChatSummary[] {
   return filterChats(chats, query).filter((chat) => chat.kind === kind);
 }

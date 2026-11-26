@@ -37,7 +37,11 @@ export function HeaderSlot({ chatId }: HeaderSlotProps) {
         : null
       : (() => {
           const working = workingOnlyPresence(status.presence);
-          return working.length > 0 ? working.map((member) => t("conversation.status.working", { name: member.name })).join(" · ") : null;
+          return working.length > 0
+            ? working
+                .map((member) => t("conversation.status.working", { name: member.name }))
+                .join(" · ")
+            : null;
         })();
 
   function openInfoPanel() {
@@ -52,18 +56,43 @@ export function HeaderSlot({ chatId }: HeaderSlotProps) {
   return (
     <>
       <div className={styles["hb-conversation-header-row"]}>
-        <div className={styles["hb-conversation-header"]} role="button" tabIndex={0} aria-label={t("conversation.viewSettings")} onClick={openInfoPanel} onKeyDown={(event) => event.key === "Enter" && openInfoPanel()}>
+        <div
+          className={styles["hb-conversation-header"]}
+          role="button"
+          tabIndex={0}
+          aria-label={t("conversation.viewSettings")}
+          onClick={openInfoPanel}
+          onKeyDown={(event) => event.key === "Enter" && openInfoPanel()}
+        >
           {chat.kind === "bot" ? (
-            <Avatar kind="bot" color={resolvePersonaColor(chat.avatarColor)} name={chat.name} size="sm" />
+            <Avatar
+              kind="bot"
+              color={resolvePersonaColor(chat.avatarColor)}
+              name={chat.name}
+              size="sm"
+            />
           ) : (
-            <Avatar kind="room" members={members.map((member) => ({ color: resolvePersonaColor(member.avatarColor), name: member.name }))} size="sm" />
+            <Avatar
+              kind="room"
+              members={members.map((member) => ({
+                color: resolvePersonaColor(member.avatarColor),
+                name: member.name,
+              }))}
+              size="sm"
+            />
           )}
           <span className={styles["hb-conversation-title"]}>{chat.name}</span>
-          {subtitle != null && <span className={styles["hb-conversation-subtitle"]}>{subtitle}</span>}
+          {subtitle != null && (
+            <span className={styles["hb-conversation-subtitle"]}>{subtitle}</span>
+          )}
         </div>
         {chat.kind === "bot" && (
           <div className={styles["hb-conversation-header-actions"]}>
-            <IconButton size="sm" aria-label={t("conversation.openInHerdr")} onClick={() => void client.call("bot.focus", { botId: chat.id })}>
+            <IconButton
+              size="sm"
+              aria-label={t("conversation.openInHerdr")}
+              onClick={() => void client.call("bot.focus", { botId: chat.id })}
+            >
               <ExternalLink size={16} />
             </IconButton>
           </div>

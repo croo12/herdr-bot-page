@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { expandMentions, expandMentionsInBlocks, isSafeLinkHref, parseInline, parseMarkdown } from "../src/pages/workspace/model/conversation/markdown.tsx";
+import {
+  expandMentions,
+  expandMentionsInBlocks,
+  isSafeLinkHref,
+  parseInline,
+  parseMarkdown,
+} from "../src/pages/workspace/model/conversation/markdown.tsx";
 
 test("parseInline: plain text", () => {
   assert.deepEqual(parseInline("hello"), [{ type: "text", value: "hello" }]);
@@ -12,12 +18,18 @@ test("parseInline: bold with ** and __", () => {
     { type: "bold", children: [{ type: "text", value: "bold" }] },
     { type: "text", value: " b" },
   ]);
-  assert.deepEqual(parseInline("__bold__"), [{ type: "bold", children: [{ type: "text", value: "bold" }] }]);
+  assert.deepEqual(parseInline("__bold__"), [
+    { type: "bold", children: [{ type: "text", value: "bold" }] },
+  ]);
 });
 
 test("parseInline: italic with * and _, does not confuse with bold", () => {
-  assert.deepEqual(parseInline("*it*"), [{ type: "italic", children: [{ type: "text", value: "it" }] }]);
-  assert.deepEqual(parseInline("_it_"), [{ type: "italic", children: [{ type: "text", value: "it" }] }]);
+  assert.deepEqual(parseInline("*it*"), [
+    { type: "italic", children: [{ type: "text", value: "it" }] },
+  ]);
+  assert.deepEqual(parseInline("_it_"), [
+    { type: "italic", children: [{ type: "text", value: "it" }] },
+  ]);
 });
 
 test("parseInline: inline code is not parsed further", () => {
@@ -35,14 +47,20 @@ test("parseInline: link", () => {
 });
 
 test("parseInline: unterminated markers fall back to plain text", () => {
-  assert.deepEqual(parseInline("a **bold without close"), [{ type: "text", value: "a **bold without close" }]);
+  assert.deepEqual(parseInline("a **bold without close"), [
+    { type: "text", value: "a **bold without close" },
+  ]);
 });
 
 test("parseMarkdown: paragraph with a soft line break", () => {
   assert.deepEqual(parseMarkdown("line one\nline two"), [
     {
       type: "paragraph",
-      children: [{ type: "text", value: "line one" }, { type: "break" }, { type: "text", value: "line two" }],
+      children: [
+        { type: "text", value: "line one" },
+        { type: "break" },
+        { type: "text", value: "line two" },
+      ],
     },
   ]);
 });
@@ -83,7 +101,9 @@ test("parseMarkdown: blockquote recurses into its own blocks", () => {
 });
 
 test("parseMarkdown: heading", () => {
-  assert.deepEqual(parseMarkdown("## Section"), [{ type: "heading", level: 2, children: [{ type: "text", value: "Section" }] }]);
+  assert.deepEqual(parseMarkdown("## Section"), [
+    { type: "heading", level: 2, children: [{ type: "text", value: "Section" }] },
+  ]);
 });
 
 test("expandMentions splits a text leaf into mention/text tokens", () => {
@@ -104,7 +124,9 @@ test("expandMentions never expands inside inline code", () => {
 test("expandMentions recurses into bold/italic/link children", () => {
   const nodes = parseInline("**@Forge**");
   const expanded = expandMentions(nodes, [{ id: "forge", name: "Forge" }]);
-  assert.deepEqual(expanded, [{ type: "bold", children: [{ type: "mention", id: "forge", name: "Forge" }] }]);
+  assert.deepEqual(expanded, [
+    { type: "bold", children: [{ type: "mention", id: "forge", name: "Forge" }] },
+  ]);
 });
 
 test("expandMentionsInBlocks walks paragraphs, lists, and blockquotes", () => {
@@ -120,7 +142,10 @@ test("expandMentionsInBlocks walks paragraphs, lists, and blockquotes", () => {
   const list = expanded[1] as unknown as { items: { type: string }[][] };
   assert.equal(list.items[0]![0]!.type, "mention");
   const quote = expanded[2] as unknown as { children: { children: { type: string }[] }[] };
-  assert.equal((quote.children[0] as unknown as { children: { type: string }[] }).children[0]!.type, "mention");
+  assert.equal(
+    (quote.children[0] as unknown as { children: { type: string }[] }).children[0]!.type,
+    "mention",
+  );
 });
 
 test("isSafeLinkHref allows http(s)/mailto, rejects everything else", () => {

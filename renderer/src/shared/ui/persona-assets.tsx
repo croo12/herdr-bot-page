@@ -29,7 +29,19 @@ import redMask from "../assets/persona-avatars/masks/red-bot-mask.png";
 import violetMask from "../assets/persona-avatars/masks/violet-bot-mask.png";
 import yellowMask from "../assets/persona-avatars/masks/yellow-bot-mask.png";
 
-export const PERSONA_FULL: Record<PersonaColor, string> = { black, blue, brown, cyan, gray, green, magenta, orange, red, violet, yellow };
+export const PERSONA_FULL: Record<PersonaColor, string> = {
+  black,
+  blue,
+  brown,
+  cyan,
+  gray,
+  green,
+  magenta,
+  orange,
+  red,
+  violet,
+  yellow,
+};
 
 /** `masks/*-bot-mask.png` are 160px crops -- used below `SMALL_ASSET_THRESHOLD_PX`. */
 export const PERSONA_SMALL: Record<PersonaColor, string> = {

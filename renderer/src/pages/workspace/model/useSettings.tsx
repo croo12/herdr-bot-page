@@ -10,7 +10,7 @@ export function useSettings() {
   const mutation = useMutation({
     scope: { id: "workspace-settings" },
     mutationFn: (patch: Partial<AppSettings>) => client.call("settings.update", patch),
-    onSuccess: async settings => {
+    onSuccess: async (settings) => {
       await cache.cancelQueries({ queryKey: settingsKey });
       cache.setQueryData(settingsKey, settings);
     },

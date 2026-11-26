@@ -35,9 +35,18 @@ test("parses the composer's documented shape: text, mention, hardBreak", () => {
 test("everyone:true resolves to id: null", () => {
   const json = JSON.stringify({
     type: "doc",
-    content: [{ type: "paragraph", content: [{ type: "mention", attrs: { id: "anything", label: "everyone", everyone: true } }] }],
+    content: [
+      {
+        type: "paragraph",
+        content: [
+          { type: "mention", attrs: { id: "anything", label: "everyone", everyone: true } },
+        ],
+      },
+    ],
   });
-  const blocks = parseRichTextBlocks(json) as unknown as { children: { type: string; id?: string | null }[] }[];
+  const blocks = parseRichTextBlocks(json) as unknown as {
+    children: { type: string; id?: string | null }[];
+  }[];
   assert.deepEqual(blocks[0]!.children[0], { type: "mention", id: null, name: "everyone" });
 });
 
@@ -76,7 +85,14 @@ test("multiple paragraphs join with a break", () => {
     ],
   });
   assert.deepEqual(parseRichTextBlocks(json), [
-    { type: "paragraph", children: [{ type: "text", value: "first" }, { type: "break" }, { type: "text", value: "second" }] },
+    {
+      type: "paragraph",
+      children: [
+        { type: "text", value: "first" },
+        { type: "break" },
+        { type: "text", value: "second" },
+      ],
+    },
   ]);
 });
 

@@ -14,7 +14,11 @@ import { MessageBubble } from "./MessageBubble.tsx";
 import { Notice } from "./Notice.tsx";
 import { PromptCard } from "#features/answer-prompt";
 import { useStoreContext } from "../../model/store/StoreProvider.tsx";
-import { isNearBottom, isNearTop, olderPageScrollAdjustment } from "../../model/conversation/scroll-anchor.tsx";
+import {
+  isNearBottom,
+  isNearTop,
+  olderPageScrollAdjustment,
+} from "../../model/conversation/scroll-anchor.tsx";
 import { useMarkRead } from "../../model/conversation/useMarkRead.tsx";
 import { WorkingIndicator } from "./WorkingIndicator.tsx";
 import styles from "./Transcript.module.css";
@@ -52,7 +56,13 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
     return map;
   }, [transcript.entries]);
 
-  const mentionCandidates = useMemo(() => (chat.kind === "bot" ? [{ id: chat.id, name: chat.name }] : members.map((member) => ({ id: member.id, name: member.name }))), [chat, members]);
+  const mentionCandidates = useMemo(
+    () =>
+      chat.kind === "bot"
+        ? [{ id: chat.id, name: chat.name }]
+        : members.map((member) => ({ id: member.id, name: member.name })),
+    [chat, members],
+  );
 
   const workingBots = useMemo(() => {
     if (chat.kind === "bot") return chat.isRunning || chat.currentActivity != null ? [chat] : [];
@@ -95,7 +105,11 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
     const el = containerRef.current;
     if (el == null) return;
     pinnedRef.current = isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight);
-    if (isNearTop(el.scrollTop) && !transcript.loadingOlder && transcript.nextBeforeSeq !== undefined) {
+    if (
+      isNearTop(el.scrollTop) &&
+      !transcript.loadingOlder &&
+      transcript.nextBeforeSeq !== undefined
+    ) {
       olderAnchorRef.current = el.scrollHeight;
       transcript.loadOlder();
     }
@@ -106,10 +120,13 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
   useEffect(() => {
     if (jumpTarget == null) return;
     if (!entriesById.has(jumpTarget.entryId)) {
-      if (!transcript.loadingOlder && transcript.nextBeforeSeq !== undefined) transcript.loadOlder();
+      if (!transcript.loadingOlder && transcript.nextBeforeSeq !== undefined)
+        transcript.loadOlder();
       return;
     }
-    const node = containerRef.current?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(jumpTarget.entryId)}"]`);
+    const node = containerRef.current?.querySelector<HTMLElement>(
+      `[data-entry-id="${CSS.escape(jumpTarget.entryId)}"]`,
+    );
     if (node == null) return;
     node.scrollIntoView({ block: "center" });
     setHighlightId(jumpTarget.entryId);
@@ -123,15 +140,12 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
 
   const retry = transcript.error && (
     <div role="alert">
-      {transcript.error.message} <Button onClick={() => void transcript.retry()}>{t("common.retry")}</Button>
+      {transcript.error.message}{" "}
+      <Button onClick={() => void transcript.retry()}>{t("common.retry")}</Button>
     </div>
   );
   if (!transcript.loaded) {
-    return (
-      <div className={styles["hb-transcript"]}>
-        {retry || <Spinner />}
-      </div>
-    );
+    return <div className={styles["hb-transcript"]}>{retry || <Spinner />}</div>;
   }
 
   return (
@@ -145,16 +159,46 @@ export function Transcript({ chatId, chat, transcript }: TranscriptProps) {
         )}
         {rows.length === 0 && <EmptyChat />}
         {rows.map((row) => {
-          if (row.type === "date") return <DateSeparator key={row.key} timestampMs={row.timestampMs} />;
+          if (row.type === "date")
+            return <DateSeparator key={row.key} timestampMs={row.timestampMs} />;
           if (row.type === "notice") return <Notice key={row.key} entry={row.entry} />;
           if (row.type === "prompt") {
             const authorId = getAuthor(row.entry)?.id;
-            const botChat = chat.kind === "bot" ? chat : (chats.find((candidate) => candidate.id === authorId) ?? null);
-            return <div key={row.key} data-entry-id={row.entry.id} className={styles["hb-prompt-history"]}><PromptCard client={client} entry={row.entry} botChat={botChat} showAuthor={chat.kind === "room"} /></div>;
+            const botChat =
+              chat.kind === "bot"
+                ? chat
+                : (chats.find((candidate) => candidate.id === authorId) ?? null);
+            return (
+              <div
+                key={row.key}
+                data-entry-id={row.entry.id}
+                className={styles["hb-prompt-history"]}
+              >
+                <PromptCard
+                  client={client}
+                  entry={row.entry}
+                  botChat={botChat}
+                  showAuthor={chat.kind === "room"}
+                />
+              </div>
+            );
           }
           return (
-            <div key={row.key} data-entry-id={row.entry.id} className={highlightId === row.entry.id ? styles["hb-transcript-row--highlight"] : undefined}>
-              <MessageBubble chat={chat} entry={row.entry} grouped={row.grouped} showAuthorLabel={chat.kind === "room"} members={mentionCandidates} entriesById={entriesById} />
+            <div
+              key={row.key}
+              data-entry-id={row.entry.id}
+              className={
+                highlightId === row.entry.id ? styles["hb-transcript-row--highlight"] : undefined
+              }
+            >
+              <MessageBubble
+                chat={chat}
+                entry={row.entry}
+                grouped={row.grouped}
+                showAuthorLabel={chat.kind === "room"}
+                members={mentionCandidates}
+                entriesById={entriesById}
+              />
             </div>
           );
         })}

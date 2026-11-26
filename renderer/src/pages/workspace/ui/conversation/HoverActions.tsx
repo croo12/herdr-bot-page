@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { MessageSquarePlus, MoreHorizontal, Reply, SmilePlus } from "lucide-react";
 import { useStoreContext } from "../../model/store/StoreProvider.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
@@ -28,14 +28,21 @@ export interface HoverActionsProps {
 /** The floating 3-icon toolbar revealed on hover over a message bubble: react, reply, and a
  * "more" menu (Start a thread / Copy). Visibility is pure CSS (`:hover`/`:focus-within` in the row's own
  * stylesheet) -- this component only owns the popovers' open/closed state. */
-export function HoverActions({ chatId, entryId, authorName, previewText, isMine, hovered, onTrack }: HoverActionsProps) {
+export function HoverActions({
+  chatId,
+  entryId,
+  authorName,
+  previewText,
+  isMine,
+  hovered,
+  onTrack,
+}: HoverActionsProps) {
   const { client } = useStoreContext();
   const { t } = useT();
-  // `IconButton` doesn't forward a ref, so each trigger is wrapped in a plain anchor span instead of
-  // reaching into the primitive -- the popover anchors to the span's (practically identical) rect.
-  const reactButtonRef = useRef<HTMLSpanElement>(null);
-  const moreButtonRef = useRef<HTMLSpanElement>(null);
-  const [openPopover, setOpenPopover] = useState<"react" | "more" | null>(null);
+  const [openPopover, setOpenPopover] = useState<{
+    kind: "react" | "more";
+    anchor: HTMLButtonElement;
+  } | null>(null);
 
   function reply() {
     setReplyTarget(chatId, { entryId, authorName, preview: previewText });
@@ -52,32 +59,60 @@ export function HoverActions({ chatId, entryId, authorName, previewText, isMine,
   const visible = hovered || openPopover != null;
 
   return (
-    <div className={`${styles["hb-hover-actions"]} ${visible ? styles["hb-hover-actions--visible"] : ""}`}>
-      <span ref={reactButtonRef} className={styles["hb-hover-actions-anchor"]}>
-        <IconButton size="sm" aria-label={t("conversation.addReaction")} onClick={() => setOpenPopover("react")}>
+    <div
+      className={`${styles["hb-hover-actions"]} ${visible ? styles["hb-hover-actions--visible"] : ""}`}
+    >
+      <span className={styles["hb-hover-actions-anchor"]}>
+        <IconButton
+          size="sm"
+          aria-label={t("conversation.addReaction")}
+          onClick={(event) => setOpenPopover({ kind: "react", anchor: event.currentTarget })}
+        >
           <SmilePlus size={15} />
         </IconButton>
       </span>
-      <IconButton size="sm" aria-label={t(isMine ? "conversation.replyToYou" : "conversation.replyToAgent")} onClick={reply}>
+      <IconButton
+        size="sm"
+        aria-label={t(isMine ? "conversation.replyToYou" : "conversation.replyToAgent")}
+        onClick={reply}
+      >
         <Reply size={15} />
       </IconButton>
-      <span ref={moreButtonRef} className={styles["hb-hover-actions-anchor"]}>
-        <IconButton size="sm" aria-label={t("conversation.moreActions")} onClick={() => setOpenPopover("more")}>
+      <span className={styles["hb-hover-actions-anchor"]}>
+        <IconButton
+          size="sm"
+          aria-label={t("conversation.moreActions")}
+          onClick={(event) => setOpenPopover({ kind: "more", anchor: event.currentTarget })}
+        >
           <MoreHorizontal size={15} />
         </IconButton>
       </span>
 
-      {reactButtonRef.current != null && (
+      {openPopover?.kind === "react" && (
         <ReactionPicker
-          open={openPopover === "react"}
-          anchor={{ kind: "element", element: reactButtonRef.current, placement: "bottom-end" }}
+          open
+          anchor={{ kind: "element", element: openPopover.anchor, placement: "bottom-end" }}
           onClose={() => setOpenPopover(null)}
           onPick={(emoji) => void client.call("message.react", { chatId, entryId, emoji })}
         />
       )}
-      {moreButtonRef.current != null && (
-        <Menu open={openPopover === "more"} onClose={() => setOpenPopover(null)} anchor={{ kind: "element", element: moreButtonRef.current, placement: "bottom-end" }} aria-label={t("conversation.moreActions")}>
-          {onTrack && <MenuItem onSelect={() => { setOpenPopover(null); onTrack(); }}>{t("conversation.trackTask")}</MenuItem>}
+      {openPopover?.kind === "more" && (
+        <Menu
+          open
+          onClose={() => setOpenPopover(null)}
+          anchor={{ kind: "element", element: openPopover.anchor, placement: "bottom-end" }}
+          aria-label={t("conversation.moreActions")}
+        >
+          {onTrack && (
+            <MenuItem
+              onSelect={() => {
+                setOpenPopover(null);
+                onTrack();
+              }}
+            >
+              {t("conversation.trackTask")}
+            </MenuItem>
+          )}
           <MenuItem
             icon={<MessageSquarePlus size={14} />}
             onSelect={() => {

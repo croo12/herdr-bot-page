@@ -1,15 +1,44 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EMPTY_LAUNCH_CHOICE, emptyBotFormState, isLaunchChoiceComplete, validateBotForm } from "../src/pages/workspace/model/dialogs/bot-form.tsx";
+import {
+  EMPTY_LAUNCH_CHOICE,
+  emptyBotFormState,
+  isLaunchChoiceComplete,
+  validateBotForm,
+} from "../src/pages/workspace/model/dialogs/bot-form.tsx";
 import type { BotFormState } from "../src/pages/workspace/model/dialogs/bot-form.tsx";
-import { canToggleMember, MAX_ROOM_MEMBERS, toggleMember, validateRoomForm } from "../src/pages/workspace/model/dialogs/room-form.tsx";
+import {
+  canToggleMember,
+  MAX_ROOM_MEMBERS,
+  toggleMember,
+  validateRoomForm,
+} from "../src/pages/workspace/model/dialogs/room-form.tsx";
 import { resolveBotFormDefaults } from "../src/pages/workspace/model/dialogs/quick-create-defaults.tsx";
-import { diffLaunchSettings, launchSettingsFormFromFacts } from "../src/pages/workspace/model/dialogs/launch-settings-diff.tsx";
-import { findProvider, isSelectableProvider, providerSupportsModel, providerSupportsReasoning, PROVIDERS } from "../src/pages/workspace/model/dialogs/provider-catalog.tsx";
+import {
+  diffLaunchSettings,
+  launchSettingsFormFromFacts,
+} from "../src/pages/workspace/model/dialogs/launch-settings-diff.tsx";
+import {
+  findProvider,
+  isSelectableProvider,
+  providerSupportsModel,
+  providerSupportsReasoning,
+  PROVIDERS,
+} from "../src/pages/workspace/model/dialogs/provider-catalog.tsx";
 import type { BotFacts } from "../src/shared/api/index.tsx";
 
 function botForm(patch: Partial<BotFormState> = {}): BotFormState {
-  return { name: "Code Reviewer", persona: "", provider: "claude", cwd: "/Users/ray/work/shop", permissionMode: "ask", model: "opus", reasoningEffort: "high", adoptPaneId: null, ...patch };
+  return {
+    name: "Code Reviewer",
+    persona: "",
+    provider: "claude",
+    cwd: "/Users/ray/work/shop",
+    permissionMode: "ask",
+    model: "opus",
+    reasoningEffort: "high",
+    adoptPaneId: null,
+    ...patch,
+  };
 }
 
 // ---- provider-catalog ----
@@ -83,17 +112,29 @@ test("bot-form: a valid cwd with no directory check yet (still loading) does not
 });
 
 test("bot-form: home directory requires confirmation unless allowHomeCwd is set", () => {
-  const blocked = validateBotForm(botForm({ cwd: "/Users/ray" }), { exists: true, isHome: true }, false);
+  const blocked = validateBotForm(
+    botForm({ cwd: "/Users/ray" }),
+    { exists: true, isHome: true },
+    false,
+  );
   assert.equal(blocked.needsHomeConfirmation, true);
   assert.equal(blocked.canSubmit, false);
 
-  const confirmed = validateBotForm(botForm({ cwd: "/Users/ray" }), { exists: true, isHome: true }, true);
+  const confirmed = validateBotForm(
+    botForm({ cwd: "/Users/ray" }),
+    { exists: true, isHome: true },
+    true,
+  );
   assert.equal(confirmed.needsHomeConfirmation, false);
   assert.equal(confirmed.canSubmit, true);
 });
 
 test("bot-form: adopting a running agent skips every cwd rule", () => {
-  const result = validateBotForm(botForm({ cwd: "", adoptPaneId: "w1:p1" }), { exists: false, isHome: true }, false);
+  const result = validateBotForm(
+    botForm({ cwd: "", adoptPaneId: "w1:p1" }),
+    { exists: false, isHome: true },
+    false,
+  );
   assert.equal(result.cwdError, null);
   assert.equal(result.needsHomeConfirmation, false);
   assert.equal(result.canSubmit, true);
@@ -117,15 +158,32 @@ test("bot-form: a new bot cannot be submitted until its provider, model and reas
   assert.equal(noEffort.launchComplete, false);
   assert.equal(noEffort.canSubmit, false);
   // agy/opencode have no reasoning picker, so a model alone completes them.
-  assert.equal(validateBotForm(botForm({ provider: "agy", model: "gemini-4-argon-high", reasoningEffort: null }), null, false).canSubmit, true);
+  assert.equal(
+    validateBotForm(
+      botForm({ provider: "agy", model: "gemini-4-argon-high", reasoningEffort: null }),
+      null,
+      false,
+    ).canSubmit,
+    true,
+  );
   // Adopting reuses the running agent's own setup.
-  assert.equal(validateBotForm(botForm({ ...EMPTY_LAUNCH_CHOICE, adoptPaneId: "w1:p1" }), null, false).canSubmit, true);
+  assert.equal(
+    validateBotForm(botForm({ ...EMPTY_LAUNCH_CHOICE, adoptPaneId: "w1:p1" }), null, false)
+      .canSubmit,
+    true,
+  );
 });
 
 test("bot-form: isLaunchChoiceComplete rejects an unpicked or no-longer-offered provider", () => {
   assert.equal(isLaunchChoiceComplete(EMPTY_LAUNCH_CHOICE), false);
-  assert.equal(isLaunchChoiceComplete({ provider: "gemini", model: "pro", reasoningEffort: null }), false);
-  assert.equal(isLaunchChoiceComplete({ provider: "claude", model: "fable", reasoningEffort: "max" }), true);
+  assert.equal(
+    isLaunchChoiceComplete({ provider: "gemini", model: "pro", reasoningEffort: null }),
+    false,
+  );
+  assert.equal(
+    isLaunchChoiceComplete({ provider: "claude", model: "fable", reasoningEffort: "max" }),
+    true,
+  );
 });
 
 test("bot-form: emptyBotFormState accepts a null permissionMode default (agent's default)", () => {
@@ -154,35 +212,82 @@ test("room-form: MAX_ROOM_MEMBERS is 6", () => {
 
 test("room-form: requires a name and at least one member", () => {
   assert.equal(validateRoomForm({ name: "", goal: "", memberIds: [] }).canSubmit, false);
-  assert.equal(validateRoomForm({ name: "Auth refactor", goal: "", memberIds: [] }).memberError, "required");
-  assert.equal(validateRoomForm({ name: "Auth refactor", goal: "", memberIds: ["forge"] }).canSubmit, true);
+  assert.equal(
+    validateRoomForm({ name: "Auth refactor", goal: "", memberIds: [] }).memberError,
+    "required",
+  );
+  assert.equal(
+    validateRoomForm({ name: "Auth refactor", goal: "", memberIds: ["forge"] }).canSubmit,
+    true,
+  );
 });
 
 // ---- quick-create-defaults ----
 
 test("quick-create-defaults: settings fields override host defaults field by field", () => {
-  const hostDefaults = { cwd: "/Users/ray/work/shop", provider: "claude", permissionMode: "ask" as const, homeDir: "/Users/ray" };
-  const resolved = resolveBotFormDefaults(hostDefaults, { defaultWorkingFolder: "/Users/ray/work/other", defaultProvider: null, defaultPermissionMode: "auto", terminal: null });
+  const hostDefaults = {
+    cwd: "/Users/ray/work/shop",
+    provider: "claude",
+    permissionMode: "ask" as const,
+    homeDir: "/Users/ray",
+  };
+  const resolved = resolveBotFormDefaults(hostDefaults, {
+    defaultWorkingFolder: "/Users/ray/work/other",
+    defaultProvider: null,
+    defaultPermissionMode: "auto",
+    terminal: null,
+  });
   assert.equal(resolved.cwd, "/Users/ray/work/other");
   assert.equal(resolved.provider, "claude");
   assert.equal(resolved.permissionMode, "auto");
 });
 
 test("quick-create-defaults: null settings falls back to host defaults for cwd/provider, but to null (agent's default) for permissionMode -- never host.permissionMode", () => {
-  const hostDefaults = { cwd: "/Users/ray/work/shop", provider: "claude", permissionMode: "ask" as const, homeDir: "/Users/ray" };
-  assert.deepEqual(resolveBotFormDefaults(hostDefaults, null), { cwd: hostDefaults.cwd, provider: hostDefaults.provider, permissionMode: null });
+  const hostDefaults = {
+    cwd: "/Users/ray/work/shop",
+    provider: "claude",
+    permissionMode: "ask" as const,
+    homeDir: "/Users/ray",
+  };
+  assert.deepEqual(resolveBotFormDefaults(hostDefaults, null), {
+    cwd: hostDefaults.cwd,
+    provider: hostDefaults.provider,
+    permissionMode: null,
+  });
 });
 
 test("quick-create-defaults: an explicit AppSettings.defaultPermissionMode: null is passed through as agent's default, not coalesced to the host's default", () => {
-  const hostDefaults = { cwd: "/Users/ray/work/shop", provider: "claude", permissionMode: "auto" as const, homeDir: "/Users/ray" };
-  const resolved = resolveBotFormDefaults(hostDefaults, { defaultWorkingFolder: null, defaultProvider: null, defaultPermissionMode: null, terminal: null });
+  const hostDefaults = {
+    cwd: "/Users/ray/work/shop",
+    provider: "claude",
+    permissionMode: "auto" as const,
+    homeDir: "/Users/ray",
+  };
+  const resolved = resolveBotFormDefaults(hostDefaults, {
+    defaultWorkingFolder: null,
+    defaultProvider: null,
+    defaultPermissionMode: null,
+    terminal: null,
+  });
   assert.equal(resolved.permissionMode, null);
 });
 
 // ---- launch-settings-diff ----
 
 function botFacts(patch: Partial<BotFacts> = {}): BotFacts {
-  return { provider: "claude", status: "idle", paneId: "w1:p1", cwd: "/Users/ray/work/shop", adopted: false, permissionMode: "ask", model: null, reasoningEffort: "medium", onboarding: null, pendingPrompt: null, ...patch };
+  return {
+    provider: "claude",
+    status: "idle",
+    paneId: "w1:p1",
+    cwd: "/Users/ray/work/shop",
+    adopted: false,
+    permissionMode: "ask",
+    model: null,
+    reasoningEffort: "medium",
+    onboarding: null,
+    pendingPrompt: null,
+    ...patch,
+  };
 }
 
 test("launch-settings-diff: no changes returns null", () => {

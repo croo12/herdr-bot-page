@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { presenceMembers, sidebarWaitingReason, statusDotTone, statusPhraseKind } from "../src/pages/workspace/model/status.tsx";
+import {
+  presenceMembers,
+  sidebarWaitingReason,
+  statusDotTone,
+  statusPhraseKind,
+} from "../src/pages/workspace/model/status.tsx";
 import type { ChatSummary } from "../src/shared/api/index.tsx";
 
 function bot(patch: Partial<ChatSummary> = {}): ChatSummary {
@@ -45,21 +50,39 @@ test("statusDotTone is working when running, idle (null) otherwise", () => {
 });
 
 test("statusDotTone is always null for a room", () => {
-  assert.equal(statusDotTone(bot({ kind: "room", awaitingUserResponse: { reason: "approval" }, isRunning: true })), null);
+  assert.equal(
+    statusDotTone(
+      bot({ kind: "room", awaitingUserResponse: { reason: "approval" }, isRunning: true }),
+    ),
+    null,
+  );
 });
 
 test("sidebarWaitingReason mirrors the reason, only for a bot", () => {
-  assert.equal(sidebarWaitingReason(bot({ awaitingUserResponse: { reason: "offline" } })), "offline");
+  assert.equal(
+    sidebarWaitingReason(bot({ awaitingUserResponse: { reason: "offline" } })),
+    "offline",
+  );
   assert.equal(sidebarWaitingReason(bot()), null);
-  assert.equal(sidebarWaitingReason(bot({ kind: "room", awaitingUserResponse: { reason: "offline" } })), null);
+  assert.equal(
+    sidebarWaitingReason(bot({ kind: "room", awaitingUserResponse: { reason: "offline" } })),
+    null,
+  );
 });
 
 test("statusPhraseKind maps approval before working", () => {
-  assert.equal(statusPhraseKind(bot({ awaitingUserResponse: { reason: "approval" }, isRunning: true })), "needsApproval");
+  assert.equal(
+    statusPhraseKind(bot({ awaitingUserResponse: { reason: "approval" }, isRunning: true })),
+    "needsApproval",
+  );
 });
 
 test("presenceMembers omits idle members and keeps order", () => {
-  const members = [bot({ name: "Atlas" }), bot({ name: "Forge", awaitingUserResponse: { reason: "approval" } }), bot({ name: "Lens", isRunning: true })];
+  const members = [
+    bot({ name: "Atlas" }),
+    bot({ name: "Forge", awaitingUserResponse: { reason: "approval" } }),
+    bot({ name: "Lens", isRunning: true }),
+  ];
   assert.deepEqual(presenceMembers(members), [
     { name: "Forge", phrase: "needsApproval" },
     { name: "Lens", phrase: "working" },

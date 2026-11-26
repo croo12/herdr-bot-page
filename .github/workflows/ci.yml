@@ -25,8 +25,8 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
-      - run: cargo clippy --locked --all-targets --manifest-path native/Cargo.toml
-      - run: cargo clippy --locked --all-targets --release --manifest-path desktop/Cargo.toml
+      - run: cargo clippy --locked --all-targets --manifest-path native/Cargo.toml -- -D warnings
+      - run: cargo clippy --locked --all-targets --release --manifest-path desktop/Cargo.toml -- -D warnings
       - uses: actions/upload-artifact@v4
         with:
           name: herdr-bot-windows-x64
@@ -46,5 +46,5 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build -- --bundles app
-      - run: cargo clippy --locked --all-targets --manifest-path native/Cargo.toml
-      - run: cargo clippy --locked --all-targets --release --manifest-path desktop/Cargo.toml
+      - run: cargo clippy --locked --all-targets --manifest-path native/Cargo.toml -- -D warnings
+      - run: cargo clippy --locked --all-targets --release --manifest-path desktop/Cargo.toml -- -D warnings

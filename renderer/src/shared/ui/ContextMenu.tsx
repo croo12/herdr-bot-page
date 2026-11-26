@@ -25,9 +25,22 @@ export function useContextMenu(): ContextMenuState {
   return { open, point, openAt, close };
 }
 
-export function ContextMenu({ state, children, label }: { readonly state: ContextMenuState; readonly children: ReactNode; readonly label: string }) {
+export function ContextMenu({
+  state,
+  children,
+  label,
+}: {
+  readonly state: ContextMenuState;
+  readonly children: ReactNode;
+  readonly label: string;
+}) {
   return (
-    <Menu open={state.open} onClose={state.close} anchor={{ kind: "point", x: state.point.x, y: state.point.y }} aria-label={label}>
+    <Menu
+      open={state.open}
+      onClose={state.close}
+      anchor={{ kind: "point", x: state.point.x, y: state.point.y }}
+      aria-label={label}
+    >
       {children}
     </Menu>
   );

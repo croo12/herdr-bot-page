@@ -1,15 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent } from "react";
 
 /** Let an open suggestion list consume Escape before its enclosing dialog dismisses. */
 export function useEscapeOwnership(active: boolean, onEscape: () => void): void {
-  const stateRef = useRef({ active, onEscape });
-  stateRef.current = { active, onEscape };
+  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key !== "Escape" || !active) return;
+    event.stopImmediatePropagation();
+    onEscape();
+  });
 
   useEffect(() => {
     function onKeyDownCapture(event: KeyboardEvent) {
-      if (event.key !== "Escape" || !stateRef.current.active) return;
-      event.stopImmediatePropagation();
-      stateRef.current.onEscape();
+      handleEscape(event);
     }
     document.addEventListener("keydown", onKeyDownCapture, true);
     return () => document.removeEventListener("keydown", onKeyDownCapture, true);

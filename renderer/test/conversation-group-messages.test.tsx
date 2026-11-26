@@ -1,14 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTranscriptRows, shouldGroupWithPrevious, shouldShowDateSeparator } from "../src/pages/workspace/model/conversation/group-messages.tsx";
+import {
+  buildTranscriptRows,
+  shouldGroupWithPrevious,
+  shouldShowDateSeparator,
+} from "../src/pages/workspace/model/conversation/group-messages.tsx";
 import type { TranscriptEntry } from "../src/shared/api/index.tsx";
 
-function msg(id: string, seq: number, timestampMs: number, authorId: string, kind: string = "message"): TranscriptEntry {
+function msg(
+  id: string,
+  seq: number,
+  timestampMs: number,
+  authorId: string,
+  kind: string = "message",
+): TranscriptEntry {
   const author = { id: authorId, name: authorId };
-  return kind === "send-message" ? { id, kind, seq, timestampMs, message: { type: "text", content: "x" }, author } : { id, kind, seq, timestampMs, content: "x", author };
+  return kind === "send-message"
+    ? { id, kind, seq, timestampMs, message: { type: "text", content: "x" }, author }
+    : { id, kind, seq, timestampMs, content: "x", author };
 }
-
-const DAY = 24 * 60 * 60 * 1000;
 
 test("shouldShowDateSeparator: true for the very first entry", () => {
   assert.equal(shouldShowDateSeparator(null, msg("a", 1, 1_000, "u")), true);
@@ -50,7 +60,11 @@ test("shouldGroupWithPrevious: breaks after the gap threshold", () => {
 });
 
 test("buildTranscriptRows: inserts a date row before the first message, groups consecutive same-author rows", () => {
-  const entries = [msg("a", 1, 0, "forge", "send-message"), msg("b", 2, 1000, "forge", "send-message"), msg("c", 3, 2000, "lens", "send-message")];
+  const entries = [
+    msg("a", 1, 0, "forge", "send-message"),
+    msg("b", 2, 1000, "forge", "send-message"),
+    msg("c", 3, 2000, "lens", "send-message"),
+  ];
   const rows = buildTranscriptRows(entries);
   assert.equal(rows[0]!.type, "date");
   assert.equal(rows[1]!.type, "message");
@@ -72,14 +86,26 @@ test("buildTranscriptRows: notices and prompts break grouping and pass through a
 });
 
 test("buildTranscriptRows: drops a superseded prompt entry entirely", () => {
-  const entries: TranscriptEntry[] = [{ id: "p", kind: "prompt", seq: 1, timestampMs: 0, prompt: { question: "q", options: [], signature: "s" }, status: "superseded" }];
+  const entries: TranscriptEntry[] = [
+    {
+      id: "p",
+      kind: "prompt",
+      seq: 1,
+      timestampMs: 0,
+      prompt: { question: "q", options: [], signature: "s" },
+      status: "superseded",
+    },
+  ];
   assert.deepEqual(buildTranscriptRows(entries), []);
 });
 
 test("buildTranscriptRows: a day boundary starts a fresh group even for the same author", () => {
   const d1 = new Date(2024, 0, 1, 23, 59, 0).getTime();
   const d2 = new Date(2024, 0, 2, 0, 1, 0).getTime();
-  const entries = [msg("a", 1, d1, "forge", "send-message"), msg("b", 2, d2, "forge", "send-message")];
+  const entries = [
+    msg("a", 1, d1, "forge", "send-message"),
+    msg("b", 2, d2, "forge", "send-message"),
+  ];
   const rows = buildTranscriptRows(entries);
   assert.deepEqual(
     rows.map((r) => r.type),

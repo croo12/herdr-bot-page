@@ -4,7 +4,8 @@ import { useStoreContext } from "./store/StoreProvider.tsx";
 import { chatsQuery } from "./store/queries.tsx";
 
 const emptyChats: readonly ChatSummary[] = [];
-const byActivity = (chats: ChatSummary[]) => [...chats].sort((left, right) => right.lastActivityAt - left.lastActivityAt);
+const byActivity = (chats: ChatSummary[]) =>
+  [...chats].sort((left, right) => right.lastActivityAt - left.lastActivityAt);
 
 export function useChatsQuery() {
   const { client } = useStoreContext();

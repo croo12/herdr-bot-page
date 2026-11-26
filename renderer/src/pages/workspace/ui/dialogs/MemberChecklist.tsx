@@ -16,7 +16,13 @@ export interface MemberChecklistProps {
  * name + @handle, with a live N/6 counter) and the room info panel's "Add members" step -- no
  * other UI surface exists for post-creation member editing, so this component is reused there as
  * the obvious starting point. */
-export function MemberChecklist({ candidates, selected, onToggle, label, max = MAX_ROOM_MEMBERS }: MemberChecklistProps) {
+export function MemberChecklist({
+  candidates,
+  selected,
+  onToggle,
+  label,
+  max = MAX_ROOM_MEMBERS,
+}: MemberChecklistProps) {
   return (
     <div>
       <div className={styles["hb-members-header"]}>
@@ -32,8 +38,18 @@ export function MemberChecklist({ candidates, selected, onToggle, label, max = M
           return (
             <div key={chat.id} className={styles["hb-members-row"]}>
               <label>
-                <input type="checkbox" checked={checked} disabled={disabled} onChange={() => onToggle(chat.id)} />
-                <Avatar kind="bot" color={resolvePersonaColor(chat.avatarColor)} name={chat.name} size="sm" />
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => onToggle(chat.id)}
+                />
+                <Avatar
+                  kind="bot"
+                  color={resolvePersonaColor(chat.avatarColor)}
+                  name={chat.name}
+                  size="sm"
+                />
                 <span className={styles["hb-members-name"]}>{chat.name}</span>
                 <span className={styles["hb-members-handle"]}>@{chat.id}</span>
               </label>

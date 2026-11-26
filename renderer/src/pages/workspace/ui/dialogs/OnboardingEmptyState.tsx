@@ -1,5 +1,4 @@
 import { useDialogHost } from "#shared/ui/DialogHost.tsx";
-import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { NewDialog } from "./NewDialog.tsx";
 import { QuickCreateBot } from "./QuickCreateBot.tsx";
 
@@ -10,12 +9,13 @@ import { QuickCreateBot } from "./QuickCreateBot.tsx";
  */
 export function OnboardingEmptyState() {
   const dialogHost = useDialogHost();
-  const { t } = useT();
 
   return (
     <QuickCreateBot
       showExplainer
-      onAdvanced={() => dialogHost.open(<NewDialog initialTab="bot" />, { titleKey: "dialogs.new.title" })}
+      onAdvanced={() =>
+        dialogHost.open(<NewDialog initialTab="bot" />, { titleKey: "dialogs.new.title" })
+      }
     />
   );
 }

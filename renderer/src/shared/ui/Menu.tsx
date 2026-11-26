@@ -28,8 +28,20 @@ export function Menu({ open, onClose, anchor, children, ...rest }: MenuProps) {
   }
 
   return (
-    <Popover open={open} onClose={onClose} anchor={anchor} trapFocus aria-label={rest["aria-label"]}>
-      <div role="menu" aria-label={rest["aria-label"]} className={styles["hb-menu"]} onKeyDown={onKeyDown}>
+    <Popover
+      open={open}
+      onClose={onClose}
+      anchor={anchor}
+      trapFocus
+      aria-label={rest["aria-label"]}
+    >
+      <div
+        role="menu"
+        tabIndex={-1}
+        aria-label={rest["aria-label"]}
+        className={styles["hb-menu"]}
+        onKeyDown={onKeyDown}
+      >
         {children}
       </div>
     </Popover>
@@ -45,7 +57,13 @@ export interface MenuItemProps {
 
 export function MenuItem({ children, onSelect, danger = false, icon }: MenuItemProps) {
   return (
-    <button type="button" role="menuitem" tabIndex={-1} className={`${styles["hb-menu-item"]} ${danger ? styles["hb-menu-item--danger"] : ""}`} onClick={onSelect}>
+    <button
+      type="button"
+      role="menuitem"
+      tabIndex={-1}
+      className={`${styles["hb-menu-item"]} ${danger ? styles["hb-menu-item--danger"] : ""}`}
+      onClick={onSelect}
+    >
       {icon}
       {children}
     </button>

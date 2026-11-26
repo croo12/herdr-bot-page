@@ -15,7 +15,10 @@ import { RoomInfoPanel } from "./RoomInfoPanel.tsx";
  */
 export function DialogsPanelSync() {
   const panel = useInfoPanel();
-  const request = useSyncExternalStore(dialogsStore.subscribe, () => dialogsStore.getState().panelRequest);
+  const request = useSyncExternalStore(
+    dialogsStore.subscribe,
+    () => dialogsStore.getState().panelRequest,
+  );
   const { activeChatId } = useActiveChat();
 
   useEffect(() => {

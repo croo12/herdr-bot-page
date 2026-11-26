@@ -6,7 +6,10 @@
  */
 import type { Locale } from "#shared/i18n/locale.tsx";
 
-const UNITS: Record<Locale, { readonly seconds: string; readonly minutes: string; readonly hours: string }> = {
+const UNITS: Record<
+  Locale,
+  { readonly seconds: string; readonly minutes: string; readonly hours: string }
+> = {
   en: { seconds: "s", minutes: "m", hours: "h" },
   ko: { seconds: "초", minutes: "분", hours: "시간" },
 };

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Download, File, FileAudio, FileVideo } from "lucide-react";
 import { useBridge } from "#shared/api/desktop/BridgeContext.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
-import { IconButton } from "#shared/ui/index.tsx";
 import { attachmentFileName, inferAttachmentKind } from "../../model/conversation/attachments.tsx";
 import styles from "./Attachments.module.css";
 
@@ -37,7 +36,12 @@ function parseResolvedMedia(value: unknown): ResolvedMedia | null {
   const record = value as Record<string, unknown>;
   const kind = record.kind;
   if (kind !== "image" && kind !== "video" && kind !== "audio") return null;
-  const src = typeof record.dataUrl === "string" ? record.dataUrl : typeof record.src === "string" ? record.src : null;
+  const src =
+    typeof record.dataUrl === "string"
+      ? record.dataUrl
+      : typeof record.src === "string"
+        ? record.src
+        : null;
   return src == null ? null : { kind, src };
 }
 
@@ -66,7 +70,12 @@ function AttachmentItem({ path }: { readonly path: string }) {
 
   if (media?.kind === "image") {
     return (
-      <button type="button" className={styles["hb-attachment-image"]} onClick={download} aria-label={t("conversation.attachment.download", { fileName })}>
+      <button
+        type="button"
+        className={styles["hb-attachment-image"]}
+        onClick={download}
+        aria-label={t("conversation.attachment.download", { fileName })}
+      >
         <img src={media.src} alt={fileName} />
       </button>
     );
@@ -74,6 +83,7 @@ function AttachmentItem({ path }: { readonly path: string }) {
   if (media?.kind === "video") {
     return (
       <div className={styles["hb-attachment-image"]}>
+        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- This preview displays a user-supplied attachment without a separate caption file. */}
         <video src={media.src} controls />
       </div>
     );
@@ -82,6 +92,7 @@ function AttachmentItem({ path }: { readonly path: string }) {
     return (
       <div className={styles["hb-attachment-chip"]}>
         <FileAudio size={16} aria-hidden />
+        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- This preview displays a user-supplied attachment without a separate caption file. */}
         <audio src={media.src} controls className={styles["hb-attachment-audio"]} />
       </div>
     );
@@ -89,7 +100,12 @@ function AttachmentItem({ path }: { readonly path: string }) {
 
   const Icon = kind === "video" ? FileVideo : kind === "audio" ? FileAudio : File;
   return (
-    <button type="button" className={styles["hb-attachment-chip"]} onClick={download} aria-label={t("conversation.attachment.download", { fileName })}>
+    <button
+      type="button"
+      className={styles["hb-attachment-chip"]}
+      onClick={download}
+      aria-label={t("conversation.attachment.download", { fileName })}
+    >
       <Icon size={16} aria-hidden />
       <span className={styles["hb-attachment-name"]}>{fileName}</span>
       <Download size={13} aria-hidden />

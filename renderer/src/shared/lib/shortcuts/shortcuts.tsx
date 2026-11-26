@@ -45,7 +45,11 @@ export function parseCombo(combo: string): ParsedCombo {
   return { key, mod, shift, alt };
 }
 
-export function matchesCombo(event: KeyEventLike, combo: string, platform: NodeJS.Platform | "darwin" | "other"): boolean {
+export function matchesCombo(
+  event: KeyEventLike,
+  combo: string,
+  platform: NodeJS.Platform | "darwin" | "other",
+): boolean {
   const parsed = parseCombo(combo);
   const modPressed = platform === "darwin" ? event.metaKey : event.ctrlKey;
   if (parsed.mod !== modPressed) return false;

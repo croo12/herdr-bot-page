@@ -22,23 +22,68 @@ export interface ProviderDescriptor {
 }
 
 export const PROVIDERS: readonly ProviderDescriptor[] = [
-  { id: "claude", label: "Claude Code", iconSlug: "claude", iconColor: "#D97757", supportsModel: true, supportsReasoning: true },
-  { id: "codex", label: "Codex", iconSlug: "codex", iconColor: null, supportsModel: true, supportsReasoning: true },
-  { id: "grok", label: "Grok CLI", iconSlug: null, iconColor: null, supportsModel: true, supportsReasoning: true },
-  { id: "agy", label: "Antigravity CLI", iconSlug: null, iconColor: null, supportsModel: true, supportsReasoning: false },
-  { id: "opencode", label: "OpenCode", iconSlug: "opencode", iconColor: null, supportsModel: true, supportsReasoning: false },
+  {
+    id: "claude",
+    label: "Claude Code",
+    iconSlug: "claude",
+    iconColor: "#D97757",
+    supportsModel: true,
+    supportsReasoning: true,
+  },
+  {
+    id: "codex",
+    label: "Codex",
+    iconSlug: "codex",
+    iconColor: null,
+    supportsModel: true,
+    supportsReasoning: true,
+  },
+  {
+    id: "grok",
+    label: "Grok CLI",
+    iconSlug: null,
+    iconColor: null,
+    supportsModel: true,
+    supportsReasoning: true,
+  },
+  {
+    id: "agy",
+    label: "Antigravity CLI",
+    iconSlug: null,
+    iconColor: null,
+    supportsModel: true,
+    supportsReasoning: false,
+  },
+  {
+    id: "opencode",
+    label: "OpenCode",
+    iconSlug: "opencode",
+    iconColor: null,
+    supportsModel: true,
+    supportsReasoning: false,
+  },
 ];
 
 /** Providers no longer offered for new bots but still describing existing ones -- Gemini CLI was replaced
  * by Antigravity CLI (`agy`) in the picker; a bot already running on `gemini` keeps its own capabilities. */
 const LEGACY_PROVIDERS: readonly ProviderDescriptor[] = [
-  { id: "gemini", label: "Gemini CLI", iconSlug: "gemini", iconColor: "#8E75B2", supportsModel: true, supportsReasoning: false },
+  {
+    id: "gemini",
+    label: "Gemini CLI",
+    iconSlug: "gemini",
+    iconColor: "#8E75B2",
+    supportsModel: true,
+    supportsReasoning: false,
+  },
 ];
 
 export const DEFAULT_PROVIDER_ID = "claude";
 
 export function findProvider(id: string | null | undefined): ProviderDescriptor {
-  return [...PROVIDERS, ...LEGACY_PROVIDERS].find((provider) => provider.id === id) ?? PROVIDERS.find((provider) => provider.id === DEFAULT_PROVIDER_ID)!;
+  return (
+    [...PROVIDERS, ...LEGACY_PROVIDERS].find((provider) => provider.id === id) ??
+    PROVIDERS.find((provider) => provider.id === DEFAULT_PROVIDER_ID)!
+  );
 }
 
 /** Whether `id` is one of the providers a new bot can be created with. */

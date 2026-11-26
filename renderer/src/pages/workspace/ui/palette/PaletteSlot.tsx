@@ -44,7 +44,7 @@ export function PaletteSlot() {
   const bridge = useBridge();
   const dialogs = useDialogs();
   const theme = useTheme();
-  const { t, locale } = useT();
+  const { t } = useT();
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, open);
 
@@ -54,6 +54,7 @@ export function PaletteSlot() {
     () =>
       onPaletteOpenRequested(({ initialQuery }) => {
         setQuery(initialQuery);
+        if (!initialQuery.trim()) setMessageHits([]);
         setSelectedIndex(0);
         setOpen(true);
       }),
@@ -64,10 +65,7 @@ export function PaletteSlot() {
   // already-loaded chat list) -- re-runs only while the palette is open and the query is non-empty.
   useEffect(() => {
     const needle = query.trim();
-    if (!open || needle.length === 0) {
-      setMessageHits([]);
-      return;
-    }
+    if (!open || needle.length === 0) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       void client.call("message.search", { query: needle }).then((hits) => {
@@ -81,7 +79,10 @@ export function PaletteSlot() {
   }, [open, query, client]);
 
   const chatMatches = useMemo(() => filterChats(chats, query), [chats, query]);
-  const sortedMessageHits = useMemo(() => [...messageHits].sort((a, b) => b.timestampMs - a.timestampMs), [messageHits]);
+  const sortedMessageHits = useMemo(
+    () => [...messageHits].sort((a, b) => b.timestampMs - a.timestampMs),
+    [messageHits],
+  );
 
   const tabs = useMemo(() => {
     const bots = chats.filter((chat) => chat.kind === "bot").length;
@@ -89,12 +90,16 @@ export function PaletteSlot() {
     return visibleTabs({ bots, groups });
   }, [chats]);
 
-  useEffect(() => {
-    if (!tabs.includes(activeTab)) setActiveTab("all");
-  }, [tabs, activeTab]);
+  if (!tabs.includes(activeTab)) setActiveTab("all");
 
-  const actionLabels = useMemo(() => new Map(PALETTE_ACTIONS.map((action) => [action.id, t(action.labelKey)])), [t]);
-  const matchingActions = useMemo(() => filterActions(PALETTE_ACTIONS, actionLabels, query), [actionLabels, query]);
+  const actionLabels = useMemo(
+    () => new Map(PALETTE_ACTIONS.map((action) => [action.id, t(action.labelKey)])),
+    [t],
+  );
+  const matchingActions = useMemo(
+    () => filterActions(PALETTE_ACTIONS, actionLabels, query),
+    [actionLabels, query],
+  );
 
   function chatResult(chat: ChatSummary): PaletteResult {
     return { kind: "chat", chat };
@@ -124,6 +129,7 @@ export function PaletteSlot() {
   }, [activeTab, chatMatches, sortedMessageHits, chats, query, matchingActions, actionLabels]);
 
   const clampedIndex = clampIndex(selectedIndex, results.length);
+  // oxlint-disable-next-line react/purity -- Relative timestamps reflect the time the palette is rendered.
   const nowMs = Date.now();
 
   if (!open) return null;
@@ -140,7 +146,8 @@ export function PaletteSlot() {
     if (id === "newBot") dialogs.openNewBotDialog();
     else if (id === "newRoom") dialogs.openNewRoomDialog();
     else if (id === "settings") dialogs.openSettings();
-    else if (id === "toggleTheme") theme.setPreference(theme.resolved === "dark" ? "light" : "dark");
+    else if (id === "toggleTheme")
+      theme.setPreference(theme.resolved === "dark" ? "light" : "dark");
   }
 
   function activate(result: PaletteResult) {
@@ -189,13 +196,19 @@ export function PaletteSlot() {
 
   return createPortal(
     <div
+      role="presentation"
       className={styles["hb-palette-scrim"]}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
       }}
       onKeyDown={onPaletteKeyDown}
     >
-      <div ref={panelRef} role="dialog" aria-label={t("palette.ariaLabel")} className={styles["hb-palette"]}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-label={t("palette.ariaLabel")}
+        className={styles["hb-palette"]}
+      >
         <div className={styles["hb-palette-input-row"]}>
           <Search size={18} />
           <input
@@ -205,12 +218,17 @@ export function PaletteSlot() {
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
+              if (!event.target.value.trim()) setMessageHits([]);
               setSelectedIndex(0);
             }}
           />
         </div>
 
-        <div role="tablist" className={styles["hb-palette-tabs"]} aria-label={t("palette.ariaLabel")}>
+        <div
+          role="tablist"
+          className={styles["hb-palette-tabs"]}
+          aria-label={t("palette.ariaLabel")}
+        >
           {tabs.map((tabId) => (
             <button
               key={tabId}
@@ -228,9 +246,15 @@ export function PaletteSlot() {
           ))}
         </div>
 
-        <div className={styles["hb-palette-results"]} role="listbox" aria-label={t("palette.ariaLabel")}>
+        <div
+          className={styles["hb-palette-results"]}
+          role="listbox"
+          aria-label={t("palette.ariaLabel")}
+        >
           {results.length === 0 ? (
-            <div className={styles["hb-palette-empty"]}>{t(query.trim().length === 0 ? "palette.empty" : "palette.noResults")}</div>
+            <div className={styles["hb-palette-empty"]}>
+              {t(query.trim().length === 0 ? "palette.empty" : "palette.noResults")}
+            </div>
           ) : (
             results.map((result, index) => (
               <PaletteResultRow

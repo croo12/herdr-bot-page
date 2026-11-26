@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dmHeaderPhrase, workingOnlyPresence } from "../src/pages/workspace/model/conversation/header-status.tsx";
+import {
+  dmHeaderPhrase,
+  workingOnlyPresence,
+} from "../src/pages/workspace/model/conversation/header-status.tsx";
 
 test("dmHeaderPhrase: working only, never needsApproval or idle", () => {
   assert.equal(dmHeaderPhrase("working"), "working");

@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyTranscriptEntry, mergeTranscriptPage } from "../src/pages/workspace/model/transcript-merge.tsx";
+import {
+  applyTranscriptEntry,
+  mergeTranscriptPage,
+} from "../src/pages/workspace/model/transcript-merge.tsx";
 import type { TranscriptEntry } from "../src/shared/api/index.tsx";
 
 function e(id: string, seq: number): TranscriptEntry {
@@ -11,7 +14,10 @@ test("mergeTranscriptPage combines and sorts by seq ascending", () => {
   const existing = [e("b", 2), e("c", 3)];
   const page = [e("a", 1), e("b", 2)];
   const merged = mergeTranscriptPage(existing, page);
-  assert.deepEqual(merged.map((entry) => entry.id), ["a", "b", "c"]);
+  assert.deepEqual(
+    merged.map((entry) => entry.id),
+    ["a", "b", "c"],
+  );
 });
 
 test("mergeTranscriptPage lets the page's copy of a shared id win", () => {
@@ -25,7 +31,10 @@ test("mergeTranscriptPage lets the page's copy of a shared id win", () => {
 test("applyTranscriptEntry inserts a new id in seq order", () => {
   const existing = [e("a", 1), e("c", 3)];
   const next = applyTranscriptEntry(existing, e("b", 2));
-  assert.deepEqual(next.map((entry) => entry.id), ["a", "b", "c"]);
+  assert.deepEqual(
+    next.map((entry) => entry.id),
+    ["a", "b", "c"],
+  );
 });
 
 test("applyTranscriptEntry replaces an existing id in place", () => {

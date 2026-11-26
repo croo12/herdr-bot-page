@@ -23,7 +23,9 @@ export interface AttachmentCandidate {
 }
 
 /** `null` means "fine, go ahead and stage it". */
-export function validateAttachmentCandidate(file: AttachmentCandidate): AttachmentRejectionReason | null {
+export function validateAttachmentCandidate(
+  file: AttachmentCandidate,
+): AttachmentRejectionReason | null {
   if (file.size <= 0) return "empty";
   if (file.size > MAX_ATTACHMENT_BYTES) return "too-large";
   return null;

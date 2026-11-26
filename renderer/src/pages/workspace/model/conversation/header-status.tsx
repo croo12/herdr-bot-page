@@ -20,6 +20,8 @@ export function dmHeaderPhrase(phrase: StatusPhraseKind): "working" | null {
 
 /** A room's header subtitle is the presence list filtered down to working members only (needs-approval
  * members are omitted here even though the presence strip below still lists them -- see module doc). */
-export function workingOnlyPresence(presence: readonly PresenceMember[]): readonly PresenceMember[] {
+export function workingOnlyPresence(
+  presence: readonly PresenceMember[],
+): readonly PresenceMember[] {
   return presence.filter((member) => member.phrase === "working");
 }

@@ -15,7 +15,10 @@ import { ColorSwatches } from "./ColorSwatches.tsx";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog.tsx";
 import { DirectoryField } from "./DirectoryField.tsx";
 import type { DirectoryCheck } from "../../model/dialogs/bot-form.tsx";
-import { diffLaunchSettings, launchSettingsFormFromFacts } from "../../model/dialogs/launch-settings-diff.tsx";
+import {
+  diffLaunchSettings,
+  launchSettingsFormFromFacts,
+} from "../../model/dialogs/launch-settings-diff.tsx";
 import type { LaunchSettingsFormState } from "../../model/dialogs/launch-settings-diff.tsx";
 import { providerSupportsReasoning } from "../../model/dialogs/provider-catalog.tsx";
 import { RelaunchConfirmDialog } from "./RelaunchConfirmDialog.tsx";
@@ -56,6 +59,7 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
   // bot's own status/presence updates in the background.
   useEffect(() => {
     if (chat == null) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- Initialize the draft when the selected bot changes.
     setName(chat.name);
     setLabel(chat.title);
     setDescription(chat.description);
@@ -84,7 +88,12 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
   const bot = chat.bot;
   const adopted = bot.adopted;
 
-  async function saveProfile(patch: { name?: string; title?: string; description?: string; avatarColor?: string }) {
+  async function saveProfile(patch: {
+    name?: string;
+    title?: string;
+    description?: string;
+    avatarColor?: string;
+  }) {
     try {
       await client.call("chat.updateProfile", { chatId: botId, ...patch });
     } catch (err) {
@@ -101,7 +110,10 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
   }
 
   function openRelaunchConfirm() {
-    dialogHost.open(<RelaunchConfirmDialog name={chat!.name} onConfirm={applyLaunchSettings} />, {});
+    dialogHost.open(
+      <RelaunchConfirmDialog name={chat!.name} onConfirm={applyLaunchSettings} />,
+      {},
+    );
   }
 
   return (
@@ -127,15 +139,25 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
             aria-label={t("dialogs.botInfo.changeColor")}
             onClick={() => setColorOpen(true)}
           >
-            <Avatar kind="bot" color={resolvePersonaColor(chat.avatarColor)} name={chat.name} size="xl" />
+            <Avatar
+              kind="bot"
+              color={resolvePersonaColor(chat.avatarColor)}
+              name={chat.name}
+              size="xl"
+            />
           </button>
         </div>
 
         {/* Inline (not a floating Popover) so opening it pushes the fields below down the panel,
          * rather than overlaying them. */}
         {colorOpen && (
-          <div className={styles["hb-panel-color-popover"]} aria-label={t("dialogs.botInfo.changeColor")}>
-            <p className={styles["hb-panel-color-popover-title"]}>{t("dialogs.botInfo.changeColor")}</p>
+          <div
+            className={styles["hb-panel-color-popover"]}
+            aria-label={t("dialogs.botInfo.changeColor")}
+          >
+            <p className={styles["hb-panel-color-popover-title"]}>
+              {t("dialogs.botInfo.changeColor")}
+            </p>
             <ColorSwatches
               value={resolvePersonaColor(chat.avatarColor)}
               onChange={(color: PersonaColor) => {
@@ -151,32 +173,69 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
           <ExternalLink size={14} /> {t("dialogs.botInfo.openInHerdr")}
         </Button>
 
-        <TextField label={t("dialogs.new.name")} value={name} onChange={(event) => setName(event.target.value)} onBlur={() => name !== chat.name && saveProfile({ name })} />
-        <TextField label={t("dialogs.botInfo.label")} value={label} onChange={(event) => setLabel(event.target.value)} onBlur={() => label !== chat.title && saveProfile({ title: label })} />
-        <TextArea label={t("dialogs.botInfo.description")} value={description} onChange={(event) => setDescription(event.target.value)} onBlur={() => description !== chat.description && saveProfile({ description })} />
+        <TextField
+          label={t("dialogs.new.name")}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onBlur={() => name !== chat.name && saveProfile({ name })}
+        />
+        <TextField
+          label={t("dialogs.botInfo.label")}
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          onBlur={() => label !== chat.title && saveProfile({ title: label })}
+        />
+        <TextArea
+          label={t("dialogs.botInfo.description")}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          onBlur={() => description !== chat.description && saveProfile({ description })}
+        />
 
         <div className={styles["hb-panel-card"]}>
           <div className={styles["hb-panel-card-text"]}>
-            <div className={styles["hb-panel-card-title"]}>{t("dialogs.botInfo.notifications")}</div>
-            <div className={styles["hb-panel-card-help"]}>{t("dialogs.botInfo.notificationsHelp")}</div>
+            <div className={styles["hb-panel-card-title"]}>
+              {t("dialogs.botInfo.notifications")}
+            </div>
+            <div className={styles["hb-panel-card-help"]}>
+              {t("dialogs.botInfo.notificationsHelp")}
+            </div>
           </div>
           <ToggleSwitch
             checked={chat.notifyOnUpdatesEnabled}
             aria-label={t("dialogs.botInfo.notifications")}
-            onChange={(next) => void client.call("chat.setNotifyOnUpdates", { chatId: botId, isEnabled: next })}
+            onChange={(next) =>
+              void client.call("chat.setNotifyOnUpdates", { chatId: botId, isEnabled: next })
+            }
           />
         </div>
 
-        <div className={styles["hb-panel-section-header"]}>{t("dialogs.botInfo.launchSettings")}</div>
+        <div className={styles["hb-panel-section-header"]}>
+          {t("dialogs.botInfo.launchSettings")}
+        </div>
         {adopted ? (
           <p className={styles["hb-panel-help"]}>{t("dialogs.botInfo.adoptedNote")}</p>
         ) : (
           <>
-            <DirectoryField label={t("dialogs.new.cwd")} value={launch.cwd} onChange={(cwd) => { setLaunch({ ...launch, cwd }); setAllowHomeCwd(false); }} onCheckChange={setCwdCheck} invalidMessage={null} />
+            <DirectoryField
+              label={t("dialogs.new.cwd")}
+              value={launch.cwd}
+              onChange={(cwd) => {
+                setLaunch({ ...launch, cwd });
+                setAllowHomeCwd(false);
+              }}
+              onCheckChange={setCwdCheck}
+              invalidMessage={null}
+            />
             <Select
               label={t("dialogs.new.permissions")}
               value={launch.permissionMode ?? ""}
-              onChange={(value) => setLaunch({ ...launch, permissionMode: value.length === 0 ? null : (value as "ask" | "auto") })}
+              onChange={(value) =>
+                setLaunch({
+                  ...launch,
+                  permissionMode: value.length === 0 ? null : (value as "ask" | "auto"),
+                })
+              }
               options={[
                 { value: "", label: t("dialogs.new.permissions.agentDefault") },
                 { value: "ask", label: t("dialogs.new.permissions.ask") },
@@ -187,21 +246,39 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
               label={t("dialogs.new.model")}
               helperText={t("dialogs.botInfo.modelHelp")}
               value={launch.model ?? ""}
-              onChange={(value) => setLaunch({ ...launch, model: value.length === 0 ? null : value })}
-              options={[{ value: "", label: t("dialogs.new.model.default") }, ...models.map((model) => ({ value: model.id, label: model.label }))]}
+              onChange={(value) =>
+                setLaunch({ ...launch, model: value.length === 0 ? null : value })
+              }
+              options={[
+                { value: "", label: t("dialogs.new.model.default") },
+                ...models.map((model) => ({ value: model.id, label: model.label })),
+              ]}
             />
             {providerSupportsReasoning(bot.provider) && (
               <Select
                 label={t("dialogs.new.reasoning")}
                 value={launch.reasoningEffort ?? ""}
-                onChange={(value) => setLaunch({ ...launch, reasoningEffort: value.length === 0 ? null : (value as ReasoningEffort) })}
-                options={[{ value: "", label: t("dialogs.new.reasoning.default") }, ...REASONING_LEVELS.map((level) => ({ value: level, label: t(`dialogs.new.reasoning.${level}`) }))]}
+                onChange={(value) =>
+                  setLaunch({
+                    ...launch,
+                    reasoningEffort: value.length === 0 ? null : (value as ReasoningEffort),
+                  })
+                }
+                options={[
+                  { value: "", label: t("dialogs.new.reasoning.default") },
+                  ...REASONING_LEVELS.map((level) => ({
+                    value: level,
+                    label: t(`dialogs.new.reasoning.${level}`),
+                  })),
+                ]}
               />
             )}
 
             {needsHomeConfirmation && (
               <div className={styles["hb-panel-card"]}>
-                <div className={styles["hb-panel-card-text"]}>{t("dialogs.new.homeConfirmBody")}</div>
+                <div className={styles["hb-panel-card-text"]}>
+                  {t("dialogs.new.homeConfirmBody")}
+                </div>
                 <Button type="button" variant="secondary" onClick={() => setAllowHomeCwd(true)}>
                   {t("dialogs.new.homeConfirmAction")}
                 </Button>
@@ -211,7 +288,11 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
             {error != null && <div className={styles["hb-panel-error"]}>{error}</div>}
 
             <div className={styles["hb-panel-full-button"]}>
-              <Button variant="secondary" disabled={diff == null || needsHomeConfirmation} onClick={openRelaunchConfirm}>
+              <Button
+                variant="secondary"
+                disabled={diff == null || needsHomeConfirmation}
+                onClick={openRelaunchConfirm}
+              >
                 {t("dialogs.botInfo.restartToApply")}
               </Button>
             </div>
@@ -220,7 +301,12 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
 
         <div className={styles["hb-panel-footer"]}>
           <div className={styles["hb-panel-full-button"]}>
-            <Button variant="danger" onClick={() => dialogHost.open(<DeleteConfirmDialog chatId={botId} name={chat.name} />, {})}>
+            <Button
+              variant="danger"
+              onClick={() =>
+                dialogHost.open(<DeleteConfirmDialog chatId={botId} name={chat.name} />, {})
+              }
+            >
               {t("common.delete")}
             </Button>
           </div>

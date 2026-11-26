@@ -12,7 +12,12 @@ export interface DialogProps {
 
 export function Dialog({ open, onClose, title, closeLabel, children, width = 520 }: DialogProps) {
   return (
-    <DialogRoot open={open} onOpenChange={next => { if (!next) onClose(); }}>
+    <DialogRoot
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
       <DialogContent
         className="block max-h-[calc(100dvh-4rem)] overflow-y-auto p-6 sm:max-w-[calc(100%-2rem)]"
         style={{ width }}

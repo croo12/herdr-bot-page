@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createShortcutRegistry, matchesCombo, parseCombo } from "../src/shared/lib/shortcuts/shortcuts.tsx";
+import {
+  createShortcutRegistry,
+  matchesCombo,
+  parseCombo,
+} from "../src/shared/lib/shortcuts/shortcuts.tsx";
 
 test("parseCombo splits mod/shift/alt from the key", () => {
   assert.deepEqual(parseCombo("mod+k"), { key: "k", mod: true, shift: false, alt: false });
@@ -23,14 +27,20 @@ test("createShortcutRegistry dispatches to the first matching handler and report
   registry.register("palette", "mod+k", () => {
     fired += 1;
   });
-  const handled = registry.dispatch({ key: "k", metaKey: true, ctrlKey: false, shiftKey: false, altKey: false }, "darwin");
+  const handled = registry.dispatch(
+    { key: "k", metaKey: true, ctrlKey: false, shiftKey: false, altKey: false },
+    "darwin",
+  );
   assert.equal(handled, true);
   assert.equal(fired, 1);
 });
 
 test("dispatch returns false when nothing matches", () => {
   const registry = createShortcutRegistry();
-  const handled = registry.dispatch({ key: "z", metaKey: true, ctrlKey: false, shiftKey: false, altKey: false }, "darwin");
+  const handled = registry.dispatch(
+    { key: "z", metaKey: true, ctrlKey: false, shiftKey: false, altKey: false },
+    "darwin",
+  );
   assert.equal(handled, false);
 });
 

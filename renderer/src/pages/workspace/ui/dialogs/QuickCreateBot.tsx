@@ -82,9 +82,18 @@ export function QuickCreateBot({ showExplainer = false, onAdvanced, onDone }: Qu
           </div>
         )}
         <Avatar kind="bot" color={color} name={previewName} size="xl" />
-        <ColorSwatches value={color} onChange={setColor} aria-label={t("dialogs.botInfo.changeColor")} />
+        <ColorSwatches
+          value={color}
+          onChange={setColor}
+          aria-label={t("dialogs.botInfo.changeColor")}
+        />
         <div className={styles["hb-quick-create-field"]}>
-          <TextField label={t("dialogs.new.name")} placeholder={t("dialogs.onboarding.namePlaceholder")} value={name} onChange={(event) => setName(event.target.value)} />
+          <TextField
+            label={t("dialogs.new.name")}
+            placeholder={t("dialogs.onboarding.namePlaceholder")}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
           <LaunchChoiceFields
             value={launch}
             onChange={(next) => {
@@ -95,7 +104,12 @@ export function QuickCreateBot({ showExplainer = false, onAdvanced, onDone }: Qu
         </div>
         {error != null && <div className={styles["hb-quick-create-error"]}>{error}</div>}
         <div className={styles["hb-quick-create-start"]}>
-          <Button variant="primary" size="lg" disabled={busy || !isLaunchChoiceComplete(launch)} onClick={start}>
+          <Button
+            variant="primary"
+            size="lg"
+            disabled={busy || !isLaunchChoiceComplete(launch)}
+            onClick={start}
+          >
             {t("dialogs.onboarding.start")}
           </Button>
         </div>

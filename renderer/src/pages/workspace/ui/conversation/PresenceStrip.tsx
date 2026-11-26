@@ -26,16 +26,31 @@ export function PresenceStrip({ members, presence }: PresenceStripProps) {
       {members.map((member) => {
         const color = resolvePersonaColor(member.avatarColor);
         const phrase = statusPhraseKind(member);
-        const ring = phrase === "needsApproval" ? "dashed" : phrase === "working" ? "solid" : "none";
+        const ring =
+          phrase === "needsApproval" ? "dashed" : phrase === "working" ? "solid" : "none";
         return (
-          <span key={member.id} className={styles["hb-conversation-presence-avatar"]} style={{ borderColor: ring === "none" ? "transparent" : personaColorVar(color), borderStyle: ring }}>
+          <span
+            key={member.id}
+            className={styles["hb-conversation-presence-avatar"]}
+            style={{
+              borderColor: ring === "none" ? "transparent" : personaColorVar(color),
+              borderStyle: ring,
+            }}
+          >
             <Avatar kind="bot" color={color} name={member.name} size="xs" />
           </span>
         );
       })}
       {presence.length > 0 && (
         <span className={styles["hb-conversation-presence-text"]}>
-          {presence.map((member) => t(`conversation.status.${member.phrase === "needsApproval" ? "needsApproval" : "working"}`, { name: member.name })).join(" · ")}
+          {presence
+            .map((member) =>
+              t(
+                `conversation.status.${member.phrase === "needsApproval" ? "needsApproval" : "working"}`,
+                { name: member.name },
+              ),
+            )
+            .join(" · ")}
         </span>
       )}
     </div>

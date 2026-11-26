@@ -2,9 +2,21 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { InfiniteQueryObserver, QueryObserver } from "@tanstack/react-query";
 import { createAppClient, type AppApiTransport } from "../src/shared/api/protocol/client.tsx";
-import type { AppApiEvent, ChatSummary, TranscriptPage } from "../src/shared/api/protocol/types.tsx";
-import { chatsQuery, chatsKey, createWorkspaceQueryClient, transcriptQuery } from "../src/pages/workspace/model/store/queries.tsx";
-import { resyncEngineQueries, subscribeToEngineQueries } from "../src/pages/workspace/model/store/query-events.tsx";
+import type {
+  AppApiEvent,
+  ChatSummary,
+  TranscriptPage,
+} from "../src/shared/api/protocol/types.tsx";
+import {
+  chatsQuery,
+  chatsKey,
+  createWorkspaceQueryClient,
+  transcriptQuery,
+} from "../src/pages/workspace/model/store/queries.tsx";
+import {
+  resyncEngineQueries,
+  subscribeToEngineQueries,
+} from "../src/pages/workspace/model/store/query-events.tsx";
 
 function chat(id: string, patch: Partial<ChatSummary> = {}): ChatSummary {
   return {
@@ -40,25 +52,43 @@ function chat(id: string, patch: Partial<ChatSummary> = {}): ChatSummary {
 
 function deferred<Data>() {
   let resolve!: (value: Data) => void;
-  const promise = new Promise<Data>(done => { resolve = done; });
+  const promise = new Promise<Data>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
 function workspace(call: AppApiTransport["call"]) {
   const cache = createWorkspaceQueryClient();
   const listeners = new Set<(event: AppApiEvent) => void>();
-  const client = createAppClient({ call, subscribe(listener) {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-  } }, { onResyncNeeded: () => resyncEngineQueries(cache) });
+  const client = createAppClient(
+    {
+      call,
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+    { onResyncNeeded: () => resyncEngineQueries(cache) },
+  );
   const dispose = subscribeToEngineQueries(cache, client);
-  return { client, cache, dispose, emit(event: AppApiEvent) { for (const listener of listeners) listener(event); } };
+  return {
+    client,
+    cache,
+    dispose,
+    emit(event: AppApiEvent) {
+      for (const listener of listeners) listener(event);
+    },
+  };
 }
 
 test("clients share the chat snapshot and replay live updates delivered during the initial read", async () => {
   const snapshot = deferred<ChatSummary[]>();
   let calls = 0;
-  const { client, cache, emit, dispose } = workspace(async () => { calls++; return snapshot.promise; });
+  const { client, cache, emit, dispose } = workspace(async () => {
+    calls++;
+    return snapshot.promise;
+  });
   const options = chatsQuery(client);
   const first = cache.fetchQuery(options);
   const second = cache.fetchQuery(options);
@@ -66,9 +96,15 @@ test("clients share the chat snapshot and replay live updates delivered during t
   snapshot.resolve([chat("bot"), chat("room")]);
   await Promise.all([first, second]);
   assert.equal(calls, 1);
-  assert.deepEqual(cache.getQueryData(options.queryKey)?.map(item => item.name), ["Updated", "room"]);
+  assert.deepEqual(
+    cache.getQueryData(options.queryKey)?.map((item) => item.name),
+    ["Updated", "room"],
+  );
   emit({ seq: 2, type: "chat.listChanged", payload: [chat("new")] });
-  assert.deepEqual(cache.getQueryData(options.queryKey)?.map(item => item.id), ["new"]);
+  assert.deepEqual(
+    cache.getQueryData(options.queryKey)?.map((item) => item.id),
+    ["new"],
+  );
   dispose();
   cache.clear();
 });
@@ -83,7 +119,14 @@ test("a sequence gap reloads active queries and leaves inactive transcripts stal
   const observer = new QueryObserver(cache, options);
   const unsubscribe = observer.subscribe(() => {});
   emit({ seq: 1, type: "chat.changed", payload: chat("old") });
-  emit({ seq: 3, type: "transcript.entryUpdated", payload: { chatId: "archived", entry: { id: "message", seq: 1, timestampMs: 0, kind: "message" } } });
+  emit({
+    seq: 3,
+    type: "transcript.entryUpdated",
+    payload: {
+      chatId: "archived",
+      entry: { id: "message", seq: 1, timestampMs: 0, kind: "message" },
+    },
+  });
   assert.equal(cache.getQueryState(chatsKey)?.fetchStatus, "fetching");
   assert.equal(cache.getQueryState(inactive.queryKey)?.isInvalidated, true);
   reads.resolve([chat("recovered")]);
@@ -99,15 +142,23 @@ test("older pages can be retried, preserve concurrent live edits and terminate a
   const latest = { id: "new", kind: "message", seq: 2, timestampMs: 0, content: "before" };
   let attempts = 0;
   const { client, cache, emit, dispose } = workspace(async (_method, params) => {
-    if ((params as {beforeSeq?: number}).beforeSeq === undefined) return { entries: [latest], nextBeforeSeq: 2 };
+    if ((params as { beforeSeq?: number }).beforeSeq === undefined)
+      return { entries: [latest], nextBeforeSeq: 2 };
     if (++attempts === 1) throw new Error("unavailable");
     return earlier.promise;
   });
-  const observer = new InfiniteQueryObserver(cache, { ...transcriptQuery(client, "room"), retry: false });
+  const observer = new InfiniteQueryObserver(cache, {
+    ...transcriptQuery(client, "room"),
+    retry: false,
+  });
   await observer.refetch();
   assert.equal((await observer.fetchNextPage()).isFetchNextPageError, true);
   const pending = observer.fetchNextPage();
-  emit({ seq: 1, type: "transcript.entryUpdated", payload: { chatId: "room", entry: { ...latest, content: "after" } } });
+  emit({
+    seq: 1,
+    type: "transcript.entryUpdated",
+    payload: { chatId: "room", entry: { ...latest, content: "after" } },
+  });
   earlier.resolve({ entries: [{ ...latest, id: "old", seq: 1 }] });
   await pending;
   const data = cache.getQueryData(transcriptQuery(client, "room").queryKey);

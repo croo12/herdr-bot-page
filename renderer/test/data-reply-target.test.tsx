@@ -1,11 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clearReplyTarget, getReplyTarget, resetReplyTargetsForTests, setReplyTarget } from "../src/features/compose-message/model/reply-target.tsx";
+import {
+  clearReplyTarget,
+  getReplyTarget,
+  resetReplyTargetsForTests,
+  setReplyTarget,
+} from "../src/features/compose-message/model/reply-target.tsx";
 
 test("setReplyTarget stores a target keyed by chatId", () => {
   resetReplyTargetsForTests();
   setReplyTarget("chat-1", { entryId: "entry-1", authorName: "Forge", preview: "hey there" });
-  assert.deepEqual(getReplyTarget("chat-1"), { entryId: "entry-1", authorName: "Forge", preview: "hey there" });
+  assert.deepEqual(getReplyTarget("chat-1"), {
+    entryId: "entry-1",
+    authorName: "Forge",
+    preview: "hey there",
+  });
   assert.equal(getReplyTarget("chat-2"), null);
 });
 

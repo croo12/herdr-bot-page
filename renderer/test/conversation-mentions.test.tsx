@@ -31,12 +31,18 @@ test("@everyone resolves to id: null regardless of case", () => {
     { type: "mention", id: null, name: "everyone" },
     { type: "text", value: " look here" },
   ]);
-  assert.deepEqual(parseMentions("@Everyone", MEMBERS), [{ type: "mention", id: null, name: "everyone" }]);
+  assert.deepEqual(parseMentions("@Everyone", MEMBERS), [
+    { type: "mention", id: null, name: "everyone" },
+  ]);
 });
 
 test("does not match inside an email-like token or a longer word", () => {
-  assert.deepEqual(parseMentions("ping ray@forge.dev please", MEMBERS), [{ type: "text", value: "ping ray@forge.dev please" }]);
-  assert.deepEqual(parseMentions("@Forgery is not a member", MEMBERS), [{ type: "text", value: "@Forgery is not a member" }]);
+  assert.deepEqual(parseMentions("ping ray@forge.dev please", MEMBERS), [
+    { type: "text", value: "ping ray@forge.dev please" },
+  ]);
+  assert.deepEqual(parseMentions("@Forgery is not a member", MEMBERS), [
+    { type: "text", value: "@Forgery is not a member" },
+  ]);
 });
 
 test("multiple mentions in one string", () => {

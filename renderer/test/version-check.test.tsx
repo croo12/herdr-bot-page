@@ -24,6 +24,10 @@ test("compareVersions strips a leading v and a -beta/-rc/+build suffix (GitHub t
 test("isNewerVersion is true only when the candidate is strictly greater than current", () => {
   assert.equal(isNewerVersion("0.1.0", "0.1.1"), true);
   assert.equal(isNewerVersion("0.1.0", "0.1.0"), false);
-  assert.equal(isNewerVersion("0.1.1", "0.1.0"), false, "an older/rolled-back tag is never \"newer\"");
+  assert.equal(
+    isNewerVersion("0.1.1", "0.1.0"),
+    false,
+    'an older/rolled-back tag is never "newer"',
+  );
   assert.equal(isNewerVersion("0.1.0", "v0.2.0"), true);
 });

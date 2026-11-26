@@ -36,17 +36,34 @@ function everyoneCandidate(): MentionCandidate {
 
 /** Builds the full (unfiltered) candidate list for a room: Everyone, then members in their given order
  * (callers pass `useChatMembers(chat)`'s result, which is already room-membership order). */
-export function buildMentionCandidates(members: readonly MentionMember[]): readonly MentionCandidate[] {
+export function buildMentionCandidates(
+  members: readonly MentionMember[],
+): readonly MentionCandidate[] {
   if (members.length === 0) return [];
-  return [everyoneCandidate(), ...members.map((member) => ({ id: member.id, label: member.name, everyone: false, avatarColor: member.avatarColor }))];
+  return [
+    everyoneCandidate(),
+    ...members.map((member) => ({
+      id: member.id,
+      label: member.name,
+      everyone: false,
+      avatarColor: member.avatarColor,
+    })),
+  ];
 }
 
 /** Live-filters the candidate list as the user keeps typing after `@`. Case-insensitive substring
  * match on the display label; "Everyone" matches either its own label or the literal word "everyone".
  * Order is preserved from `candidates` (Everyone-first, then member order) -- filtering never re-sorts
  * by match quality. */
-export function filterMentionCandidates(candidates: readonly MentionCandidate[], query: string): readonly MentionCandidate[] {
+export function filterMentionCandidates(
+  candidates: readonly MentionCandidate[],
+  query: string,
+): readonly MentionCandidate[] {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return candidates;
-  return candidates.filter((candidate) => candidate.label.toLowerCase().includes(needle) || (candidate.everyone && "everyone".includes(needle)));
+  return candidates.filter(
+    (candidate) =>
+      candidate.label.toLowerCase().includes(needle) ||
+      (candidate.everyone && "everyone".includes(needle)),
+  );
 }

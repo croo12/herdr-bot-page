@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SIDEBAR_RAIL_WIDTH, SIDEBAR_WIDTH_MAX, SIDEBAR_WIDTH_MIN, resolveSidebarDrag, widthForMode } from "../src/pages/workspace/model/layout/sidebar-width.tsx";
+import {
+  SIDEBAR_RAIL_WIDTH,
+  SIDEBAR_WIDTH_MAX,
+  SIDEBAR_WIDTH_MIN,
+  resolveSidebarDrag,
+  widthForMode,
+} from "../src/pages/workspace/model/layout/sidebar-width.tsx";
 
 test("dragging below the snap threshold collapses to the icon rail", () => {
   const result = resolveSidebarDrag(100);

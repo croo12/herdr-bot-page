@@ -225,26 +225,73 @@ export interface AppApiMethods {
   "chat.list": { params: void; result: ChatSummary[] };
   "chat.search": { params: { readonly query?: string }; result: ChatSummary[] };
   "chat.updateProfile": {
-    params: { readonly chatId: string; readonly name?: string; readonly description?: string; readonly title?: string; readonly avatarShape?: string | null; readonly avatarColor?: string | null };
+    params: {
+      readonly chatId: string;
+      readonly name?: string;
+      readonly description?: string;
+      readonly title?: string;
+      readonly avatarShape?: string | null;
+      readonly avatarColor?: string | null;
+    };
     result: ChatSummary | null;
   };
-  "chat.setUnread": { params: { readonly chatId: string; readonly isUnread: boolean }; result: void };
-  "chat.markRead": { params: { readonly chatId: string; readonly throughSeq: number }; result: { readonly lastReadSeq: number } };
-  "chat.setHidden": { params: { readonly chatId: string; readonly isHidden: boolean }; result: void };
-  "chat.setNotifyOnUpdates": { params: { readonly chatId: string; readonly isEnabled: boolean }; result: ChatSummary | null };
-  "chat.delete": { params: { readonly chatIds: readonly string[] }; result: { readonly deletedIds: readonly string[] } };
+  "chat.setUnread": {
+    params: { readonly chatId: string; readonly isUnread: boolean };
+    result: void;
+  };
+  "chat.markRead": {
+    params: { readonly chatId: string; readonly throughSeq: number };
+    result: { readonly lastReadSeq: number };
+  };
+  "chat.setHidden": {
+    params: { readonly chatId: string; readonly isHidden: boolean };
+    result: void;
+  };
+  "chat.setNotifyOnUpdates": {
+    params: { readonly chatId: string; readonly isEnabled: boolean };
+    result: ChatSummary | null;
+  };
+  "chat.delete": {
+    params: { readonly chatIds: readonly string[] };
+    result: { readonly deletedIds: readonly string[] };
+  };
 
-  "transcript.page": { params: { readonly chatId: string; readonly limit?: number; readonly beforeSeq?: number }; result: TranscriptPage };
-  "transcript.thread": { params: { readonly chatId: string; readonly rootId: string }; result: { readonly entries: readonly TranscriptEntry[] } };
+  "transcript.page": {
+    params: { readonly chatId: string; readonly limit?: number; readonly beforeSeq?: number };
+    result: TranscriptPage;
+  };
+  "transcript.thread": {
+    params: { readonly chatId: string; readonly rootId: string };
+    result: { readonly entries: readonly TranscriptEntry[] };
+  };
 
   "message.send": {
-    params: { readonly chatId: string; readonly text: string; readonly richText?: string; readonly replyTo?: string; readonly attachmentPaths?: readonly string[]; readonly clientNonce?: string };
+    params: {
+      readonly chatId: string;
+      readonly text: string;
+      readonly richText?: string;
+      readonly replyTo?: string;
+      readonly attachmentPaths?: readonly string[];
+      readonly clientNonce?: string;
+    };
     result: { readonly entryId: string };
   };
-  "message.react": { params: { readonly chatId: string; readonly entryId: string; readonly emoji: string }; result: { readonly entry: TranscriptEntry | null } };
-  "task.track": { params: { chatId: string; entryId: string; assigneeId: string | null; criteria: string }; result: TranscriptEntry };
-  "task.assign": { params: TaskControlParams & { previousAssigneeId: string | null; assigneeId: string | null }; result: TranscriptEntry };
-  "task.setStatus": { params: { chatId: string; entryId: string; previousStatus: TaskStatus; status: TaskStatus }; result: TranscriptEntry };
+  "message.react": {
+    params: { readonly chatId: string; readonly entryId: string; readonly emoji: string };
+    result: { readonly entry: TranscriptEntry | null };
+  };
+  "task.track": {
+    params: { chatId: string; entryId: string; assigneeId: string | null; criteria: string };
+    result: TranscriptEntry;
+  };
+  "task.assign": {
+    params: TaskControlParams & { previousAssigneeId: string | null; assigneeId: string | null };
+    result: TranscriptEntry;
+  };
+  "task.setStatus": {
+    params: { chatId: string; entryId: string; previousStatus: TaskStatus; status: TaskStatus };
+    result: TranscriptEntry;
+  };
   "task.list": { params: { chatId: string }; result: TranscriptEntry[] };
   "task.run": { params: TaskControlParams & { assigneeId: string }; result: TranscriptEntry };
   "task.pause": { params: TaskControlParams; result: TranscriptEntry };
@@ -254,7 +301,16 @@ export interface AppApiMethods {
   /** `provider` is required, as are `model`/`reasoningEffort` whenever that provider supports choosing
    * them (`bot.listModels`, `ProviderDescriptor.supportsReasoning`) -- quick create never picks defaults. */
   "bot.quickCreate": {
-    params: { readonly requestId: string; readonly locale: OnboardingLocale; readonly provider: string; readonly model?: string; readonly reasoningEffort?: ReasoningEffort; readonly name?: string; readonly avatarColor?: string; readonly cwd?: string };
+    params: {
+      readonly requestId: string;
+      readonly locale: OnboardingLocale;
+      readonly provider: string;
+      readonly model?: string;
+      readonly reasoningEffort?: ReasoningEffort;
+      readonly name?: string;
+      readonly avatarColor?: string;
+      readonly cwd?: string;
+    };
     result: { readonly chat: ChatSummary };
   };
   "bot.retrySetup": { params: { readonly botId: string }; result: { readonly chat: ChatSummary } };
@@ -262,7 +318,14 @@ export interface AppApiMethods {
     /** `permissionMode`, like `model`/`reasoningEffort`, distinguishes an absent key (keep the bot's
      * current mode) from an explicit `null` (reset to the host's effective default permission mode --
      * "use the agent's own default approval policy"). */
-    params: { readonly botId: string; readonly cwd?: string; readonly permissionMode?: PermissionMode | null; readonly model?: string | null; readonly reasoningEffort?: ReasoningEffort | null; readonly allowHomeCwd?: boolean };
+    params: {
+      readonly botId: string;
+      readonly cwd?: string;
+      readonly permissionMode?: PermissionMode | null;
+      readonly model?: string | null;
+      readonly reasoningEffort?: ReasoningEffort | null;
+      readonly allowHomeCwd?: boolean;
+    };
     result: { readonly chat: ChatSummary };
   };
   "bot.focus": { params: { readonly botId: string }; result: void };
@@ -270,11 +333,28 @@ export interface AppApiMethods {
   "bot.listModels": { params: { readonly provider: string }; result: ModelCatalogResult };
   "bot.defaults": { params: void; result: BotDefaults };
 
-  "room.create": { params: { readonly name: string; readonly description?: string; readonly memberIds: readonly string[]; readonly requestId?: string }; result: { readonly chat: ChatSummary } };
-  "room.setMembers": { params: { readonly roomId: string; readonly memberIds: readonly string[] }; result: ChatSummary | null };
+  "room.create": {
+    params: {
+      readonly name: string;
+      readonly description?: string;
+      readonly memberIds: readonly string[];
+      readonly requestId?: string;
+    };
+    result: { readonly chat: ChatSummary };
+  };
+  "room.setMembers": {
+    params: { readonly roomId: string; readonly memberIds: readonly string[] };
+    result: ChatSummary | null;
+  };
 
   "prompt.answer": {
-    params: { readonly botId: string; readonly signature: string; readonly action: "option" | "text" | "next" | "cancel"; readonly key?: string; readonly text?: string };
+    params: {
+      readonly botId: string;
+      readonly signature: string;
+      readonly action: "option" | "text" | "next" | "cancel";
+      readonly key?: string;
+      readonly text?: string;
+    };
     result: { readonly chat: ChatSummary };
   };
 

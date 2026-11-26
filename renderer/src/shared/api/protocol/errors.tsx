@@ -20,7 +20,12 @@ export function isAppApiError(value: unknown): value is AppApiError {
 }
 
 function isErrorPayload(value: unknown): value is AppApiErrorPayload {
-  return typeof value === "object" && value !== null && typeof (value as { code?: unknown }).code === "string" && typeof (value as { message?: unknown }).message === "string";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { code?: unknown }).code === "string" &&
+    typeof (value as { message?: unknown }).message === "string"
+  );
 }
 
 /** Normalizes whatever a transport rejected with (a thrown `AppApiError`, a plain `{code,message}`

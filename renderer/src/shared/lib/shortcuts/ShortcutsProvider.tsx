@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef } from "react";
+import { createContext, useContext, useEffect, useEffectEvent, useMemo } from "react";
 import type { ReactNode } from "react";
 import { useBridge } from "../../api/desktop/BridgeContext.tsx";
 import { createShortcutRegistry } from "./shortcuts.tsx";
@@ -16,7 +16,13 @@ export function ShortcutsProvider({ children }: { readonly children: ReactNode }
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const handled = registry.dispatch(
-        { key: event.key, metaKey: event.metaKey, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey, altKey: event.altKey },
+        {
+          key: event.key,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+        },
         bridge.platform,
       );
       if (handled) event.preventDefault();
@@ -30,13 +36,16 @@ export function ShortcutsProvider({ children }: { readonly children: ReactNode }
 
 /** Registers a shortcut for the lifetime of the calling component. `combo` uses `"mod"` for the
  * platform primary modifier -- see shared/lib/shortcuts/shortcuts.tsx. */
-export function useShortcut(id: string, combo: string, handler: (event: KeyboardEvent) => void): void {
+export function useShortcut(
+  id: string,
+  combo: string,
+  handler: (event: KeyboardEvent) => void,
+): void {
   const registry = useContext(ShortcutsContext);
-  const handlerRef = useRef(handler);
-  handlerRef.current = handler;
+  const onShortcut = useEffectEvent(handler);
 
   useEffect(() => {
     if (registry == null) throw new Error("useShortcut() called outside <ShortcutsProvider>");
-    return registry.register(id, combo, (event) => handlerRef.current(event as KeyboardEvent));
+    return registry.register(id, combo, (event) => onShortcut(event as KeyboardEvent));
   }, [registry, id, combo]);
 }

@@ -7,7 +7,14 @@
  *
  * Pure, DOM-free -- unit tested directly with `node --test`.
  */
-import { getAuthor, getPromptStatus, getRawText, isNotice, isPromptEntry, isRenderableMessage } from "#shared/api/transcript/entry-shapes.tsx";
+import {
+  getAuthor,
+  getPromptStatus,
+  getRawText,
+  isNotice,
+  isPromptEntry,
+  isRenderableMessage,
+} from "#shared/api/transcript/entry-shapes.tsx";
 import type { TranscriptEntry } from "#shared/api/index.tsx";
 
 /** A new date separator is inserted before the first entry, whenever the calendar day changes, or
@@ -26,7 +33,11 @@ export function startOfDay(timestampMs: number): number {
   return date.getTime();
 }
 
-export function shouldShowDateSeparator(previous: TranscriptEntry | null, current: TranscriptEntry, gapMs: number = DATE_SEPARATOR_GAP_MS): boolean {
+export function shouldShowDateSeparator(
+  previous: TranscriptEntry | null,
+  current: TranscriptEntry,
+  gapMs: number = DATE_SEPARATOR_GAP_MS,
+): boolean {
   if (previous == null) return true;
   if (startOfDay(previous.timestampMs) !== startOfDay(current.timestampMs)) return true;
   return current.timestampMs - previous.timestampMs > gapMs;
@@ -40,7 +51,11 @@ function sameAuthor(a: TranscriptEntry, b: TranscriptEntry): boolean {
   return authorA.id === authorB.id;
 }
 
-export function shouldGroupWithPrevious(previous: TranscriptEntry | null, current: TranscriptEntry, gapMs: number = GROUP_GAP_MS): boolean {
+export function shouldGroupWithPrevious(
+  previous: TranscriptEntry | null,
+  current: TranscriptEntry,
+  gapMs: number = GROUP_GAP_MS,
+): boolean {
   if (previous == null) return false;
   if (!isRenderableMessage(previous) || !isRenderableMessage(current)) return false;
   if (!sameAuthor(previous, current)) return false;
@@ -49,7 +64,12 @@ export function shouldGroupWithPrevious(previous: TranscriptEntry | null, curren
 
 export type TranscriptRow =
   | { readonly type: "date"; readonly key: string; readonly timestampMs: number }
-  | { readonly type: "message"; readonly key: string; readonly entry: TranscriptEntry; readonly grouped: boolean }
+  | {
+      readonly type: "message";
+      readonly key: string;
+      readonly entry: TranscriptEntry;
+      readonly grouped: boolean;
+    }
   | { readonly type: "notice"; readonly key: string; readonly entry: TranscriptEntry }
   | { readonly type: "prompt"; readonly key: string; readonly entry: TranscriptEntry };
 
@@ -73,7 +93,12 @@ export function buildTranscriptRows(entries: readonly TranscriptEntry[]): Transc
     }
 
     if (isRenderableMessage(entry)) {
-      rows.push({ type: "message", key: entry.id, entry, grouped: shouldGroupWithPrevious(previousMessage, entry) });
+      rows.push({
+        type: "message",
+        key: entry.id,
+        entry,
+        grouped: shouldGroupWithPrevious(previousMessage, entry),
+      });
       previousMessage = entry;
     } else if (isNotice(entry)) {
       rows.push({ type: "notice", key: entry.id, entry });

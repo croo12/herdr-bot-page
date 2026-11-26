@@ -10,7 +10,13 @@ export function useTranscript(chatId: string) {
   const entries = useMemo(() => {
     const pages = query.data?.pages ?? [];
     // Older pages come last in the cache. Prefer the newest page at overlapping boundaries.
-    return mergeTranscriptPage([], pages.slice().reverse().flatMap(page => page.entries));
+    return mergeTranscriptPage(
+      [],
+      pages
+        .slice()
+        .reverse()
+        .flatMap((page) => page.entries),
+    );
   }, [query.data]);
   return {
     entries,
@@ -18,9 +24,10 @@ export function useTranscript(chatId: string) {
     loadingOlder: query.isFetchingNextPage,
     nextBeforeSeq: query.data?.pages.at(-1)?.nextBeforeSeq,
     error: query.error,
-    retry: () => query.isFetchNextPageError ? query.fetchNextPage() : query.refetch(),
+    retry: () => (query.isFetchNextPageError ? query.fetchNextPage() : query.refetch()),
     loadOlder: () => {
-      if (query.hasNextPage && !query.isFetching) void query.fetchNextPage({ cancelRefetch: false });
+      if (query.hasNextPage && !query.isFetching)
+        void query.fetchNextPage({ cancelRefetch: false });
     },
   };
 }

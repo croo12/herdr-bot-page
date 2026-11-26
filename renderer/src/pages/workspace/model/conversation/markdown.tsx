@@ -27,7 +27,11 @@ export type BlockNode =
   | { readonly type: "paragraph"; readonly children: readonly InlineNode[] }
   | { readonly type: "heading"; readonly level: number; readonly children: readonly InlineNode[] }
   | { readonly type: "codeBlock"; readonly lang: string | null; readonly code: string }
-  | { readonly type: "list"; readonly ordered: boolean; readonly items: readonly (readonly InlineNode[])[] }
+  | {
+      readonly type: "list";
+      readonly ordered: boolean;
+      readonly items: readonly (readonly InlineNode[])[];
+    }
   | { readonly type: "blockquote"; readonly children: readonly BlockNode[] };
 
 /** Parses one line's worth (or a short run of consecutive non-blank, non-special lines joined by
@@ -155,7 +159,11 @@ export function parseMarkdown(src: string): BlockNode[] {
     const headingMatch = HEADING_RE.exec(line);
     if (headingMatch != null) {
       flushParagraph();
-      blocks.push({ type: "heading", level: headingMatch[1]!.length, children: parseInline(headingMatch[2]!) });
+      blocks.push({
+        type: "heading",
+        level: headingMatch[1]!.length,
+        children: parseInline(headingMatch[2]!),
+      });
       i += 1;
       continue;
     }
@@ -199,26 +207,47 @@ export function parseMarkdown(src: string): BlockNode[] {
   return blocks;
 }
 
-function expandMentionsInInline(node: InlineNode, members: readonly MentionCandidate[]): InlineNode[] {
+function expandMentionsInInline(
+  node: InlineNode,
+  members: readonly MentionCandidate[],
+): InlineNode[] {
   if (node.type === "text") {
-    return parseMentions(node.value, members).map((token): InlineNode => (token.type === "text" ? { type: "text", value: token.value } : { type: "mention", id: token.id, name: token.name }));
+    return parseMentions(node.value, members).map((token): InlineNode =>
+      token.type === "text"
+        ? { type: "text", value: token.value }
+        : { type: "mention", id: token.id, name: token.name },
+    );
   }
   if (node.type === "code" || node.type === "break" || node.type === "mention") return [node];
-  return [{ ...node, children: node.children.flatMap((child) => expandMentionsInInline(child, members)) } as InlineNode];
+  return [
+    {
+      ...node,
+      children: node.children.flatMap((child) => expandMentionsInInline(child, members)),
+    } as InlineNode,
+  ];
 }
 
-export function expandMentions(nodes: readonly InlineNode[], members: readonly MentionCandidate[]): InlineNode[] {
+export function expandMentions(
+  nodes: readonly InlineNode[],
+  members: readonly MentionCandidate[],
+): InlineNode[] {
   return nodes.flatMap((node) => expandMentionsInInline(node, members));
 }
 
 /** Walks a full block tree applying `expandMentions` to every inline run (paragraphs, headings, list
  * items, and recursively into blockquotes) -- the one entry point a message renderer should call after
  * `parseMarkdown`. */
-export function expandMentionsInBlocks(blocks: readonly BlockNode[], members: readonly MentionCandidate[]): BlockNode[] {
+export function expandMentionsInBlocks(
+  blocks: readonly BlockNode[],
+  members: readonly MentionCandidate[],
+): BlockNode[] {
   return blocks.map((block): BlockNode => {
-    if (block.type === "paragraph" || block.type === "heading") return { ...block, children: expandMentions(block.children, members) };
-    if (block.type === "list") return { ...block, items: block.items.map((item) => expandMentions(item, members)) };
-    if (block.type === "blockquote") return { ...block, children: expandMentionsInBlocks(block.children, members) };
+    if (block.type === "paragraph" || block.type === "heading")
+      return { ...block, children: expandMentions(block.children, members) };
+    if (block.type === "list")
+      return { ...block, items: block.items.map((item) => expandMentions(item, members)) };
+    if (block.type === "blockquote")
+      return { ...block, children: expandMentionsInBlocks(block.children, members) };
     return block;
   });
 }

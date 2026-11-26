@@ -18,10 +18,17 @@ export function ReplyPreviewBar({ target, onClear }: ReplyPreviewBarProps) {
   return (
     <div className={styles["hb-reply-bar"]}>
       <div className={styles["hb-reply-bar-body"]}>
-        <span className={styles["hb-reply-bar-label"]}>{t("composer.reply.label", { authorName: target.authorName })}</span>
+        <span className={styles["hb-reply-bar-label"]}>
+          {t("composer.reply.label", { authorName: target.authorName })}
+        </span>
         <span className={styles["hb-reply-bar-preview"]}>{target.preview}</span>
       </div>
-      <button type="button" className={styles["hb-reply-bar-clear"]} aria-label={t("composer.reply.clear")} onClick={onClear}>
+      <button
+        type="button"
+        className={styles["hb-reply-bar-clear"]}
+        aria-label={t("composer.reply.clear")}
+        onClick={onClear}
+      >
         <X size={14} />
       </button>
     </div>

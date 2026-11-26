@@ -25,7 +25,10 @@ const DialogHostContext = createContext<DialogHandle | null>(null);
  * command palette action) without the shell knowing that dialog exists. Mount once near the app root. */
 export function DialogHost({ children }: { readonly children: ReactNode }) {
   const { t } = useT();
-  const [state, setState] = useState<{ readonly node: ReactNode; readonly options: DialogOptions } | null>(null);
+  const [state, setState] = useState<{
+    readonly node: ReactNode;
+    readonly options: DialogOptions;
+  } | null>(null);
 
   const close = useCallback(() => setState(null), []);
   const open = useCallback<DialogHandle["open"]>((node, options) => {
@@ -37,7 +40,13 @@ export function DialogHost({ children }: { readonly children: ReactNode }) {
   return (
     <DialogHostContext.Provider value={handle}>
       {children}
-      <Dialog open={state != null} onClose={close} title={state?.options.titleKey != null ? t(state.options.titleKey) : state?.options.title} width={state?.options.width} closeLabel={t("common.close")}>
+      <Dialog
+        open={state != null}
+        onClose={close}
+        title={state?.options.titleKey != null ? t(state.options.titleKey) : state?.options.title}
+        width={state?.options.width}
+        closeLabel={t("common.close")}
+      >
         {state?.node}
       </Dialog>
     </DialogHostContext.Provider>

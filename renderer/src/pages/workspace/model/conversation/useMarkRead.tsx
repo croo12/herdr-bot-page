@@ -8,7 +8,12 @@ import type { ChatSummary, TranscriptEntry } from "#shared/api/index.tsx";
  * of `chat.lastReadSeq`, and re-checks on `focus`/`visibilitychange` so leaving the chat open in a
  * background/unfocused window doesn't silently clear unread the moment a new message streams in.
  */
-export function useMarkRead(chatId: string | null, chat: ChatSummary | null, loaded: boolean, entries: readonly TranscriptEntry[]): void {
+export function useMarkRead(
+  chatId: string | null,
+  chat: ChatSummary | null,
+  loaded: boolean,
+  entries: readonly TranscriptEntry[],
+): void {
   const { client } = useStoreContext();
   const lastMarkedRef = useRef<number>(0);
 
@@ -23,7 +28,12 @@ export function useMarkRead(chatId: string | null, chat: ChatSummary | null, loa
     function tryMark() {
       if (newestSeq <= chat!.lastReadSeq) return;
       if (newestSeq <= lastMarkedRef.current) return;
-      if (typeof document === "undefined" || !document.hasFocus() || document.visibilityState !== "visible") return;
+      if (
+        typeof document === "undefined" ||
+        !document.hasFocus() ||
+        document.visibilityState !== "visible"
+      )
+        return;
       lastMarkedRef.current = newestSeq;
       void client.call("chat.markRead", { chatId: chatId!, throughSeq: newestSeq }).catch(() => {
         lastMarkedRef.current = 0;

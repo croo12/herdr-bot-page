@@ -25,7 +25,11 @@ export function TranslationProvider({ children }: { readonly children: ReactNode
 
 /** `const { t } = useT()` -- the one hook feature components use for copy. Also exposes the current
  * locale and `setLocale` so the Settings dialog's Language control can live anywhere. */
-export function useT(): { readonly t: TranslateFn; readonly locale: Locale; readonly setLocale: (locale: Locale) => void } {
+export function useT(): {
+  readonly t: TranslateFn;
+  readonly locale: Locale;
+  readonly setLocale: (locale: Locale) => void;
+} {
   const value = useContext(TranslationContext);
   if (value == null) throw new Error("useT() called outside <TranslationProvider>");
   return value;

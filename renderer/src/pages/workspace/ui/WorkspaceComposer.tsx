@@ -8,5 +8,14 @@ export function WorkspaceComposer({ chatId }: { readonly chatId: string }) {
   const chat = useChat(chatId);
   const members = useChatMembers(chat);
   const contacts = useChats();
-  return <MessageComposer chatId={chatId} chat={chat} members={members} contacts={contacts} client={client} drafts={drafts} />;
+  return (
+    <MessageComposer
+      chatId={chatId}
+      chat={chat}
+      members={members}
+      contacts={contacts}
+      client={client}
+      drafts={drafts}
+    />
+  );
 }

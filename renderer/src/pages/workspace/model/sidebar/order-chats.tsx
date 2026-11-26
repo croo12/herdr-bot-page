@@ -10,7 +10,10 @@ import type { ChatSummary } from "#shared/api/index.tsx";
 /** A chat hidden via `chat.setHidden` is dropped from the sidebar -- except the chat currently open,
  * which stays visible (hiding the chat you're looking at would strand you with no way back to it
  * short of the command palette; a deliberate design decision, see README). */
-export function visibleChats(chats: readonly ChatSummary[], activeChatId: string | null): readonly ChatSummary[] {
+export function visibleChats(
+  chats: readonly ChatSummary[],
+  activeChatId: string | null,
+): readonly ChatSummary[] {
   return chats.filter((chat) => !chat.isHiddenFromSidebar || chat.id === activeChatId);
 }
 
@@ -25,7 +28,10 @@ function byRecency(a: ChatSummary, b: ChatSummary): number {
 
 /** Splits into pinned/unpinned groups (pinned rendered first), each sorted newest-activity-first
  * independently -- pinning never changes a chat's relative order within its own group. */
-export function orderChats(chats: readonly ChatSummary[], pinnedChatIds: readonly string[]): OrderedChats {
+export function orderChats(
+  chats: readonly ChatSummary[],
+  pinnedChatIds: readonly string[],
+): OrderedChats {
   const pinnedSet = new Set(pinnedChatIds);
   const pinned: ChatSummary[] = [];
   const rest: ChatSummary[] = [];

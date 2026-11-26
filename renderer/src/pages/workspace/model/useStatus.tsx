@@ -1,6 +1,16 @@
 import { useMemo } from "react";
-import { presenceMembers, sidebarWaitingReason, statusDotTone, statusPhraseKind } from "./status.tsx";
-import type { PresenceMember, SidebarWaitingReason, StatusDotTone, StatusPhraseKind } from "./status.tsx";
+import {
+  presenceMembers,
+  sidebarWaitingReason,
+  statusDotTone,
+  statusPhraseKind,
+} from "./status.tsx";
+import type {
+  PresenceMember,
+  SidebarWaitingReason,
+  StatusDotTone,
+  StatusPhraseKind,
+} from "./status.tsx";
 import { useChatMembers } from "./useChat.tsx";
 import type { ChatSummary } from "#shared/api/index.tsx";
 

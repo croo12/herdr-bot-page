@@ -15,5 +15,11 @@ test("visibleTabs adds Groups only when at least one room exists", () => {
 });
 
 test("visibleTabs shows every tab when both kinds exist", () => {
-  assert.deepEqual(visibleTabs({ bots: 3, groups: 1 }), ["all", "messages", "bots", "groups", "actions"]);
+  assert.deepEqual(visibleTabs({ bots: 3, groups: 1 }), [
+    "all",
+    "messages",
+    "bots",
+    "groups",
+    "actions",
+  ]);
 });

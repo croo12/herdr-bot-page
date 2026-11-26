@@ -13,7 +13,11 @@
  */
 import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 import { ReactRenderer } from "@tiptap/react";
-import type { SuggestionKeyDownProps, SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
+import type {
+  SuggestionKeyDownProps,
+  SuggestionOptions,
+  SuggestionProps,
+} from "@tiptap/suggestion";
 import { placeNear } from "#shared/ui/popover-position.tsx";
 import popoverStyles from "#shared/ui/Popover.module.css";
 import { buildMentionCandidates, filterMentionCandidates } from "../model/mention-candidates.tsx";
@@ -27,7 +31,10 @@ export interface MentionSuggestionDeps {
   getMembers: () => readonly MentionMember[];
 }
 
-function repositionAbove(element: HTMLElement, clientRect: SuggestionProps<MentionCandidate, MentionInsert>["clientRect"]): void {
+function repositionAbove(
+  element: HTMLElement,
+  clientRect: SuggestionProps<MentionCandidate, MentionInsert>["clientRect"],
+): void {
   const anchor = clientRect?.();
   if (anchor == null) return;
   const panel = { width: element.offsetWidth, height: element.offsetHeight };
@@ -35,7 +42,12 @@ function repositionAbove(element: HTMLElement, clientRect: SuggestionProps<Menti
   // "top-start": the popover opens as a small floating list directly above the composer, anchored at
   // the caret -- the composer sits at the bottom of the window, so below-the-caret would usually run
   // off-screen anyway.
-  const { top, left } = placeNear({ top: anchor.top, left: anchor.left, width: anchor.width, height: anchor.height }, panel, "top-start", viewport);
+  const { top, left } = placeNear(
+    { top: anchor.top, left: anchor.left, width: anchor.width, height: anchor.height },
+    panel,
+    "top-start",
+    viewport,
+  );
   element.style.top = `${top}px`;
   element.style.left = `${left}px`;
 }
@@ -47,19 +59,26 @@ function repositionAbove(element: HTMLElement, clientRect: SuggestionProps<Menti
  * default Mention command just spreads whatever it's given into the node's attrs); this cast exists only
  * to satisfy that generic mismatch at the type level, not to paper over an actual behavior difference.
  */
-export function createMentionSuggestion(deps: MentionSuggestionDeps): Partial<SuggestionOptions<MentionCandidate, MentionNodeAttrs>> {
+export function createMentionSuggestion(
+  deps: MentionSuggestionDeps,
+): Partial<SuggestionOptions<MentionCandidate, MentionNodeAttrs>> {
   const config: Partial<SuggestionOptions<MentionCandidate, MentionInsert>> = {
     // A bot 1:1 DM has no members to mention at all (see mention-candidates.tsx's own doc comment) --
     // `allow` returning false means the suggestion plugin never activates there, so `@` just stays a
     // literal character instead of opening an empty/pointless popover.
     allow: () => deps.getMembers().length > 0,
-    items: ({ query }) => [...filterMentionCandidates(buildMentionCandidates(deps.getMembers()), query)],
+    items: ({ query }) => [
+      ...filterMentionCandidates(buildMentionCandidates(deps.getMembers()), query),
+    ],
     render: () => {
       let renderer: ReactRenderer<MentionListHandle, MentionListProps> | null = null;
 
       return {
         onStart: (props) => {
-          renderer = new ReactRenderer(MentionList, { editor: props.editor, props: { items: props.items, command: props.command } });
+          renderer = new ReactRenderer(MentionList, {
+            editor: props.editor,
+            props: { items: props.items, command: props.command },
+          });
           const el = renderer.element;
           el.classList.add(popoverStyles["hb-popover"]!);
           el.style.position = "fixed";

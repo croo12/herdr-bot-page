@@ -3,8 +3,18 @@ import { Check, X } from "lucide-react";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { Badge, Button, IconButton, TextField } from "#shared/ui/index.tsx";
 import { isAppApiError } from "#shared/api/index.tsx";
-import type { AppApiClient, ChatSummary, PendingPrompt, PendingPromptOption, TranscriptEntry } from "#shared/api/index.tsx";
-import { derivePromptCardView, optionBadgeLabel, seedCheckedOptions } from "../model/prompt-card-state.tsx";
+import type {
+  AppApiClient,
+  ChatSummary,
+  PendingPrompt,
+  PendingPromptOption,
+  TranscriptEntry,
+} from "#shared/api/index.tsx";
+import {
+  derivePromptCardView,
+  optionBadgeLabel,
+  seedCheckedOptions,
+} from "../model/prompt-card-state.tsx";
 import styles from "./PromptCard.module.css";
 
 export interface PromptCardProps {
@@ -25,7 +35,9 @@ export interface PromptCardProps {
 export function PromptCard({ client, entry, botChat, showAuthor }: PromptCardProps) {
   const { t } = useT();
   const view = derivePromptCardView(entry, botChat?.bot?.pendingPrompt ?? null);
-  const [checked, setChecked] = useState<Record<string, boolean>>(() => (view.prompt != null ? seedCheckedOptions(view.prompt) : {}));
+  const [checked, setChecked] = useState<Record<string, boolean>>(() =>
+    view.prompt != null ? seedCheckedOptions(view.prompt) : {},
+  );
   const [freeTextKey, setFreeTextKey] = useState<string | null>(null);
   const [freeTextValue, setFreeTextValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -35,7 +47,10 @@ export function PromptCard({ client, entry, botChat, showAuthor }: PromptCardPro
   const prompt = view.prompt;
   const botId = botChat?.id;
 
-  async function answer(action: "option" | "text" | "next" | "cancel", extra: { readonly key?: string; readonly text?: string } = {}) {
+  async function answer(
+    action: "option" | "text" | "next" | "cancel",
+    extra: { readonly key?: string; readonly text?: string } = {},
+  ) {
     if (botId == null || submitting) return;
     setSubmitting(true);
     setErrorMessage("");
@@ -46,7 +61,10 @@ export function PromptCard({ client, entry, botChat, showAuthor }: PromptCardPro
     } catch (error) {
       // `prompt_changed`/`not_blocked`/`answer_in_flight` all resolve themselves once the chat's live
       // `pendingPrompt` updates and this view re-derives on the next render -- nothing else to do here.
-      if (!isAppApiError(error) || !["prompt_changed", "not_blocked", "answer_in_flight"].includes(error.code)) {
+      if (
+        !isAppApiError(error) ||
+        !["prompt_changed", "not_blocked", "answer_in_flight"].includes(error.code)
+      ) {
         setErrorMessage(error instanceof Error ? error.message : String(error));
       }
     } finally {
@@ -78,7 +96,11 @@ export function PromptCard({ client, entry, botChat, showAuthor }: PromptCardPro
     <div className={styles["hb-prompt-card"]}>
       {interactive && (
         <div className={styles["hb-prompt-dismiss"]}>
-          <IconButton size="sm" aria-label={t("conversation.promptDismiss")} onClick={() => void answer("cancel")}>
+          <IconButton
+            size="sm"
+            aria-label={t("conversation.promptDismiss")}
+            onClick={() => void answer("cancel")}
+          >
             <X size={14} />
           </IconButton>
         </div>
@@ -87,22 +109,44 @@ export function PromptCard({ client, entry, botChat, showAuthor }: PromptCardPro
       {prompt.title != null && <div className={styles["hb-prompt-title"]}>{prompt.title}</div>}
       <div className={styles["hb-prompt-question"]}>
         {prompt.question}
-        {prompt.progress != null && <span className={styles["hb-prompt-progress"]}>{t("conversation.questionProgress", { done: prompt.progress.done, total: prompt.progress.total })}</span>}
+        {prompt.progress != null && (
+          <span className={styles["hb-prompt-progress"]}>
+            {t("conversation.questionProgress", {
+              done: prompt.progress.done,
+              total: prompt.progress.total,
+            })}
+          </span>
+        )}
       </div>
       <PromptBody body={prompt.body} />
-      {entry.permissionReview && (view.mode === "live" || entry.permissionReview.decision !== "pending") && (
-        <div className={styles["hb-prompt-description"]}>
-          {t(`conversation.review.${entry.permissionReview.decision}`, { name: entry.permissionReview.name })}
-        </div>
-      )}
+      {entry.permissionReview &&
+        (view.mode === "live" || entry.permissionReview.decision !== "pending") && (
+          <div className={styles["hb-prompt-description"]}>
+            {t(`conversation.review.${entry.permissionReview.decision}`, {
+              name: entry.permissionReview.name,
+            })}
+          </div>
+        )}
       {interactive && prompt.options.length === 0 && botId && (
-        <Button variant="secondary" size="sm" onClick={() => {
-          void client.call("bot.focus", { botId }).catch((error: unknown) => setErrorMessage(error instanceof Error ? error.message : String(error)));
-        }}>{t("conversation.openInHerdr")}</Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            void client
+              .call("bot.focus", { botId })
+              .catch((error: unknown) =>
+                setErrorMessage(error instanceof Error ? error.message : String(error)),
+              );
+          }}
+        >
+          {t("conversation.openInHerdr")}
+        </Button>
       )}
       {errorMessage && <div role="alert">{errorMessage}</div>}
 
-      {view.mode === "inert" && <div className={styles["hb-prompt-inert"]}>{t("conversation.answeredInTerminal")}</div>}
+      {view.mode === "inert" && (
+        <div className={styles["hb-prompt-inert"]}>{t("conversation.answeredInTerminal")}</div>
+      )}
 
       {view.mode !== "inert" && (
         <div className={styles["hb-prompt-options"]}>
@@ -114,8 +158,18 @@ export function PromptCard({ client, entry, botChat, showAuthor }: PromptCardPro
               prompt={prompt}
               interactive={interactive}
               checked={checked[option.key] ?? option.checked ?? false}
-              selected={view.mode === "answered" ? (view.answer?.kind === "option" ? view.answer.key === option.key : option.selected) : false}
-              isFreeTextOpen={view.mode === "live" && (freeTextKey === option.key || (prompt.options.length === 1 && prompt.freeTextKey === option.key))}
+              selected={
+                view.mode === "answered"
+                  ? view.answer?.kind === "option"
+                    ? view.answer.key === option.key
+                    : option.selected
+                  : false
+              }
+              isFreeTextOpen={
+                view.mode === "live" &&
+                (freeTextKey === option.key ||
+                  (prompt.options.length === 1 && prompt.freeTextKey === option.key))
+              }
               freeTextValue={freeTextValue}
               onFreeTextChange={setFreeTextValue}
               onFreeTextSubmit={() => void answer("text", { text: freeTextValue })}
@@ -127,10 +181,20 @@ export function PromptCard({ client, entry, botChat, showAuthor }: PromptCardPro
 
       {interactive && prompt.multiSelect && (
         <div className={styles["hb-prompt-footer"]}>
-          <Button variant="secondary" size="sm" onClick={() => void answer("cancel")} disabled={submitting}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void answer("cancel")}
+            disabled={submitting}
+          >
             {t("conversation.promptCancel")}
           </Button>
-          <Button variant="primary" size="sm" onClick={() => void answer("next")} disabled={submitting}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => void answer("next")}
+            disabled={submitting}
+          >
             {t("conversation.promptNext")}
           </Button>
         </div>
@@ -168,7 +232,19 @@ interface PromptOptionRowProps {
   readonly onSelect: () => void;
 }
 
-function PromptOptionRow({ option, badgeLabel, prompt, interactive, checked, selected, isFreeTextOpen, freeTextValue, onFreeTextChange, onFreeTextSubmit, onSelect }: PromptOptionRowProps) {
+function PromptOptionRow({
+  option,
+  badgeLabel,
+  prompt,
+  interactive,
+  checked,
+  selected,
+  isFreeTextOpen,
+  freeTextValue,
+  onFreeTextChange,
+  onFreeTextSubmit,
+  onSelect,
+}: PromptOptionRowProps) {
   const { t } = useT();
 
   if (isFreeTextOpen) {
@@ -181,8 +257,10 @@ function PromptOptionRow({ option, badgeLabel, prompt, interactive, checked, sel
             placeholder={t("conversation.promptTextPlaceholder")}
             onChange={(event) => onFreeTextChange(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.nativeEvent.isComposing && interactive) onFreeTextSubmit();
+              if (event.key === "Enter" && !event.nativeEvent.isComposing && interactive)
+                onFreeTextSubmit();
             }}
+            // oxlint-disable-next-line jsx-a11y/no-autofocus -- The user just opened this answer field for typing.
             autoFocus
           />
           <Button size="sm" variant="primary" disabled={!interactive} onClick={onFreeTextSubmit}>
@@ -194,15 +272,25 @@ function PromptOptionRow({ option, badgeLabel, prompt, interactive, checked, sel
   }
 
   return (
-    <button type="button" className={`${styles["hb-prompt-option"]} ${selected ? styles["hb-prompt-option--selected"] : ""}`} onClick={onSelect} disabled={!interactive}>
+    <button
+      type="button"
+      className={`${styles["hb-prompt-option"]} ${selected ? styles["hb-prompt-option--selected"] : ""}`}
+      onClick={onSelect}
+      disabled={!interactive}
+    >
       <Badge tone="key">{badgeLabel}</Badge>
       {prompt.multiSelect && (
-        <span className={`${styles["hb-prompt-checkbox"]} ${checked ? styles["hb-prompt-checkbox--checked"] : ""}`} aria-hidden>
+        <span
+          className={`${styles["hb-prompt-checkbox"]} ${checked ? styles["hb-prompt-checkbox--checked"] : ""}`}
+          aria-hidden
+        >
           {checked && <Check size={12} />}
         </span>
       )}
       <span className={styles["hb-prompt-option-label"]}>{option.label}</span>
-      {option.detail != null && <span className={styles["hb-prompt-option-detail"]}>{option.detail}</span>}
+      {option.detail != null && (
+        <span className={styles["hb-prompt-option-detail"]}>{option.detail}</span>
+      )}
     </button>
   );
 }

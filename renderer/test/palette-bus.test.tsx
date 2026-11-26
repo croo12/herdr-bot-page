@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { onPaletteOpenRequested, requestPaletteOpen } from "../src/pages/workspace/model/palette/palette-bus.tsx";
+import {
+  onPaletteOpenRequested,
+  requestPaletteOpen,
+} from "../src/pages/workspace/model/palette/palette-bus.tsx";
 
 test("requestPaletteOpen notifies every subscriber with the initial query", () => {
   const received: string[] = [];

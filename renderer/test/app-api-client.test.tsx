@@ -5,14 +5,18 @@ import { createAppClient, type AppApiTransport } from "../src/shared/api/protoco
 import { createInMemoryTransport, type AppApiServerLike } from "./helpers/in-memory-transport.tsx";
 import type { AppApiEvent } from "../src/shared/api/protocol/types.tsx";
 
-function fakeServer(overrides: Partial<AppApiServerLike> = {}): AppApiServerLike & { emit: (event: AppApiEvent) => void } {
+function fakeServer(
+  overrides: Partial<AppApiServerLike> = {},
+): AppApiServerLike & { emit: (event: AppApiEvent) => void } {
   const listeners = new Set<(event: AppApiEvent) => void>();
   return {
     call: overrides.call ?? (async () => null),
-    subscribe: overrides.subscribe ?? ((onEvent) => {
-      listeners.add(onEvent);
-      return () => listeners.delete(onEvent);
-    }),
+    subscribe:
+      overrides.subscribe ??
+      ((onEvent) => {
+        listeners.add(onEvent);
+        return () => listeners.delete(onEvent);
+      }),
     emit: (event) => {
       for (const listener of listeners) listener(event);
     },
@@ -27,7 +31,11 @@ test("call() round-trips params/result through the transport", async () => {
 });
 
 test("call() rejects with a real AppApiError, from a thrown AppApiError or a plain payload", async () => {
-  const server = fakeServer({ call: async () => { throw new AppApiError("unknown_bot", "no bot \"x\""); } });
+  const server = fakeServer({
+    call: async () => {
+      throw new AppApiError("unknown_bot", 'no bot "x"');
+    },
+  });
   const client = createAppClient(createInMemoryTransport(server));
   await assert.rejects(client.call("bot.focus", { botId: "x" }), (error: unknown) => {
     assert.ok(isAppApiError(error));
@@ -37,7 +45,11 @@ test("call() rejects with a real AppApiError, from a thrown AppApiError or a pla
 });
 
 test("call() wraps an arbitrary thrown value as an internal error", async () => {
-  const server = fakeServer({ call: async () => { throw new Error("boom"); } });
+  const server = fakeServer({
+    call: async () => {
+      throw new Error("boom");
+    },
+  });
   const client = createAppClient(createInMemoryTransport(server));
   await assert.rejects(client.call("host.status", undefined), (error: unknown) => {
     assert.ok(isAppApiError(error));
@@ -68,7 +80,11 @@ test("subscribe() filters by event type, a list of types, or '*'", () => {
 test("a seq gap triggers onResyncNeeded; contiguous seqs do not", () => {
   const server = fakeServer();
   let resyncs = 0;
-  const client = createAppClient(createInMemoryTransport(server), { onResyncNeeded: () => { resyncs += 1; } });
+  const client = createAppClient(createInMemoryTransport(server), {
+    onResyncNeeded: () => {
+      resyncs += 1;
+    },
+  });
   client.subscribe("*", () => {});
 
   server.emit({ seq: 1, type: "chat.listChanged", payload: [] });

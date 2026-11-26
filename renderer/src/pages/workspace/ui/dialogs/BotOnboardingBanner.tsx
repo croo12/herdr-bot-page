@@ -42,9 +42,18 @@ export function BotOnboardingBanner({ chatId }: BotOnboardingBannerProps) {
 
   if (onboarding.stage === "failed") {
     return (
-      <div className={`${styles["hb-onboarding-banner"]} ${styles["hb-onboarding-banner--failed"]}`}>
-        <span className={styles["hb-onboarding-banner-message"]}>{retryError ?? onboarding.error ?? t("dialogs.onboarding.setupFailed")}</span>
-        <button type="button" className={styles["hb-onboarding-banner-retry"]} disabled={retrying} onClick={retry}>
+      <div
+        className={`${styles["hb-onboarding-banner"]} ${styles["hb-onboarding-banner--failed"]}`}
+      >
+        <span className={styles["hb-onboarding-banner-message"]}>
+          {retryError ?? onboarding.error ?? t("dialogs.onboarding.setupFailed")}
+        </span>
+        <button
+          type="button"
+          className={styles["hb-onboarding-banner-retry"]}
+          disabled={retrying}
+          onClick={retry}
+        >
           {t("dialogs.onboarding.retry")}
         </button>
       </div>
@@ -54,7 +63,9 @@ export function BotOnboardingBanner({ chatId }: BotOnboardingBannerProps) {
   return (
     <div className={styles["hb-onboarding-banner"]}>
       <Spinner />
-      <span className={styles["hb-onboarding-banner-message"]}>{t(`dialogs.onboarding.stage.${onboarding.stage}`)}</span>
+      <span className={styles["hb-onboarding-banner-message"]}>
+        {t(`dialogs.onboarding.stage.${onboarding.stage}`)}
+      </span>
     </div>
   );
 }

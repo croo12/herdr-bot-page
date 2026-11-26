@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_ATTACHMENT_BYTES, attachmentErrorMessageKey, validateAttachmentCandidate } from "../src/features/compose-message/model/attachment-validation.tsx";
+import {
+  MAX_ATTACHMENT_BYTES,
+  attachmentErrorMessageKey,
+  validateAttachmentCandidate,
+} from "../src/features/compose-message/model/attachment-validation.tsx";
 
 test("a zero-byte file is rejected as empty", () => {
   assert.equal(validateAttachmentCandidate({ size: 0 }), "empty");

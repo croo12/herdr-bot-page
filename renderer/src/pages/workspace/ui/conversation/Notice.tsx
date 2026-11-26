@@ -12,7 +12,9 @@ import styles from "./Notice.module.css";
  * object doesn't contain that key (see shared/i18n/catalog.tsx's `interpolate`), which an empty `{}` satisfies. */
 function splitOnNamePlaceholder(template: string): readonly [string, string] {
   const index = template.indexOf("{name}");
-  return index === -1 ? [template, ""] : [template.slice(0, index), template.slice(index + "{name}".length)];
+  return index === -1
+    ? [template, ""]
+    : [template.slice(0, index), template.slice(index + "{name}".length)];
 }
 
 export interface NoticeProps {
@@ -30,7 +32,11 @@ export function Notice({ entry }: NoticeProps) {
   const view = deriveNoticeView(entry);
 
   if (view.kind === "renamed") {
-    return <div className={styles["hb-notice"]}>{t("conversation.noticeRenamed", { newName: view.newName })}</div>;
+    return (
+      <div className={styles["hb-notice"]}>
+        {t("conversation.noticeRenamed", { newName: view.newName })}
+      </div>
+    );
   }
 
   if (view.kind === "delegated") {
@@ -43,7 +49,12 @@ export function Notice({ entry }: NoticeProps) {
           {target != null && target.kind === "room" ? (
             <Avatar kind="room" members={[]} size="xs" />
           ) : (
-            <Avatar kind="bot" color={resolvePersonaColor(target?.avatarColor)} name={target?.name ?? view.targetName} size="xs" />
+            <Avatar
+              kind="bot"
+              color={resolvePersonaColor(target?.avatarColor)}
+              name={target?.name ?? view.targetName}
+              size="xs"
+            />
           )}
           <strong>{target?.name ?? view.targetName}</strong>
           {after}

@@ -28,7 +28,15 @@ export interface SidebarRowProps {
  * `<button>` -- a `<button>` can't legally contain a nested `<input>` for the inline-rename state
  * (invalid HTML; breaks the input's own typing/Space/focus), so this owns Enter/Space activation by
  * hand instead. */
-export function SidebarRow({ chat, selected, rail, locale, isPinned, onSelect, onTogglePin }: SidebarRowProps) {
+export function SidebarRow({
+  chat,
+  selected,
+  rail,
+  locale,
+  isPinned,
+  onSelect,
+  onTogglePin,
+}: SidebarRowProps) {
   const members = useChatMembers(chat);
   const status = useStatus(chat);
   const waiting = sidebarWaitingReason(chat);
@@ -41,17 +49,16 @@ export function SidebarRow({ chat, selected, rail, locale, isPinned, onSelect, o
 
   useEffect(() => {
     if (!renaming) return;
-    setDraftName(chat.name);
     const input = inputRef.current;
     input?.focus();
     input?.select();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when rename starts, not on every chat.name change
   }, [renaming]);
 
   function commitRename() {
     const name = draftName.trim();
     setRenaming(false);
-    if (name.length > 0 && name !== chat.name) void client.call("chat.updateProfile", { chatId: chat.id, name });
+    if (name.length > 0 && name !== chat.name)
+      void client.call("chat.updateProfile", { chatId: chat.id, name });
   }
 
   function onRowKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -62,7 +69,8 @@ export function SidebarRow({ chat, selected, rail, locale, isPinned, onSelect, o
     }
   }
 
-  const preview = waiting != null ? t(`sidebar.waitingForYou.${waiting}`) : (chat.lastMessagePreview ?? "");
+  const preview =
+    waiting != null ? t(`sidebar.waitingForYou.${waiting}`) : (chat.lastMessagePreview ?? "");
 
   return (
     // `SidebarRowMenu` renders a `Popover` that portals to `document.body` -- but React replays event
@@ -82,9 +90,21 @@ export function SidebarRow({ chat, selected, rail, locale, isPinned, onSelect, o
         title={rail ? chat.name : undefined}
       >
         {chat.kind === "bot" ? (
-          <Avatar kind="bot" color={resolvePersonaColor(chat.avatarColor)} name={chat.name} statusDot={status.dot} />
+          <Avatar
+            kind="bot"
+            color={resolvePersonaColor(chat.avatarColor)}
+            name={chat.name}
+            statusDot={status.dot}
+          />
         ) : (
-          <Avatar kind="room" members={members.map((member) => ({ color: resolvePersonaColor(member.avatarColor), name: member.name }))} meLabel={t("common.me")} />
+          <Avatar
+            kind="room"
+            members={members.map((member) => ({
+              color: resolvePersonaColor(member.avatarColor),
+              name: member.name,
+            }))}
+            meLabel={t("common.me")}
+          />
         )}
         {!rail && (
           <div className={styles["hb-sidebar-row-main"]}>
@@ -113,7 +133,9 @@ export function SidebarRow({ chat, selected, rail, locale, isPinned, onSelect, o
         )}
         {!rail && (
           <div className={styles["hb-sidebar-row-meta"]}>
-            <span className={styles["hb-sidebar-row-time"]}>{formatClockTime(chat.lastActivityAt, locale)}</span>
+            <span className={styles["hb-sidebar-row-time"]}>
+              {formatClockTime(chat.lastActivityAt, locale)}
+            </span>
             {chat.hasUnread && <StatusDot tone="unread" size={8} aria-label="unread" />}
           </div>
         )}
@@ -123,7 +145,16 @@ export function SidebarRow({ chat, selected, rail, locale, isPinned, onSelect, o
           </span>
         )}
       </div>
-      <SidebarRowMenu chat={chat} state={contextMenu} isPinned={isPinned} onTogglePin={onTogglePin} onStartRename={() => setRenaming(true)} />
+      <SidebarRowMenu
+        chat={chat}
+        state={contextMenu}
+        isPinned={isPinned}
+        onTogglePin={onTogglePin}
+        onStartRename={() => {
+          setDraftName(chat.name);
+          setRenaming(true);
+        }}
+      />
     </>
   );
 }

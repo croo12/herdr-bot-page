@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react";
 import { useDialogHost } from "#shared/ui/DialogHost.tsx";
-import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog.tsx";
 import { openNewMenu, requestPanel } from "../../model/dialogs/dialogs-store.tsx";
 import { NewDialog } from "./NewDialog.tsx";
@@ -29,18 +28,46 @@ export interface DialogsApi {
  */
 export function useDialogs(): DialogsApi {
   const dialogHost = useDialogHost();
-  const { t } = useT();
 
   const openNewChatMenu = useCallback(() => openNewMenu(), []);
-  const openNewBotDialog = useCallback(() => dialogHost.open(<NewDialog initialTab="bot" />, { titleKey: "dialogs.new.title" }), [dialogHost, t]);
-  const openNewRoomDialog = useCallback(() => dialogHost.open(<NewDialog initialTab="room" />, { titleKey: "dialogs.new.title" }), [dialogHost, t]);
-  const openSettings = useCallback(() => dialogHost.open(<SettingsDialog />, { titleKey: "dialogs.settings.title" }), [dialogHost, t]);
+  const openNewBotDialog = useCallback(
+    () => dialogHost.open(<NewDialog initialTab="bot" />, { titleKey: "dialogs.new.title" }),
+    [dialogHost],
+  );
+  const openNewRoomDialog = useCallback(
+    () => dialogHost.open(<NewDialog initialTab="room" />, { titleKey: "dialogs.new.title" }),
+    [dialogHost],
+  );
+  const openSettings = useCallback(
+    () => dialogHost.open(<SettingsDialog />, { titleKey: "dialogs.settings.title" }),
+    [dialogHost],
+  );
   const openBotInfo = useCallback((chatId: string) => requestPanel("bot", chatId), []);
   const openRoomInfo = useCallback((chatId: string) => requestPanel("room", chatId), []);
-  const confirmDelete = useCallback((chat: { readonly id: string; readonly name: string }) => dialogHost.open(<DeleteConfirmDialog chatId={chat.id} name={chat.name} />, {}), [dialogHost]);
+  const confirmDelete = useCallback(
+    (chat: { readonly id: string; readonly name: string }) =>
+      dialogHost.open(<DeleteConfirmDialog chatId={chat.id} name={chat.name} />, {}),
+    [dialogHost],
+  );
 
   return useMemo(
-    () => ({ openNewChatMenu, openNewBotDialog, openNewRoomDialog, openSettings, openBotInfo, openRoomInfo, confirmDelete }),
-    [openNewChatMenu, openNewBotDialog, openNewRoomDialog, openSettings, openBotInfo, openRoomInfo, confirmDelete],
+    () => ({
+      openNewChatMenu,
+      openNewBotDialog,
+      openNewRoomDialog,
+      openSettings,
+      openBotInfo,
+      openRoomInfo,
+      confirmDelete,
+    }),
+    [
+      openNewChatMenu,
+      openNewBotDialog,
+      openNewRoomDialog,
+      openSettings,
+      openBotInfo,
+      openRoomInfo,
+      confirmDelete,
+    ],
   );
 }

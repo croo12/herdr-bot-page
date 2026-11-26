@@ -36,7 +36,9 @@ export function RelaunchConfirmDialog({ name, onConfirm }: RelaunchConfirmDialog
 
   return (
     <div>
-      <DialogTitle className={styles["hb-confirm-title"]}>{t("dialogs.relaunch.title", { name })}</DialogTitle>
+      <DialogTitle className={styles["hb-confirm-title"]}>
+        {t("dialogs.relaunch.title", { name })}
+      </DialogTitle>
       <p className={styles["hb-confirm-body"]}>{t("dialogs.relaunch.body")}</p>
       {error != null && <p className={styles["hb-confirm-body"]}>{error}</p>}
       <div className={styles["hb-confirm-footer"]}>

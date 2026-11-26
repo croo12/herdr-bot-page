@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EMPTY_DRAFT, decodeDraft, encodeDraft, isDraftEmpty } from "../src/features/compose-message/model/draft-codec.tsx";
+import {
+  EMPTY_DRAFT,
+  decodeDraft,
+  encodeDraft,
+  isDraftEmpty,
+} from "../src/features/compose-message/model/draft-codec.tsx";
 import type { ComposerDraftState } from "../src/features/compose-message/model/draft-codec.tsx";
 
 test("an empty draft encodes to the empty string (so DraftStore clears its key)", () => {
@@ -13,7 +18,10 @@ test("decodeDraft('') returns the empty draft", () => {
 
 test("a draft with text round-trips through encode/decode", () => {
   const state: ComposerDraftState = {
-    doc: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "hello" }] }] },
+    doc: {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "hello" }] }],
+    },
     attachments: [],
   };
   const decoded = decodeDraft(encodeDraft(state));
@@ -24,7 +32,14 @@ test("a draft with a mention and a staged attachment round-trips", () => {
   const state: ComposerDraftState = {
     doc: {
       type: "doc",
-      content: [{ type: "paragraph", content: [{ type: "mention", attrs: { id: "bot-forge", label: "Forge", everyone: false } }] }],
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "mention", attrs: { id: "bot-forge", label: "Forge", everyone: false } },
+          ],
+        },
+      ],
     },
     attachments: [{ path: "staged/abc.png", filename: "abc.png", size: 1234 }],
   };

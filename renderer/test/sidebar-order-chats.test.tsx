@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { orderChats, visibleChats } from "../src/pages/workspace/model/sidebar/order-chats.tsx";
 import type { ChatSummary } from "../src/shared/api/index.tsx";
 
-function chat(overrides: Partial<ChatSummary> & Pick<ChatSummary, "id" | "lastActivityAt">): ChatSummary {
+function chat(
+  overrides: Partial<ChatSummary> & Pick<ChatSummary, "id" | "lastActivityAt">,
+): ChatSummary {
   return {
     kind: "bot",
     name: overrides.id,
@@ -34,7 +36,10 @@ function chat(overrides: Partial<ChatSummary> & Pick<ChatSummary, "id" | "lastAc
 }
 
 test("visibleChats drops hidden chats except the currently active one", () => {
-  const chats = [chat({ id: "a", lastActivityAt: 1 }), chat({ id: "b", lastActivityAt: 2, isHiddenFromSidebar: true })];
+  const chats = [
+    chat({ id: "a", lastActivityAt: 1 }),
+    chat({ id: "b", lastActivityAt: 2, isHiddenFromSidebar: true }),
+  ];
   assert.deepEqual(
     visibleChats(chats, null).map((c) => c.id),
     ["a"],

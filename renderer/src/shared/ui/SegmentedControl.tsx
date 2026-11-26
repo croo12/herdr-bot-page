@@ -16,7 +16,12 @@ export interface SegmentedControlProps<T extends string> {
 
 /** A tab-like exclusive choice (e.g. the Bot/Room switch, the palette's tab strip). Implements the
  * roving-tabindex `role="tablist"` keyboard pattern: arrow left/right moves focus and selects. */
-export function SegmentedControl<T extends string>({ options, value, onChange, ...rest }: SegmentedControlProps<T>) {
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  ...rest
+}: SegmentedControlProps<T>) {
   const ref = useRef<HTMLDivElement>(null);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -30,7 +35,14 @@ export function SegmentedControl<T extends string>({ options, value, onChange, .
   }
 
   return (
-    <div ref={ref} role="tablist" aria-label={rest["aria-label"]} className={styles["hb-segmented"]} onKeyDown={onKeyDown}>
+    <div
+      ref={ref}
+      role="tablist"
+      tabIndex={-1}
+      aria-label={rest["aria-label"]}
+      className={styles["hb-segmented"]}
+      onKeyDown={onKeyDown}
+    >
       {options.map((option) => {
         const selected = option.value === value;
         return (

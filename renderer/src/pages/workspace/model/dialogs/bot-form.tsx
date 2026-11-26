@@ -5,7 +5,11 @@
  * this module only encodes the inline, pre-submit rules the form already knows about client-side.
  */
 import type { PermissionMode, ReasoningEffort } from "#shared/api/index.tsx";
-import { isSelectableProvider, providerSupportsModel, providerSupportsReasoning } from "./provider-catalog.tsx";
+import {
+  isSelectableProvider,
+  providerSupportsModel,
+  providerSupportsReasoning,
+} from "./provider-catalog.tsx";
 
 /** A new bot's provider and launch options. `provider` is `""` until the user picks one; `model`/
  * `reasoningEffort` stay `null` until picked -- none of them is ever prefilled with a default. */
@@ -15,12 +19,17 @@ export interface LaunchChoice {
   readonly reasoningEffort: ReasoningEffort | null;
 }
 
-export const EMPTY_LAUNCH_CHOICE: LaunchChoice = { provider: "", model: null, reasoningEffort: null };
+export const EMPTY_LAUNCH_CHOICE: LaunchChoice = {
+  provider: "",
+  model: null,
+  reasoningEffort: null,
+};
 
 /** True once the provider is picked, plus its model and reasoning effort wherever the provider supports them. */
 export function isLaunchChoiceComplete(choice: LaunchChoice): boolean {
   if (!isSelectableProvider(choice.provider)) return false;
-  if (providerSupportsModel(choice.provider) && (choice.model == null || choice.model.length === 0)) return false;
+  if (providerSupportsModel(choice.provider) && (choice.model == null || choice.model.length === 0))
+    return false;
   if (providerSupportsReasoning(choice.provider) && choice.reasoningEffort == null) return false;
   return true;
 }
@@ -60,7 +69,11 @@ export function isAdopting(state: Pick<BotFormState, "adoptPaneId">): boolean {
   return state.adoptPaneId != null && state.adoptPaneId.length > 0;
 }
 
-export function validateBotForm(state: BotFormState, cwdCheck: DirectoryCheck | null, allowHomeCwd: boolean): BotFormValidation {
+export function validateBotForm(
+  state: BotFormState,
+  cwdCheck: DirectoryCheck | null,
+  allowHomeCwd: boolean,
+): BotFormValidation {
   const adopting = isAdopting(state);
   const nameError = state.name.trim().length === 0 ? "required" : null;
 
@@ -70,7 +83,8 @@ export function validateBotForm(state: BotFormState, cwdCheck: DirectoryCheck | 
     else if (cwdCheck != null && !cwdCheck.exists) cwdError = "not-found";
   }
 
-  const needsHomeConfirmation = !adopting && cwdError == null && (cwdCheck?.isHome ?? false) && !allowHomeCwd;
+  const needsHomeConfirmation =
+    !adopting && cwdError == null && (cwdCheck?.isHome ?? false) && !allowHomeCwd;
   const launchComplete = adopting || isLaunchChoiceComplete(state);
 
   return {
@@ -83,7 +97,10 @@ export function validateBotForm(state: BotFormState, cwdCheck: DirectoryCheck | 
 }
 
 /** Seeds the folder and permission mode from the defaults; the provider/model/reasoning start unpicked. */
-export function emptyBotFormState(defaults: { readonly cwd: string; readonly permissionMode: PermissionMode | null }): BotFormState {
+export function emptyBotFormState(defaults: {
+  readonly cwd: string;
+  readonly permissionMode: PermissionMode | null;
+}): BotFormState {
   return {
     name: "",
     persona: "",

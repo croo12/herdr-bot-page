@@ -20,7 +20,12 @@ export function WorkingIndicator({ workingBots }: WorkingIndicatorProps) {
     <div className={styles["hb-working"]}>
       {workingBots.map((bot) => (
         <div key={bot.id} className={styles["hb-working-row"]}>
-          <Avatar kind="bot" color={resolvePersonaColor(bot.avatarColor)} name={bot.name} size="xs" />
+          <Avatar
+            kind="bot"
+            color={resolvePersonaColor(bot.avatarColor)}
+            name={bot.name}
+            size="xs"
+          />
           <span>{t("conversation.working", { name: bot.name })}</span>
           <span className={styles["hb-working-dots"]} aria-hidden>
             <span />

@@ -36,6 +36,7 @@ export function RoomInfoPanel({ roomId }: RoomInfoPanelProps) {
 
   useEffect(() => {
     if (chat == null) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- Initialize editable fields when the selected room changes.
     setName(chat.name);
     setDescription(chat.description);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,7 +58,10 @@ export function RoomInfoPanel({ roomId }: RoomInfoPanelProps) {
 
   async function removeMember(memberId: string) {
     try {
-      await client.call("room.setMembers", { roomId, memberIds: chat!.memberIds.filter((id) => id !== memberId) });
+      await client.call("room.setMembers", {
+        roomId,
+        memberIds: chat!.memberIds.filter((id) => id !== memberId),
+      });
     } catch (err) {
       setError(toAppApiError(err).message);
     }
@@ -77,28 +81,68 @@ export function RoomInfoPanel({ roomId }: RoomInfoPanelProps) {
 
       <div className={styles["hb-panel-body"]}>
         <div className={styles["hb-panel-avatar"]}>
-          <Avatar kind="room" members={members.map((member) => ({ color: resolvePersonaColor(member.avatarColor), name: member.name }))} meLabel={t("common.me")} size="xl" />
+          <Avatar
+            kind="room"
+            members={members.map((member) => ({
+              color: resolvePersonaColor(member.avatarColor),
+              name: member.name,
+            }))}
+            meLabel={t("common.me")}
+            size="xl"
+          />
         </div>
 
-        <TextField label={t("dialogs.new.roomName")} value={name} onChange={(event) => setName(event.target.value)} onBlur={() => name !== chat.name && saveProfile({ name })} />
-        <TextArea label={t("dialogs.botInfo.description")} value={description} onChange={(event) => setDescription(event.target.value)} onBlur={() => description !== chat.description && saveProfile({ description })} />
+        <TextField
+          label={t("dialogs.new.roomName")}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onBlur={() => name !== chat.name && saveProfile({ name })}
+        />
+        <TextArea
+          label={t("dialogs.botInfo.description")}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          onBlur={() => description !== chat.description && saveProfile({ description })}
+        />
 
         <div>
           <div className={styles["hb-panel-row"]}>
-            <span className={styles["hb-panel-section-header"]} style={{ borderTop: "none", paddingTop: 0 }}>
+            <span
+              className={styles["hb-panel-section-header"]}
+              style={{ borderTop: "none", paddingTop: 0 }}
+            >
               {t("dialogs.roomInfo.members")} ({members.length}/{MAX_ROOM_MEMBERS})
             </span>
-            <Button variant="secondary" size="sm" disabled={members.length >= MAX_ROOM_MEMBERS} onClick={() => dialogHost.open(<AddMembersDialog roomId={roomId} currentMemberIds={chat.memberIds} />, { titleKey: "dialogs.roomInfo.addMembers" })}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={members.length >= MAX_ROOM_MEMBERS}
+              onClick={() =>
+                dialogHost.open(
+                  <AddMembersDialog roomId={roomId} currentMemberIds={chat.memberIds} />,
+                  { titleKey: "dialogs.roomInfo.addMembers" },
+                )
+              }
+            >
               {t("dialogs.roomInfo.add")}
             </Button>
           </div>
           {members.map((member) => (
             <div key={member.id} className={styles["hb-panel-row"]} style={{ padding: "8px 0" }}>
               <div className={styles["hb-panel-row"]} style={{ gap: 8 }}>
-                <Avatar kind="bot" color={resolvePersonaColor(member.avatarColor)} name={member.name} size="sm" />
+                <Avatar
+                  kind="bot"
+                  color={resolvePersonaColor(member.avatarColor)}
+                  name={member.name}
+                  size="sm"
+                />
                 <span>{member.name}</span>
               </div>
-              <IconButton aria-label={t("dialogs.roomInfo.removeMember", { name: member.name })} size="sm" onClick={() => removeMember(member.id)}>
+              <IconButton
+                aria-label={t("dialogs.roomInfo.removeMember", { name: member.name })}
+                size="sm"
+                onClick={() => removeMember(member.id)}
+              >
                 <X size={14} />
               </IconButton>
             </div>
@@ -109,7 +153,12 @@ export function RoomInfoPanel({ roomId }: RoomInfoPanelProps) {
 
         <div className={styles["hb-panel-footer"]}>
           <div className={styles["hb-panel-full-button"]}>
-            <Button variant="danger" onClick={() => dialogHost.open(<DeleteConfirmDialog chatId={roomId} name={chat.name} />, {})}>
+            <Button
+              variant="danger"
+              onClick={() =>
+                dialogHost.open(<DeleteConfirmDialog chatId={roomId} name={chat.name} />, {})
+              }
+            >
               {t("common.delete")}
             </Button>
           </div>

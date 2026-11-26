@@ -87,7 +87,11 @@ export function Avatar(props: AvatarProps) {
     const label = props.label ?? "Me";
     return (
       <span className={styles["hb-avatar"]} style={{ width: px, height: px }}>
-        <span className={styles["hb-avatar-user"]} style={{ fontSize: Math.round(px * 0.34) }} aria-hidden>
+        <span
+          className={styles["hb-avatar-user"]}
+          style={{ fontSize: Math.round(px * 0.34) }}
+          aria-hidden
+        >
           {label.slice(0, 2)}
         </span>
         <span className="hb-sr-only">{label}</span>
@@ -98,10 +102,20 @@ export function Avatar(props: AvatarProps) {
   if (props.kind === "bot") {
     return (
       <span className={styles["hb-avatar"]} style={{ width: px, height: px }}>
-        <img draggable={false} className={`${styles["hb-avatar-image"]} ${styles[`hb-avatar--shape-${shape}`]}`} src={personaAssetFor(props.color, px)} alt={props.name} />
+        <img
+          draggable={false}
+          className={`${styles["hb-avatar-image"]} ${styles[`hb-avatar--shape-${shape}`]}`}
+          src={personaAssetFor(props.color, px)}
+          alt={props.name}
+        />
         {props.statusDot != null && (
           <span className={styles["hb-avatar-dot"]}>
-            <StatusDot tone={props.statusDot} size={dotSize} ring aria-label={props.statusDot === "blocked" ? "needs approval" : "working"} />
+            <StatusDot
+              tone={props.statusDot}
+              size={dotSize}
+              ring
+              aria-label={props.statusDot === "blocked" ? "needs approval" : "working"}
+            />
           </span>
         )}
       </span>
@@ -111,7 +125,7 @@ export function Avatar(props: AvatarProps) {
   // room: up to four cells -- the user's own "Me" (sidebar rows and the info panel), members, and a
   // "+N" count for the rest.
   const cells = roomCells(props.members, props.meLabel);
-  const layout = CELL_LAYOUT[(Math.max(1, cells.length) as 1 | 2 | 3 | 4)];
+  const layout = CELL_LAYOUT[Math.max(1, cells.length) as 1 | 2 | 3 | 4];
 
   return (
     <span className={styles["hb-avatar"]} style={{ width: px, height: px }}>
@@ -120,12 +134,27 @@ export function Avatar(props: AvatarProps) {
           const slot = layout[index]!;
           const style = { top: slot.top, left: slot.left, width: slot.size, height: slot.size };
           if (cell.kind === "member") {
-            return <img draggable={false} key={`${cell.member.name}-${index}`} className={styles["hb-avatar-stack-item"]} style={style} src={personaAssetFor(cell.member.color, px * 0.6)} alt={cell.member.name} />;
+            return (
+              <img
+                draggable={false}
+                key={`${cell.member.name}-${index}`}
+                className={styles["hb-avatar-stack-item"]}
+                style={style}
+                src={personaAssetFor(cell.member.color, px * 0.6)}
+                alt={cell.member.name}
+              />
+            );
           }
           const fontSize = Math.max(7, Math.round(px * (cell.kind === "me" ? 0.18 : 0.22)));
           return (
-            <span key={cell.kind} className={styles["hb-avatar-stack-chip"]} style={{ ...style, fontSize }}>
-              <span className={styles["hb-avatar-stack-chip-disc"]}>{cell.kind === "me" ? cell.label : `+${cell.count}`}</span>
+            <span
+              key={cell.kind}
+              className={styles["hb-avatar-stack-chip"]}
+              style={{ ...style, fontSize }}
+            >
+              <span className={styles["hb-avatar-stack-chip-disc"]}>
+                {cell.kind === "me" ? cell.label : `+${cell.count}`}
+              </span>
             </span>
           );
         })}

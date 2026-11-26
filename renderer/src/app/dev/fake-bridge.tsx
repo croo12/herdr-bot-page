@@ -4,7 +4,12 @@
  *   &theme=light|dark     -- initial resolved theme (default: prefers-color-scheme)
  *   &lang=en|ko           -- initial locale (default: ko, matching the real app's default)
  */
-import type { HerdrBridge, ResolvedTheme, ThemePreference, UpdateStatus } from "#shared/api/desktop/bridge.tsx";
+import type {
+  HerdrBridge,
+  ResolvedTheme,
+  ThemePreference,
+  UpdateStatus,
+} from "#shared/api/desktop/bridge.tsx";
 import { createFakeAppApi } from "./fake-app-api.tsx";
 
 type Listener<T> = (value: T) => void;
@@ -31,10 +36,14 @@ export function createFakeBridge(): HerdrBridge {
 
   const themeEmitter = makeEmitter<{ preference: ThemePreference; resolved: ResolvedTheme }>();
   const themeParam = query.get("theme");
-  let theme: { preference: ThemePreference; resolved: ResolvedTheme } = themeParam === "dark" || themeParam === "light" ? { preference: themeParam, resolved: themeParam } : { preference: "system", resolved: resolveSystemTheme() };
+  let theme: { preference: ThemePreference; resolved: ResolvedTheme } =
+    themeParam === "dark" || themeParam === "light"
+      ? { preference: themeParam, resolved: themeParam }
+      : { preference: "system", resolved: resolveSystemTheme() };
 
   const localeEmitter = makeEmitter<string | null>();
-  let locale: string | null = query.get("lang") === "en" ? "en" : query.get("lang") === "ko" ? "ko" : null;
+  let locale: string | null =
+    query.get("lang") === "en" ? "en" : query.get("lang") === "ko" ? "ko" : null;
 
   const windowStateEmitter = makeEmitter<{ isFullscreen: boolean; isMaximized: boolean }>();
   const zoomEmitter = makeEmitter<number>();
@@ -52,7 +61,10 @@ export function createFakeBridge(): HerdrBridge {
       initial: theme,
       get: async () => theme,
       set: async (preference) => {
-        theme = { preference, resolved: preference === "system" ? resolveSystemTheme() : preference };
+        theme = {
+          preference,
+          resolved: preference === "system" ? resolveSystemTheme() : preference,
+        };
         themeEmitter.emit(theme);
         return theme;
       },

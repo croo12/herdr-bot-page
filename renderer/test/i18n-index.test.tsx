@@ -21,7 +21,13 @@ test("t() resolves a real key from every registered feature fragment", () => {
   // composer.placeholder is now kind-specific (composer.placeholder.bot/.room) -- see
   // features/compose-message/model/placeholder.tsx: a bot is addressed with 에게 (dative), a room with 에 (locative).
   assert.equal(t("en", "composer.placeholder.bot", { chatName: "Atlas" }), "Message Atlas");
-  assert.equal(t("ko", "composer.placeholder.bot", { chatName: "Atlas" }), "Atlas에게 메시지 보내기");
+  assert.equal(
+    t("ko", "composer.placeholder.bot", { chatName: "Atlas" }),
+    "Atlas에게 메시지 보내기",
+  );
   assert.equal(t("en", "composer.placeholder.room", { chatName: "Atlas" }), "Message Atlas");
-  assert.equal(t("ko", "composer.placeholder.room", { chatName: "Atlas" }), "Atlas에 메시지 보내기");
+  assert.equal(
+    t("ko", "composer.placeholder.room", { chatName: "Atlas" }),
+    "Atlas에 메시지 보내기",
+  );
 });

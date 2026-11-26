@@ -18,7 +18,10 @@ export interface ResolvedBotFormDefaults {
   readonly permissionMode: PermissionMode | null;
 }
 
-export function resolveBotFormDefaults(hostDefaults: BotDefaults, settings: AppSettings | null): ResolvedBotFormDefaults {
+export function resolveBotFormDefaults(
+  hostDefaults: BotDefaults,
+  settings: AppSettings | null,
+): ResolvedBotFormDefaults {
   return {
     cwd: settings?.defaultWorkingFolder ?? hostDefaults.cwd,
     provider: settings?.defaultProvider ?? hostDefaults.provider,

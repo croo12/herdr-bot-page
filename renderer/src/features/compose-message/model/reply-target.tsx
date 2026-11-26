@@ -49,6 +49,8 @@ export interface ReplyTargetHandle {
 
 /** The composer's own view of `chatId`'s current reply target (`null` once cleared/sent/never set). */
 export function useReplyTarget(chatId: string | null): ReplyTargetHandle {
-  const target = useSyncExternalStore(subscribeReplyTarget, () => (chatId == null ? null : getReplyTarget(chatId)));
+  const target = useSyncExternalStore(subscribeReplyTarget, () =>
+    chatId == null ? null : getReplyTarget(chatId),
+  );
   return { target, clear: () => chatId != null && clearReplyTarget(chatId) };
 }

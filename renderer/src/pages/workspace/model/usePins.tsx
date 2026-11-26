@@ -18,7 +18,9 @@ export function usePins(): PinsHandle {
 
   const togglePin = useCallback(
     (chatId: string) => {
-      const next = pinnedChatIds.includes(chatId) ? pinnedChatIds.filter((id) => id !== chatId) : [...pinnedChatIds, chatId];
+      const next = pinnedChatIds.includes(chatId)
+        ? pinnedChatIds.filter((id) => id !== chatId)
+        : [...pinnedChatIds, chatId];
       store.setState({ ...store.getState(), pinnedChatIds: next });
       void bridge.pins.set(next);
     },

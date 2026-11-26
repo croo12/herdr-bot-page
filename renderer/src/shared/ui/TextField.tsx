@@ -8,7 +8,13 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   readonly invalid?: boolean;
 }
 
-export function TextField({ id: idProp, label, helperText, invalid = false, ...rest }: TextFieldProps) {
+export function TextField({
+  id: idProp,
+  label,
+  helperText,
+  invalid = false,
+  ...rest
+}: TextFieldProps) {
   const generatedId = useId();
   const id = idProp ?? generatedId;
   const helperId = helperText != null ? `${id}-helper` : undefined;
@@ -26,7 +32,14 @@ export function TextField({ id: idProp, label, helperText, invalid = false, ...r
         aria-describedby={helperId}
         {...rest}
       />
-      {helperText != null && <div id={helperId} className={`${styles["hb-field-helper"]} ${invalid ? styles["hb-field-helper--invalid"] : ""}`}>{helperText}</div>}
+      {helperText != null && (
+        <div
+          id={helperId}
+          className={`${styles["hb-field-helper"]} ${invalid ? styles["hb-field-helper--invalid"] : ""}`}
+        >
+          {helperText}
+        </div>
+      )}
     </div>
   );
 }
