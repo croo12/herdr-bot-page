@@ -1,17 +1,22 @@
 use crate::{
     domain::{need, strings},
-    Engine,
+    infrastructure::AgentSessions,
+    storage::Store,
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 
-pub(crate) fn delete_chats(engine: &Engine, params: &Value) -> Result<Value> {
-    let _guard = engine.roster.lock().unwrap();
+pub(crate) fn delete_chats(
+    store: &Store,
+    sessions: &AgentSessions,
+    params: &Value,
+) -> Result<Value> {
+    let _guard = sessions.roster.lock().unwrap();
     let ids = strings(&params["chatIds"]);
     let mut deleted = vec![];
     for id in ids {
-        let chat = engine.tx(|repos, _| repos.chats.get(&id))?;
-        if engine
+        let chat = store.tx(|repos, _| repos.chats.get(&id))?;
+        if sessions
             .active
             .lock()
             .unwrap()
@@ -21,20 +26,20 @@ pub(crate) fn delete_chats(engine: &Engine, params: &Value) -> Result<Value> {
             bail!("bot_not_ready: {id} has an active turn")
         }
         if chat["kind"] == "bot" {
-            let agents = engine.herdr.agents()?;
+            let agents = sessions.herdr.agents()?;
             if agents
                 .iter()
                 .any(|agent| agent["name"] == id && agent["pane_id"] == chat["bot"]["paneId"])
             {
                 let pane = need(&chat["bot"], "paneId")?;
                 if chat["bot"]["adopted"] == true {
-                    engine.herdr.run(&["agent", "rename", pane, "--clear"])?;
+                    sessions.herdr.run(&["agent", "rename", pane, "--clear"])?;
                 } else {
-                    engine.herdr.run(&["pane", "close", pane])?;
+                    sessions.herdr.run(&["pane", "close", pane])?;
                 }
             }
         }
-        engine.tx(|repos, events| {
+        store.tx(|repos, events| {
             for mut room in repos.chats.list()? {
                 let mut members = strings(&room["memberIds"]);
                 if members.contains(&id) {

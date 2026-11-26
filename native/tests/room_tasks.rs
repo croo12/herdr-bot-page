@@ -164,6 +164,12 @@ fn a_room_task_stays_on_its_original_message_across_a_host_restart() {
     let recovered = Engine::start(recovery.into(), cli, |_| {}).unwrap();
     wait_for(|| recovery.join("waiting-for-reply").exists());
     assert!(!recovery.join("second-step-submitted").exists());
+    recovered
+        .call(
+            "message.send",
+            json!({"chatId":room,"text":"confirm queue order"}),
+        )
+        .unwrap();
 
     let mut report = json!({"chatId":room,"entryId":message["entryId"],"attemptId":execution["attemptId"],"outcome":"completed","summary":"Windows build passed","paneId":"w1:p2"});
     assert!(ipc::request(recovery, "cli.taskReport", report.clone()).is_err());
@@ -175,6 +181,15 @@ fn a_room_task_stays_on_its_original_message_across_a_host_restart() {
         done
     );
     std::fs::write(recovery.join("reply-posted"), "").unwrap();
+    wait_for(|| {
+        let page = recovered
+            .call("transcript.page", json!({"chatId":room}))
+            .unwrap();
+        page["entries"].as_array().unwrap().iter().any(|entry| {
+            entry["author"]["id"] == "tester"
+                && entry["message"]["content"] == "queue order confirmed"
+        })
+    });
     let replies = recovered
         .call(
             "transcript.thread",

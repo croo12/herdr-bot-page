@@ -39,17 +39,30 @@ Windows x64 설치 파일은 `desktop/target/release/bundle/nsis/`에 생성됩�
 
 ## Rust 코드 구조
 
-Tauri 창과 CLI 모두 `native/src/controller`를 통해 같은 엔진 서비스를 호출합니다. 기능을 변경할 때는 `native/src/modules` 아래의 해당 폴더에서 시작합니다.
+Rust 엔진(`native/src`)은 다음 여섯 층위를 사용합니다. 표의 위에서 아래로 직접 의존할 수 있으며 중간 계층을 건너뛸 수 있습니다. 예를 들어 `chat.list`는 `controller`에서 `modules/chats`로 바로 연결됩니다. 별개 기능 모듈끼리의 직접 참조와 같은 층위의 `storage ↔ infrastructure` 참조는 신규 의존에서 금지합니다.
 
-| 경로 | 책임 |
-| --- | --- |
-| `native/src/controller` | 요청 이름을 서비스에 연결하고 CLI의 로컬 IPC 요청을 받습니다. |
-| `native/src/modules` | 대화(`chats`), 방(`rooms`), 봇(`bots`), 설정(`settings`), 대화 기록(`transcript`), 작업 기록(`tasks`), 턴 실행(`turns`), 터미널 질문(`prompts`), 동료 봇의 권한 검토(`reviews`)를 각각 관리합니다. |
-| `native/src/storage` | SQLite 스키마와 트랜잭션을 관리합니다. 변경 이벤트는 커밋이 성공한 뒤 순서대로 발행합니다. |
-| `native/src/runtime`, `native/src/infrastructure` | 엔진 수명 주기와 작업 큐는 `runtime`에, herdr 프로세스 연동과 실행 경로 탐색은 `infrastructure`에 있습니다. |
-| `desktop/src/controller`, `desktop/src/attachments` | Tauri 명령과 시스템 대화상자를 연결하고, 첨부파일의 처리 규칙과 파일 접근을 분리합니다. |
+| 층위 | 경로 | 이곳에 두는 코드 |
+| --- | --- | --- |
+| 1. 엔진 조립·실행 | `runtime/` | 엔진 시작과 종료, IPC 리스너 시작, 방별 큐와 작업 실행을 관리합니다. |
+| 2. 요청 진입점 | `controller/` | Tauri와 CLI에서 받은 요청 이름을 해당 작업에 연결합니다. |
+| 3. 유스케이스 | `application/` | 여러 기능을 호출하는 순서를 정합니다. 권한 검토 답글은 검토자 확인 후 승인·거절 적용으로 이어집니다. |
+| 4. 기능 | `modules/<기능>/` | 봇, 방, 대화 기록, 작업, 권한 검토 등 각 기능의 규칙을 구현합니다. |
+| 5. 기술 연동 | `storage/`, `infrastructure/` | `storage`는 SQLite 연결·스키마·트랜잭션을, `infrastructure`는 Herdr 프로세스·실행 경로·로그를 관리합니다. |
+| 6. 공통 도메인 | `domain/` | 여러 기능에서 사용하는 값과 이벤트 등 엔진의 기본 정의를 둡니다. |
 
-각 기능의 `mod.rs`가 호출 가능한 작업을 공개하고 `service.rs`가 처리 규칙을 구현합니다. SQLite를 사용하는 기능은 쿼리를 자체 `repository.rs`에 둡니다. 예를 들어 방에 메시지를 보낼 때 대화 기록 추가와 방 상태 갱신은 같은 트랜잭션의 저장소를 사용합니다.
+새 기능은 `modules/<기능>/`에, 여러 기능에 걸친 작업은 `application/`에 추가합니다. 새 최상위 계층이 필요하면 층위와 책임을 먼저 정하고 README와 검사기의 `LAYERS`를 함께 변경합니다. `lib.rs`는 계층 선언과 공개 API 재노출을 담당하고, `bin/`은 별도 CLI 실행 대상입니다. [계층 검사](native/tests/architecture.rs)
+
+각 기능의 `mod.rs`가 호출 가능한 작업을 공개하고 `service.rs`가 처리 규칙을 구현합니다. `runtime`은 기능에 필요한 저장소, Herdr 세션, 작업 큐 등록 함수를 연결합니다. SQLite 쿼리는 `storage/chats.rs`, `storage/transcript.rs`처럼 기능별 파일에 두고, `Store::tx`가 같은 트랜잭션에 묶인 저장소를 제공합니다. 예를 들어 방에 메시지를 보낼 때 대화 기록 추가와 방 상태 갱신이 함께 커밋된 뒤 변경 이벤트를 발행합니다.
+
+데스크톱 앱의 `desktop/src/controller`와 `desktop/src/attachments`는 Tauri 명령과 시스템 대화상자를 연결하고 첨부파일 처리 및 파일 접근을 담당합니다.
+
+## 모듈 경계 검사
+
+`npm ci`를 실행하면 Husky가 Git 훅을 설치합니다. 커밋할 때마다 `pre-commit` 훅이 `npm run check:architecture`로 작업 트리 전체를 검사하며, 위반이 있으면 커밋이 중단됩니다. 부분 스테이징한 파일은 스테이징하지 않은 수정도 검사에 포함됩니다. Windows와 macOS의 PR CI는 `npm run check`의 첫 단계에서 같은 검사를 실행합니다.
+
+- 렌더러는 `app → pages → features → shared` 방향으로 하위 레이어를 참조할 수 있습니다. 다른 page나 feature 슬라이스의 내부 파일은 외부에 공개하지 않고, 같은 레이어의 서로 다른 슬라이스는 서로 import하지 않습니다. 다른 레이어에서 슬라이스를 사용할 때는 `index.tsx`를 거칩니다. Tauri SDK 호출은 `shared/api/desktop/tauri-bridge.tsx`에 둡니다. 검사기는 alias와 상대 경로를 해석하고 순환 import도 검사합니다. [렌더러 규칙](scripts/architecture/renderer.mjs)
+- Rust 기능 모듈은 구현 하위 모듈을 비공개로 두고 필요한 항목을 `mod.rs`에서 재공개합니다. 엔진 검사는 소스에 명시한 import와 함수 본문의 경로로 모듈 간 직접 의존을 수집합니다. 매크로가 생성하는 코드와 인자로 전달한 타입의 메서드 호출은 이 그래프의 범위 밖입니다. Cargo 메타데이터로는 로컬 패키지 의존 방향인 `desktop → native`를 별도로 확인합니다.
+- 층위에 맞는 의존도 새로 도입할 때는 허용 목록에서 검토합니다. 기존 코드에서 기능 모듈끼리 호출하는 경로는 이전 대상 목록에 별도로 기록합니다. 마지막 참조를 제거하면 해당 예외도 지워야 검사가 통과합니다. [일반 의존 목록](native/tests/architecture/dependencies.txt) · [기존 예외 목록](native/tests/architecture/legacy-dependencies.txt)
 
 ## CLI와 데이터
 

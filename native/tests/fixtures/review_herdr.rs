@@ -8,13 +8,24 @@ fn main() {
     let worker = format!(
         r#"{{"name":"worker","pane_id":"p1","agent":"codex","agent_status":"{status}","cwd":"."}}"#
     );
-    let reviewer =
-        r#"{"name":"peer","pane_id":"p2","agent":"codex","agent_status":"idle","cwd":"."}"#;
+    let peer_status = if home.join("reviewer-finishing").exists() { "working" } else { "idle" };
+    let reviewer = format!(r#"{{"name":"peer","pane_id":"p2","agent":"codex","agent_status":"{peer_status}","cwd":"."}}"#);
     match (args[0].as_str(),args[1].as_str()) {
         ("session","list") => println!(r#"{{"sessions":[{{"name":"review-test","running":true}}]}}"#),
         ("agent","list") => println!(r#"{{"result":{{"agents":[{worker},{reviewer}]}}}}"#),
-        ("agent","get") => println!(r#"{{"result":{{"agent":{}}}}}"#,if args[2]=="p1" {&worker} else {reviewer}),
+        ("agent","get") => println!(r#"{{"result":{{"agent":{}}}}}"#,if args[2]=="p1" {&worker} else {&reviewer}),
         ("agent","read") => println!("Would you like to run the following command?\n$ cargo test {}\n› 1. Yes, proceed (y)\n  2. Yes, always allow (p)\n  3. No (esc)\nPress enter to confirm or esc to cancel",fs::read_to_string(&blocked).unwrap()),
+        ("agent","prompt") if args[2]=="p1" && args[3].contains("The permission request was denied") => {
+            if home.join("reviewer-finishing").exists() {
+                assert!(args[3].contains("Use the test worktree"));
+                fs::File::create_new(home.join("denial-follow-up")).unwrap();
+            }
+            let room = fs::read_to_string(home.join("room")).unwrap();
+            let cli = home.join("bin").join(format!("herdr-bot{}",env::consts::EXE_SUFFIX));
+            assert!(std::process::Command::new(cli).env("HERDR_PANE_ID","p1")
+                .args(["say",&room,"I will request permission for the corrected worktree."]).output().unwrap().status.success());
+            println!(r#"{{"result":{{"agent":{worker}}}}}"#);
+        }
         ("agent","prompt") if args[2]=="p1" => {
             fs::write(&blocked,"--lib").unwrap();
             println!(r#"{{"result":{{"agent":{}}}}}"#,worker.replace("idle","blocked"));
@@ -27,6 +38,7 @@ fn main() {
             println!(r#"{{"result":{{"agent":{}}}}}"#,worker.replace("blocked","done"));
         }
         ("agent","prompt") if args[2]=="p2" => {
+            assert_eq!(peer_status,"idle");
             if let Some((_,args)) = args[3].split_once("arguments: say --reply-to ") {
                 fs::write(home.join("ticket"),args.split_whitespace().next().unwrap()).unwrap();
             }

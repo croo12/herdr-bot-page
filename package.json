@@ -15,9 +15,11 @@
     "renderer"
   ],
   "scripts": {
+    "prepare": "husky",
     "test": "npm test --workspace renderer && npm run test:native",
     "typecheck": "npm run renderer:typecheck",
-    "check": "npm run typecheck && npm test",
+    "check": "npm run check:architecture && npm run typecheck && npm test",
+    "check:architecture": "depcruise --config scripts/architecture/renderer.mjs renderer/src && node --test scripts/architecture/*.test.mjs && cargo test --locked --manifest-path native/Cargo.toml --test architecture",
     "renderer:typecheck": "tsc -p renderer/tsconfig.json",
     "renderer:build": "npm run build -w @herdr-bot/renderer",
     "renderer:dev": "npm run dev -w @herdr-bot/renderer",
@@ -30,8 +32,11 @@
     "test:native": "cargo test --locked --manifest-path native/Cargo.toml"
   },
   "devDependencies": {
+    "@swc/core": "1.16.22",
     "@tauri-apps/cli": "^2.12.6",
     "@types/node": "^24",
+    "dependency-cruiser": "18.9.0",
+    "husky": "9.1.7",
     "typescript": "7.0.2"
   },
   "overrides": {

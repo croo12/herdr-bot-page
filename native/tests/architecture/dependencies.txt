@@ -1,0 +1,15 @@
+application -> domain infrastructure modules::prompts modules::reviews modules::turns storage
+controller -> application domain infrastructure modules::bots modules::chats modules::prompts modules::rooms modules::settings modules::tasks modules::transcript modules::turns storage
+infrastructure -> domain
+lib -> controller infrastructure runtime
+modules::bots -> domain infrastructure storage
+modules::chats -> domain infrastructure storage
+modules::prompts -> domain infrastructure storage
+modules::reviews -> domain infrastructure storage
+modules::rooms -> domain storage
+modules::settings -> domain storage
+modules::tasks -> domain infrastructure storage
+modules::transcript -> domain storage
+modules::turns -> domain infrastructure storage
+runtime -> controller domain infrastructure modules::prompts modules::rooms modules::tasks modules::transcript modules::turns storage
+storage -> domain

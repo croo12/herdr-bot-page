@@ -1,8 +1,7 @@
 use crate::{
     domain::{need, now},
     modules::transcript::update_entry,
-    storage::Repositories,
-    Engine,
+    storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
@@ -15,9 +14,9 @@ fn room(repos: &Repositories, chat_id: &str) -> Result<Value> {
     Ok(chat)
 }
 
-pub(crate) fn list(engine: &Engine, params: &Value) -> Result<Value> {
+pub(crate) fn list(store: &Store, params: &Value) -> Result<Value> {
     let chat_id = need(params, "chatId")?;
-    engine.tx(|repos, _| {
+    store.tx(|repos, _| {
         room(repos, chat_id)?;
         Ok(json!(repos.tasks.list(chat_id)?))
     })
@@ -72,13 +71,13 @@ pub(crate) fn release_removed_members(
     Ok(())
 }
 
-pub(crate) fn assign(engine: &Engine, params: &Value) -> Result<Value> {
+pub(crate) fn assign(store: &Store, params: &Value) -> Result<Value> {
     let room_id = need(params, "chatId")?;
     let entry_id = need(params, "entryId")?;
     let assignee = params
         .get("assigneeId")
         .ok_or_else(|| anyhow::anyhow!("invalid_args: missing assigneeId"))?;
-    engine.tx(|repos, events| {
+    store.tx(|repos, events| {
         let mut entry = repos.transcript.by_id(room_id, entry_id)?;
         let task = &mut entry["task"];
         if !task.is_object() {
@@ -102,12 +101,12 @@ pub(crate) fn assign(engine: &Engine, params: &Value) -> Result<Value> {
     })
 }
 
-pub(crate) fn track(engine: &Engine, params: &Value) -> Result<Value> {
+pub(crate) fn track(store: &Store, params: &Value) -> Result<Value> {
     let chat_id = need(params, "chatId")?;
     let entry_id = need(params, "entryId")?;
     let assignee = &params["assigneeId"];
     let criteria = need(params, "criteria")?.trim();
-    engine.tx(|repos, events| {
+    store.tx(|repos, events| {
         let room = room(repos, chat_id)?;
         let mut entry = repos.transcript.by_id(chat_id, entry_id)?;
         if entry["kind"] != "message" || entry["content"].as_str().unwrap_or("").trim().is_empty() {
@@ -127,7 +126,7 @@ pub(crate) fn track(engine: &Engine, params: &Value) -> Result<Value> {
     })
 }
 
-pub(crate) fn set_status(engine: &Engine, params: &Value) -> Result<Value> {
+pub(crate) fn set_status(store: &Store, params: &Value) -> Result<Value> {
     let chat_id = need(params, "chatId")?;
     let entry_id = need(params, "entryId")?;
     let status = need(params, "status")?;
@@ -135,7 +134,7 @@ pub(crate) fn set_status(engine: &Engine, params: &Value) -> Result<Value> {
     if !matches!(status, "open" | "in_progress" | "completed") {
         bail!("invalid_args: unknown task status");
     }
-    engine.tx(|repos, events| {
+    store.tx(|repos, events| {
         let mut entry = repos.transcript.by_id(chat_id, entry_id)?;
         if !entry["task"].is_object() {
             bail!("invalid_args: message has no task");

@@ -1,9 +1,11 @@
+mod queue;
+
+use queue::QueueItem;
+
 use crate::{
-    controller::ipc,
-    domain::Events,
-    infrastructure::{herdr::Herdr, request_log::RequestLog},
-    modules::turns::{QueueItem, Turn},
-    storage::{Database, Repositories},
+    controller::{ipc, Controller, Source},
+    infrastructure::{herdr::Herdr, request_log::RequestLog, AgentSessions},
+    storage::Store,
 };
 use anyhow::{Context, Result};
 use fs2::FileExt;
@@ -14,23 +16,16 @@ use std::{
     env,
     fs::{self, File},
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 pub struct Engine {
-    db: Database,
-    pub(crate) request_log: RequestLog,
-    pub(crate) herdr: Herdr,
+    store: Store,
+    request_log: RequestLog,
+    sessions: AgentSessions,
     _lock: File,
-    seq: AtomicU64,
-    emit: Box<dyn Fn(Value) + Send + Sync>,
-    pub(crate) roster: Mutex<()>,
-    pub(crate) active: Mutex<HashMap<String, Turn>>,
-    pub(crate) queues: Mutex<HashMap<String, VecDeque<QueueItem>>>,
+    queues: Mutex<HashMap<String, VecDeque<QueueItem>>>,
     pub home: PathBuf,
     pub user: String,
 }
@@ -65,51 +60,54 @@ impl Engine {
             .or_else(|_| env::var("USER"))
             .unwrap_or("user".into());
         let engine = Arc::new(Self {
-            db: Database::open(&home)?,
+            store: Store::open(&home, emit)?,
             request_log: RequestLog::new(&home),
-            herdr,
+            sessions: AgentSessions::new(herdr),
             home,
             user,
             _lock: lock,
-            seq: AtomicU64::new(0),
-            emit: Box::new(emit),
-            roster: Mutex::default(),
-            active: Mutex::default(),
             queues: Mutex::default(),
         });
-        ipc::listen(&engine)?;
+        ipc::listen(&engine.home, &engine, |host, method, params| {
+            host.call_from(Source::Ipc, method, params)
+        })?;
         let weak = Arc::downgrade(&engine);
         thread::spawn(move || {
             if let Some(engine) = weak.upgrade() {
-                let _ = engine.herdr.ensure();
+                let _ = engine.sessions.herdr.ensure();
             }
             while let Some(engine) = weak.upgrade() {
-                let _ = crate::modules::tasks::dispatch(&engine);
-                let _ = crate::modules::prompts::refresh(&engine);
+                let _ = engine.enqueue_runnable_tasks();
+                let _ = crate::modules::prompts::refresh(&engine.store, &engine.sessions);
                 drop(engine);
                 thread::sleep(Duration::from_secs(3));
             }
         });
         Ok(engine)
     }
-    pub(crate) fn tx<Output>(
-        &self,
-        work: impl FnOnce(&Repositories, &mut Events) -> Result<Output>,
-    ) -> Result<Output> {
-        self.db.transaction(work, |events| {
-            for (kind, payload) in events {
-                let seq = self.seq.fetch_add(1, Ordering::Relaxed) + 1;
-                (self.emit)(json!({"seq":seq,"type":kind,"payload":payload}));
-            }
-        })
+    pub fn call(self: &Arc<Self>, method: &str, params: Value) -> Result<Value> {
+        self.call_from(Source::Desktop, method, params)
     }
-    pub(crate) fn host_status(&self) -> Result<Value> {
-        self.tx(|repos, _| {
+
+    fn call_from(self: &Arc<Self>, source: Source, method: &str, params: Value) -> Result<Value> {
+        Controller {
+            store: &self.store,
+            sessions: &self.sessions,
+            user: &self.user,
+            request_log: &self.request_log,
+            enqueue_chat: &|chat_id, job| self.enqueue_chat(chat_id, job),
+            host_status: &|| self.host_status(),
+        }
+        .call_from(source, method, params)
+    }
+
+    fn host_status(&self) -> Result<Value> {
+        self.store.tx(|repos, _| {
             let chats = repos.chats.list()?;
             let bots = chats.iter().filter(|chat| chat["kind"] == "bot").count();
             let running: Vec<_> = self.queues.lock().unwrap().keys().cloned().collect();
             Ok(json!({
-                "home": self.home, "session": self.herdr.session, "bots": bots,
+                "home": self.home, "session": self.sessions.herdr.session, "bots": bots,
                 "rooms": chats.len() - bots, "runningChatIds": running
             }))
         })

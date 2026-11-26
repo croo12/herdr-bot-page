@@ -1,14 +1,56 @@
-use crate::{
-    domain::Events,
-    modules::{
-        chats::repository::Chats, prompts::repository::Prompts, reviews::repository::Reviews,
-        settings::repository::Settings, tasks::repository::Tasks,
-        transcript::repository::Transcript,
+mod chats;
+mod prompts;
+mod reviews;
+mod settings;
+mod tasks;
+mod transcript;
+
+use crate::domain::Events;
+use anyhow::Result;
+use chats::Chats;
+use prompts::Prompts;
+use reviews::Reviews;
+pub(crate) use reviews::{AssignedReview, UnassignedReview};
+use rusqlite::Connection;
+use serde_json::{json, Value};
+use settings::Settings;
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
     },
 };
-use anyhow::Result;
-use rusqlite::Connection;
-use std::{path::Path, sync::Mutex};
+use tasks::Tasks;
+use transcript::Transcript;
+
+pub(crate) struct Store {
+    db: Database,
+    sequence: AtomicU64,
+    emit: Box<dyn Fn(Value) + Send + Sync>,
+}
+
+impl Store {
+    pub(crate) fn open(home: &Path, emit: impl Fn(Value) + Send + Sync + 'static) -> Result<Self> {
+        Ok(Self {
+            db: Database::open(home)?,
+            sequence: AtomicU64::new(0),
+            emit: Box::new(emit),
+        })
+    }
+
+    pub(crate) fn tx<Output>(
+        &self,
+        work: impl FnOnce(&Repositories, &mut Events) -> Result<Output>,
+    ) -> Result<Output> {
+        self.db.transaction(work, |events| {
+            for (kind, payload) in events {
+                let seq = self.sequence.fetch_add(1, Ordering::Relaxed) + 1;
+                (self.emit)(json!({"seq":seq,"type":kind,"payload":payload}));
+            }
+        })
+    }
+}
 
 pub(crate) struct Repositories<'db> {
     pub chats: Chats<'db>,
@@ -18,9 +60,9 @@ pub(crate) struct Repositories<'db> {
     pub prompts: Prompts<'db>,
     pub reviews: Reviews<'db>,
 }
-pub(crate) struct Database(Mutex<Connection>);
+struct Database(Mutex<Connection>);
 impl Database {
-    pub(crate) fn open(home: &Path) -> Result<Self> {
+    fn open(home: &Path) -> Result<Self> {
         let connection = Connection::open(home.join("chat.sqlite3"))?;
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
     CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -41,7 +83,7 @@ impl Database {
     )?;
         Ok(Self(Mutex::new(connection)))
     }
-    pub(crate) fn transaction<Output>(
+    fn transaction<Output>(
         &self,
         work: impl FnOnce(&Repositories<'_>, &mut Events) -> Result<Output>,
         publish: impl FnOnce(Events),

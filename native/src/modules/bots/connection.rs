@@ -1,35 +1,40 @@
 use crate::{
     domain::{need, string_field},
+    infrastructure::{herdr::Herdr, AgentSessions},
     modules::{chats::change, transcript::update_entry},
-    Engine,
+    storage::Store,
 };
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 
-pub(crate) fn connect_bot(engine: &Engine, params: &Value) -> Result<Value> {
+pub(crate) fn connect_bot(
+    store: &Store,
+    sessions: &AgentSessions,
+    params: &Value,
+) -> Result<Value> {
     let bot_id = need(params, "botId")?;
-    let _roster = engine.roster.lock().unwrap();
-    if engine.active.lock().unwrap().contains_key(bot_id)
-        || engine.tx(|repos, _| repos.reviews.pending_for(bot_id))?
+    let _roster = sessions.roster.lock().unwrap();
+    if sessions.active.lock().unwrap().contains_key(bot_id)
+        || store.tx(|repos, _| repos.reviews.pending_for(bot_id))?
     {
         bail!("bot_not_ready: {bot_id} already has an active turn");
     }
-    connect_for_turn(engine, bot_id)
+    connect_for_turn(store, &sessions.herdr, bot_id)
 }
 
 /// Called under the roster lock, before the first submission of a new turn.
 /// An in-flight turn must keep waiting on the pane that received its prompt.
-pub(crate) fn connect_for_turn(engine: &Engine, bot_id: &str) -> Result<Value> {
-    let chat = engine.tx(|repos, _| repos.chats.get(bot_id))?;
+pub(crate) fn connect_for_turn(store: &Store, herdr: &Herdr, bot_id: &str) -> Result<Value> {
+    let chat = store.tx(|repos, _| repos.chats.get(bot_id))?;
     if chat["kind"] != "bot" {
         bail!("unknown_bot: {bot_id}");
     }
     let bot = &chat["bot"];
-    let agents = match engine.herdr.agents() {
+    let agents = match herdr.agents() {
         Ok(agents) => agents,
         Err(_) => {
-            engine.herdr.ensure()?;
-            engine.herdr.agents()?
+            herdr.ensure()?;
+            herdr.agents()?
         }
     };
     let mut named = agents.iter().filter(|agent| agent["name"] == bot_id);
@@ -42,18 +47,14 @@ pub(crate) fn connect_for_turn(engine: &Engine, bot_id: &str) -> Result<Value> {
             agent.clone()
         }
         None if bot["adopted"] == false => {
-            let started = engine
-                .herdr
+            let started = herdr
                 .launch(bot_id, bot)
                 .with_context(|| format!("bot_not_ready: could not reconnect {bot_id}"))?;
             // Startup can stop at a provider dialog before Herdr finishes naming the agent.
             if started["name"] == bot_id {
                 started
             } else {
-                engine
-                    .herdr
-                    .run(&["agent", "get", need(&started, "pane_id")?])?["agent"]
-                    .clone()
+                herdr.run(&["agent", "get", need(&started, "pane_id")?])?["agent"].clone()
             }
         }
         None => bail!("bot_not_ready: adopted agent {bot_id} is offline; reconnect it in Herdr"),
@@ -63,7 +64,7 @@ pub(crate) fn connect_for_turn(engine: &Engine, bot_id: &str) -> Result<Value> {
         bail!("bot_not_ready: agent identity changed for {bot_id}");
     }
     if existing.is_none() || bot["paneId"] != pane {
-        engine.tx(|repos, events| {
+        store.tx(|repos, events| {
             for mut row in repos.chats.list()? {
                 let owner = string_field(&row, "id");
                 if row["kind"] != "bot" || (owner != bot_id && row["bot"]["paneId"] != pane) {

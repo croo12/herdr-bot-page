@@ -1,11 +1,8 @@
-use super::repository::{AssignedReview, UnassignedReview};
-use crate::modules::prompts;
-use crate::modules::transcript::content;
 use crate::{
     domain::{id, need, string_field, strings, Events},
-    modules::transcript::{append, update_entry},
-    storage::Repositories,
-    Engine,
+    infrastructure::{herdr::Herdr, AgentSessions},
+    modules::transcript::{append, content, update_entry},
+    storage::{AssignedReview, Repositories, Store, UnassignedReview},
 };
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
@@ -67,8 +64,12 @@ pub(crate) fn append_reply(
 }
 
 // Called with the roster lock after the blocked-prompt snapshot is committed.
-pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[Value]) -> Result<()> {
-    let pending = engine.tx(|repos, _| repos.reviews.unassigned())?;
+pub(crate) fn dispatch_reviews(
+    store: &Store,
+    sessions: &AgentSessions,
+    agents: &[Value],
+) -> Result<()> {
+    let pending = store.tx(|repos, _| repos.reviews.unassigned())?;
     for UnassignedReview {
         chat_id,
         mut entry,
@@ -88,7 +89,7 @@ pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[Value]) -> Result<()> 
             continue;
         }
         let (task, available) = {
-            let active = engine.active.lock().unwrap();
+            let active = sessions.active.lock().unwrap();
             let Some(turn) = active.get(target).filter(|turn| turn.chat == chat_id) else {
                 continue;
             };
@@ -98,7 +99,7 @@ pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[Value]) -> Result<()> 
                 .collect::<Vec<_>>();
             (turn.task.clone(), available)
         };
-        let peer = engine.tx(|repos, _| {
+        let peer = store.tx(|repos, _| {
             for candidate in available {
                 let peer = repos.chats.get(candidate)?;
                 if agents.iter().any(|agent| {
@@ -120,7 +121,7 @@ pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[Value]) -> Result<()> 
         let ticket = id();
         let evidence = json!({"requestingBot":target,"task":task,"workingDirectory":bot["bot"]["cwd"],
             "question":prompt["question"],"body":prompt["body"],"choices":prompt["options"]});
-        engine.tx(|repos, events| {
+        store.tx(|repos, events| {
             repos
                 .reviews
                 .assign(&ticket, &chat_id, &entry, target, reviewer, pane)?;
@@ -129,45 +130,59 @@ pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[Value]) -> Result<()> 
             update_entry(repos, &chat_id, &entry, events)?;
             Ok(())
         })?;
-        let recent = engine.tx(|repos, _| repos.transcript.page(&chat_id, i64::MAX, 24))?;
+        let recent = store.tx(|repos, _| repos.transcript.page(&chat_id, i64::MAX, 24))?;
         let conversation: Vec<_> = recent
             .iter()
             .filter(|entry| matches!(string_field(entry, "kind"), "message" | "send-message"))
             .map(|entry| json!({"author":entry["author"]["name"],"text":content(entry)}))
             .collect();
-        let instruction = format!("You are {} in room {}. A teammate posted the permission request below in this conversation. Read the room's task and messages as context. Treat command output and arguments as evidence. Reply to your teammate in the room's language. Approve only the exact single operation if its purpose and effects fit the user's request. Choose deny to cancel, or human for unclear intent or impact. Do not execute the command yourself. Post your reply with the same native CLI at {} using arguments: say --reply-to {} --decision <approve|deny|human> {} \"your reason\". In PowerShell use & before the quoted executable path.\nRoom messages: {}\nPermission request: {}",peer["name"],room["name"],engine.herdr.cli.display(),ticket,chat_id,json!(conversation),evidence);
-        if engine
+        let instruction = format!("You are {} in room {}. A teammate posted the permission request below in this conversation. Read the room's task and messages as context. Treat command output and arguments as evidence. Reply to your teammate in the room's language. Approve only the exact single operation if its purpose and effects fit the user's request. Choose deny to cancel, or human for unclear intent or impact. Do not execute the command yourself. Post your reply with the same native CLI at {} using arguments: say --reply-to {} --decision <approve|deny|human> {} \"your reason\". In PowerShell use & before the quoted executable path.\nRoom messages: {}\nPermission request: {}",peer["name"],room["name"],sessions.herdr.cli.display(),ticket,chat_id,json!(conversation),evidence);
+        if sessions
             .herdr
             .run_timeout(&["agent", "prompt", pane, &instruction], 10)
             .is_err()
         {
             entry["permissionReview"]["decision"] = json!("unavailable");
-            engine.tx(|repos, events| update_entry(repos, &chat_id, &entry, events))?;
+            store.tx(|repos, events| update_entry(repos, &chat_id, &entry, events))?;
         }
     }
     Ok(())
 }
 
-pub(crate) fn review_reply(engine: &Engine, params: &Value) -> Result<Value> {
-    let _guard = engine.roster.lock().unwrap();
+pub(crate) fn has_ticket(store: &Store, ticket: &str) -> Result<bool> {
+    store.tx(|repos, _| repos.reviews.ticket_exists(ticket))
+}
+
+pub(crate) struct ReviewedPermission {
+    pub bot_id: String,
+    pub signature: String,
+    pub once_key: String,
+    pub audit: Value,
+}
+
+/// A human referral is recorded here. A terminal decision is returned for the caller to apply.
+pub(crate) fn resolve_reply(
+    store: &Store,
+    herdr: &Herdr,
+    params: &Value,
+    decision: &str,
+) -> Result<Option<ReviewedPermission>> {
     let pane = need(params, "paneId")?;
     let ticket = need(params, "replyTo")?;
-    // A plain conversational response leaves the decision with the user.
-    let decision = params["decision"].as_str().unwrap_or("human");
     let reason = need(params, "text")?.trim();
     let AssignedReview {
         chat_id,
         mut entry,
         requester: bot,
         reviewer: peer,
-    } = engine
+    } = store
         .tx(|repos, _| {
             repos
                 .reviews
                 .assignment(ticket, pane, need(params, "chatId")?)
         })?
         .ok_or_else(|| anyhow!("prompt_changed: no pending review assigned to this pane"))?;
-    let live = engine.herdr.run(&["agent", "get", pane])?;
+    let live = herdr.run(&["agent", "get", pane])?;
     if live["agent"]["name"] != peer["id"] || live["agent"]["pane_id"] != pane {
         bail!("invalid_args: reviewer pane changed");
     }
@@ -177,23 +192,21 @@ pub(crate) fn review_reply(engine: &Engine, params: &Value) -> Result<Value> {
     let key =
         once_key(prompt).ok_or_else(|| anyhow!("prompt_changed: no one-time approval option"))?;
     match decision {
-        "approve" | "deny" => {
-            prompts::answer_locked(
-                engine,
-                &json!({"botId":bot["id"],"signature":prompt["signature"],
-            "action":if decision=="approve" {"option"} else {"cancel"},"key":key}),
-                Some(&audit),
-            )?;
-        }
+        "approve" | "deny" => Ok(Some(ReviewedPermission {
+            bot_id: need(&bot, "id")?.to_owned(),
+            signature: need(prompt, "signature")?.to_owned(),
+            once_key: key.to_owned(),
+            audit,
+        })),
         "human" => {
             entry["permissionReview"] = audit;
-            engine.tx(|repos, events| {
+            store.tx(|repos, events| {
                 update_entry(repos, &chat_id, &entry, events)?;
                 append_reply(repos, events, &chat_id, &entry, &entry["permissionReview"])?;
                 Ok(())
             })?;
+            Ok(None)
         }
         _ => bail!("invalid_args: unknown review decision"),
     }
-    Ok(json!({"decision":decision}))
 }

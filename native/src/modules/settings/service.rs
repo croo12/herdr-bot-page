@@ -1,4 +1,7 @@
-use crate::{domain::patch, storage::Repositories, Engine};
+use crate::{
+    domain::patch,
+    storage::{Repositories, Store},
+};
 use anyhow::Result;
 use serde_json::{json, Value};
 
@@ -13,11 +16,11 @@ fn load(repos: &Repositories) -> Result<Value> {
     }))
 }
 
-pub(crate) fn get_settings(engine: &Engine) -> Result<Value> {
-    engine.tx(|repos, _| load(repos))
+pub(crate) fn get_settings(store: &Store) -> Result<Value> {
+    store.tx(|repos, _| load(repos))
 }
-pub(crate) fn update_settings(engine: &Engine, params: &Value) -> Result<Value> {
-    engine.tx(|repos, _| {
+pub(crate) fn update_settings(store: &Store, params: &Value) -> Result<Value> {
+    store.tx(|repos, _| {
         let mut value = load(repos)?;
         patch(
             &mut value,
@@ -33,8 +36,8 @@ pub(crate) fn update_settings(engine: &Engine, params: &Value) -> Result<Value> 
         Ok(value)
     })
 }
-pub(crate) fn bot_defaults(engine: &Engine) -> Result<Value> {
-    engine.tx(|repos, _| defaults(repos))
+pub(crate) fn bot_defaults(store: &Store) -> Result<Value> {
+    store.tx(|repos, _| defaults(repos))
 }
 pub(crate) fn defaults(repos: &Repositories) -> Result<Value> {
     let settings = load(repos)?;

@@ -1,19 +1,34 @@
-use crate::modules::chats::new_chat;
 use crate::{
     domain::{id, need, strings, Events},
-    modules::chats::change,
-    storage::Repositories,
-    Engine,
+    modules::chats::{change, new_chat},
+    storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
+use std::sync::Mutex;
 
-pub(crate) fn create_room(engine: &Engine, params: &Value) -> Result<Value> {
-    engine.tx(|repos, events| update_room(repos, events, true, params))
+pub(crate) fn set_activity(store: &Store, target: &str, running: bool) {
+    let _ = store.tx(|repos, events| {
+        let mut row = repos.chats.get(target)?;
+        if row["kind"] == "room" && row["isRunning"] != running {
+            row["isRunning"] = running.into();
+            row["currentActivity"] = if running {
+                json!({"verb":"working"})
+            } else {
+                Value::Null
+            };
+            change(repos, &row, events)?;
+        }
+        Ok(())
+    });
 }
-pub(crate) fn set_members(engine: &Engine, params: &Value) -> Result<Value> {
-    let _guard = engine.roster.lock().unwrap();
-    engine.tx(|repos, events| update_room(repos, events, false, params))
+
+pub(crate) fn create_room(store: &Store, params: &Value) -> Result<Value> {
+    store.tx(|repos, events| update_room(repos, events, true, params))
+}
+pub(crate) fn set_members(store: &Store, roster: &Mutex<()>, params: &Value) -> Result<Value> {
+    let _guard = roster.lock().unwrap();
+    store.tx(|repos, events| update_room(repos, events, false, params))
 }
 fn update_room(
     repos: &Repositories,

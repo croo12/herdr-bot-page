@@ -62,6 +62,11 @@ fn main() {
                 invoke
                     .args(report.split_whitespace().take(4))
                     .args(["continue", "Build fixed; verify on Windows"]);
+            } else if prompt.contains("Current request:\nconfirm queue order\n")
+                && !prompt.contains("queue order confirmed")
+            {
+                assert!(home.join("reply-posted").exists() && !stage.exists());
+                invoke.args(["say", target, "queue order confirmed"]);
             } else if prompt.contains("native-reply") && target.starts_with("room-") {
                 invoke.args(["pass", target]);
             } else {

@@ -45,7 +45,13 @@ fn only_assigned_peer_can_decide_the_current_request() {
         .as_str()
         .unwrap()
         .to_string();
+    fs::write(home.join("room"), &room).unwrap();
     for decision in ["approve", "deny", "human"] {
+        let reason = if decision == "deny" {
+            "Use the test worktree"
+        } else {
+            "Test scope checked"
+        };
         engine
             .call(
                 "message.send",
@@ -67,7 +73,7 @@ fn only_assigned_peer_can_decide_the_current_request() {
                     "--decision",
                     decision,
                     &room,
-                    "Test scope checked",
+                    reason,
                 ])
                 .output()
                 .unwrap()
@@ -78,6 +84,9 @@ fn only_assigned_peer_can_decide_the_current_request() {
             assert!(!decide("p2").status.success());
             assert!(!home.join("key").exists());
             fs::write(home.join("blocked"), "--lib").unwrap();
+        }
+        if decision == "deny" {
+            fs::write(home.join("reviewer-finishing"), "").unwrap();
         }
         let result = decide("p2");
         assert!(
@@ -103,12 +112,12 @@ fn only_assigned_peer_can_decide_the_current_request() {
             .filter(|entry| entry["replyTo"] == card["id"])
             .collect();
         assert_eq!(replies.len(), 1);
-        assert_eq!(replies[0]["message"]["content"], "Test scope checked");
+        assert_eq!(replies[0]["message"]["content"], reason);
         assert_eq!(replies[0]["author"]["id"], "peer");
         assert_eq!(replies[0]["permissionDecision"], decision);
         assert_eq!(card["permissionReview"]["decision"], decision);
         assert_eq!(card["permissionReview"]["reviewerId"], "peer");
-        assert_eq!(card["permissionReview"]["reason"], "Test scope checked");
+        assert_eq!(card["permissionReview"]["reason"], reason);
         if decision == "human" {
             assert_eq!(card["status"], "pending");
             assert!(!home.join("key").exists());
@@ -123,6 +132,30 @@ fn only_assigned_peer_can_decide_the_current_request() {
                     "esc"
                 }
             );
+        }
+        if decision == "deny" || decision == "human" {
+            wait(|| engine.call("host.status", json!({})).unwrap()["runningChatIds"] == json!([]));
+            let page = engine
+                .call("transcript.page", json!({"chatId":room}))
+                .unwrap();
+            let entries = page["entries"].as_array().unwrap();
+            let mut after_denial = entries
+                .iter()
+                .filter(|entry| entry["seq"].as_i64().unwrap() > card["seq"].as_i64().unwrap());
+            assert_eq!(
+                after_denial
+                    .clone()
+                    .filter(|entry| entry["author"]["id"] == "worker"
+                        && entry["message"]["content"]
+                            == "I will request permission for the corrected worktree.")
+                    .count(),
+                1
+            );
+            if decision == "deny" {
+                assert!(!after_denial.any(|entry| entry["kind"] == "notice"));
+                assert!(home.join("denial-follow-up").exists());
+                fs::remove_file(home.join("reviewer-finishing")).unwrap();
+            }
         }
         fs::remove_file(home.join("key")).unwrap();
         // Let the mirror observe the end of this request before repeating it.

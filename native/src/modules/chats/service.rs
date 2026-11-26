@@ -1,7 +1,6 @@
 use crate::{
     domain::{need, now, patch, string_field, Events},
-    storage::Repositories,
-    Engine,
+    storage::{Repositories, Store},
 };
 use anyhow::Result;
 use serde_json::{json, Value};
@@ -14,8 +13,8 @@ pub(crate) enum ChatEdit {
     Read,
     Unread,
 }
-pub(crate) fn find_chats(engine: &Engine, query: &str) -> Result<Value> {
-    engine.tx(|repos, _| {
+pub(crate) fn find_chats(store: &Store, query: &str) -> Result<Value> {
+    store.tx(|repos, _| {
         let query = query.to_lowercase();
         let chats = repos
             .chats
@@ -33,8 +32,8 @@ pub(crate) fn find_chats(engine: &Engine, query: &str) -> Result<Value> {
         Ok(json!(chats))
     })
 }
-pub(crate) fn edit_chat(engine: &Engine, edit: ChatEdit, params: &Value) -> Result<Value> {
-    engine.tx(|repos, events| {
+pub(crate) fn edit_chat(store: &Store, edit: ChatEdit, params: &Value) -> Result<Value> {
+    store.tx(|repos, events| {
         let chat_id = string_field(params, "chatId");
         let mut row = repos.chats.get(chat_id)?;
         match edit {

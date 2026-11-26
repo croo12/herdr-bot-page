@@ -1,4 +1,4 @@
-use crate::{wire_error, Engine};
+use super::wire_error;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::{
@@ -13,28 +13,38 @@ use std::{
 
 const ENDPOINT: &str = "native-host.json";
 const REQUEST_LIMIT: u64 = 4 * 1024 * 1024;
-pub(crate) fn listen(engine: &Arc<Engine>) -> Result<()> {
+pub(crate) fn listen<Host: Send + Sync + 'static>(
+    home: &Path,
+    host: &Arc<Host>,
+    handle: fn(&Arc<Host>, &str, Value) -> Result<Value>,
+) -> Result<()> {
     let socket = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let secret = uuid::Uuid::new_v4().to_string();
-    let mut file = tempfile::NamedTempFile::new_in(&engine.home)?;
+    let mut file = tempfile::NamedTempFile::new_in(home)?;
     serde_json::to_writer(
         &mut file,
         &json!({"port":socket.local_addr()?.port(),"token":secret}),
     )?;
-    file.persist(engine.home.join(ENDPOINT))?;
-    let weak = Arc::downgrade(engine);
+    file.persist(home.join(ENDPOINT))?;
+    let weak = Arc::downgrade(host);
     thread::spawn(move || {
         for client in socket.incoming().flatten() {
-            let Some(engine) = weak.upgrade() else { break };
+            let Some(host) = weak.upgrade() else { break };
             let secret = secret.clone();
             thread::spawn(move || {
-                let _ = serve_client(client, &engine, &secret);
+                let _ = serve_client(client, &secret, |method, params| {
+                    handle(&host, method, params)
+                });
             });
         }
     });
     Ok(())
 }
-fn serve_client(mut stream: TcpStream, engine: &Arc<Engine>, secret: &str) -> Result<()> {
+fn serve_client(
+    mut stream: TcpStream,
+    secret: &str,
+    handle: impl FnOnce(&str, Value) -> Result<Value>,
+) -> Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(10)))?;
     let mut line = String::new();
@@ -49,7 +59,7 @@ fn serve_client(mut stream: TcpStream, engine: &Arc<Engine>, secret: &str) -> Re
         bail!("invalid token")
     }
     let method = request["method"].as_str().unwrap_or_default();
-    let res = engine.call_from(super::Source::Ipc, method, request["params"].clone());
+    let res = handle(method, request["params"].clone());
     let response = match res {
         Ok(value) => json!({"value":value}),
         Err(error) => json!({"error":wire_error(&error)}),

@@ -1,12 +1,14 @@
-use crate::modules::{chats, reviews};
 use crate::{
-    domain::{need, strings},
-    modules::{chats::ChatEdit, transcript::append, turns::Job},
-    Engine,
+    domain::{need, strings, ChatJob},
+    infrastructure::AgentSessions,
+    modules::{
+        chats::{self, ChatEdit},
+        transcript::{append, notice},
+    },
+    storage::Store,
 };
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
-use std::sync::Arc;
 #[derive(PartialEq, Eq)]
 pub(crate) enum AgentAction {
     Say,
@@ -15,25 +17,15 @@ pub(crate) enum AgentAction {
     Profile,
     UpdateProfile,
 }
-pub(crate) fn say(engine: &Arc<Engine>, params: Value) -> Result<Value> {
-    if !params["replyTo"].is_null() {
-        let assigned =
-            engine.tx(|repos, _| repos.reviews.ticket_exists(need(&params, "replyTo")?))?;
-        if assigned || !params["decision"].is_null() {
-            return reviews::review_reply(engine, &params);
-        }
-    } else if !params["decision"].is_null() {
-        bail!("invalid_args: reply to a permission request")
-    }
-    agent_action(engine, AgentAction::Say, params)
-}
 pub(crate) fn agent_action(
-    engine: &Arc<Engine>,
+    store: &Store,
+    sessions: &AgentSessions,
+    enqueue_chat: &dyn Fn(&str, ChatJob),
     action: AgentAction,
     params: Value,
 ) -> Result<Value> {
     let pane = need(&params, "paneId")?;
-    let bot = engine
+    let bot = store
         .tx(|repos, _| repos.chats.list())?
         .into_iter()
         .find(|chat| chat["bot"]["paneId"] == pane)
@@ -45,11 +37,11 @@ pub(crate) fn agent_action(
     if action == AgentAction::UpdateProfile {
         let mut patch = params;
         patch["chatId"] = bot_id.into();
-        return chats::edit_chat(engine, ChatEdit::Profile, &patch);
+        return chats::edit_chat(store, ChatEdit::Profile, &patch);
     }
     let target = need(&params, "chatId")?;
-    let target_chat = engine.tx(|repos, _| repos.chats.get(target))?;
-    let mut active = engine.active.lock().unwrap();
+    let target_chat = store.tx(|repos, _| repos.chats.get(target))?;
+    let mut active = sessions.active.lock().unwrap();
     let turn = active
         .get_mut(bot_id)
         .ok_or_else(|| anyhow!("bot_not_ready: no open turn for {bot_id}"))?;
@@ -75,7 +67,7 @@ pub(crate) fn agent_action(
         return Ok(json!({"passed":true}));
     }
     let text = need(&params, "text")?;
-    let posted_entry = engine.tx(|repos, events| {
+    let posted_entry = store.tx(|repos, events| {
         let mut entry = json!({"kind":"send-message","message":{"type":"text","content":text},"author":{"id":bot_id,"name":bot["name"]}});
         if let Some(parent) = params["replyTo"].as_str() {
             if !repos.transcript.contains(target, parent)? {
@@ -91,15 +83,14 @@ pub(crate) fn agent_action(
         let depth = turn.depth + 1;
         let from = turn.chat.clone();
         drop(active);
-        super::service::notice(
-            engine,
+        notice(
+            store,
             &from,
             &format!("{bot_id} sent a message to {target}."),
         );
-        super::service::enqueue(
-            engine,
+        enqueue_chat(
             target,
-            Job {
+            ChatJob {
                 seed: text.into(),
                 depth,
                 exclude: Some(bot_id.into()),

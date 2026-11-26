@@ -1,17 +1,24 @@
-use crate::modules::transcript::content;
-use crate::modules::turns;
 use crate::{
-    domain::{id, need, now, patch, string_field, strings, Events},
-    modules::{chats::change, turns::Job},
-    storage::Repositories,
-    Engine,
+    domain::{id, need, now, patch, string_field, strings, ChatJob, Events},
+    modules::{chats::change, transcript::content},
+    storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
-use std::sync::Arc;
-pub(crate) fn transcript_page(engine: &Engine, params: &Value) -> Result<Value> {
+pub(crate) fn notice(store: &Store, target: &str, text: &str) {
+    let _ = store.tx(|repos, events| {
+        append(
+            repos,
+            target,
+            json!({"kind":"notice","content":text}),
+            events,
+        )
+    });
+}
+
+pub(crate) fn transcript_page(store: &Store, params: &Value) -> Result<Value> {
     let chat_id = string_field(params, "chatId");
-    engine.tx(|repos, _| {
+    store.tx(|repos, _| {
         repos.chats.get(chat_id)?;
         let limit = params["limit"].as_i64().unwrap_or(200).clamp(1, 1000);
         let mut rows = repos.transcript.page(
@@ -28,12 +35,12 @@ pub(crate) fn transcript_page(engine: &Engine, params: &Value) -> Result<Value> 
         Ok(result)
     })
 }
-pub(crate) fn transcript_thread(engine: &Engine, params: &Value) -> Result<Value> {
-    engine.tx(|repos, _| Ok(json!({"entries":repos.transcript.thread(string_field(params,"chatId"),need(params,"rootId")?)?})))
+pub(crate) fn transcript_thread(store: &Store, params: &Value) -> Result<Value> {
+    store.tx(|repos, _| Ok(json!({"entries":repos.transcript.thread(string_field(params,"chatId"),need(params,"rootId")?)?})))
 }
-pub(crate) fn react(engine: &Engine, params: &Value) -> Result<Value> {
+pub(crate) fn react(store: &Store, params: &Value) -> Result<Value> {
     let chat_id = string_field(params, "chatId");
-    engine.tx(|repos, events| {
+    store.tx(|repos, events| {
         let mut entry = repos.transcript.by_id(chat_id, need(params, "entryId")?)?;
         let mut reactions = entry["reactions"].as_array().cloned().unwrap_or_default();
         let reaction = json!({"by":"me","emoji":need(params,"emoji")?});
@@ -47,8 +54,8 @@ pub(crate) fn react(engine: &Engine, params: &Value) -> Result<Value> {
         Ok(json!({"entry":entry}))
     })
 }
-pub(crate) fn search_messages(engine: &Engine, query: &str) -> Result<Value> {
-    engine.tx(|repos, _| {
+pub(crate) fn search_messages(store: &Store, query: &str) -> Result<Value> {
+    store.tx(|repos, _| {
         let query = query.trim().to_lowercase();
         let mut hits = vec![];
         if query.is_empty() {
@@ -69,7 +76,12 @@ pub(crate) fn search_messages(engine: &Engine, query: &str) -> Result<Value> {
         Ok(json!(hits))
     })
 }
-pub(crate) fn send(engine: &Arc<Engine>, params: &Value) -> Result<Value> {
+pub(crate) fn send(
+    store: &Store,
+    user: &str,
+    enqueue_chat: &dyn Fn(&str, ChatJob),
+    params: &Value,
+) -> Result<Value> {
     let chat_id = need(params, "chatId")?;
     let mut text = string_field(params, "text").to_owned();
     let paths = strings(&params["attachmentPaths"]);
@@ -84,24 +96,23 @@ pub(crate) fn send(engine: &Arc<Engine>, params: &Value) -> Result<Value> {
     if text.trim().is_empty() {
         bail!("invalid_args: message is empty")
     }
-    let (entry, new) = engine.tx(|repos, events| {
+    let (entry, new) = store.tx(|repos, events| {
         if let Some(nonce) = params["clientNonce"].as_str() {
             if let Some(row) = repos.transcript.by_nonce(chat_id, nonce)? {
                 return Ok((row, false));
             }
         }
         let mut entry = json!({
-            "kind": "message", "role": "user", "author": {"id": "user", "name": engine.user},
+            "kind": "message", "role": "user", "author": {"id": "user", "name": user},
             "content": text, "isStreaming": false
         });
         patch(&mut entry, params, &["clientNonce", "replyTo", "richText"]);
         Ok((append(repos, chat_id, entry, events)?, true))
     })?;
     if new {
-        turns::enqueue(
-            engine,
+        enqueue_chat(
             chat_id,
-            Job {
+            ChatJob {
                 seed: text,
                 depth: 0,
                 exclude: None,

@@ -1,4 +1,3 @@
-pub(crate) mod repository;
 mod screen;
 mod service;
 

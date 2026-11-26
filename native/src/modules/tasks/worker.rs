@@ -1,18 +1,15 @@
 use super::execution::save;
 use crate::{
-    domain::{id, need, string_field, strings},
-    modules::turns::{enqueue_item, run_or_resume_prompt, QueueItem, Turn},
-    Engine,
+    domain::{id, need, string_field, strings, Turn},
+    infrastructure::{herdr::Herdr, AgentSessions},
+    modules::turns::run_or_resume_prompt,
+    storage::Store,
 };
 use anyhow::{bail, Result};
 use serde_json::Value;
-use std::sync::Arc;
 
-pub(crate) fn dispatch(engine: &Arc<Engine>) -> Result<()> {
-    for (room, entry_id) in engine.tx(|repos, _| repos.tasks.runnable())? {
-        enqueue_item(engine, &room, QueueItem::Task(entry_id));
-    }
-    Ok(())
+pub(crate) fn runnable(store: &Store) -> Result<Vec<(String, String)>> {
+    store.tx(|repos, _| repos.tasks.runnable())
 }
 
 struct Step {
@@ -22,11 +19,11 @@ struct Step {
     prompt: Option<String>,
 }
 
-fn instructions(engine: &Engine, room: &str, entry: &Value, attempt: &str) -> Result<String> {
+fn instructions(herdr: &Herdr, room: &str, entry: &Value, attempt: &str) -> Result<String> {
     let task = &entry["task"];
     let bot = need(task, "assigneeId")?;
     let entry_id = need(entry, "id")?;
-    let cli = engine.herdr.cli.to_string_lossy().replace('\\', "/");
+    let cli = herdr.cli.to_string_lossy().replace('\\', "/");
     Ok(format!("You are {bot} in herdr-bot chat {room}. Work on one concrete step toward the goal.
 Goal: {}
 Completion criteria: {}
@@ -42,9 +39,14 @@ Your report is posted as a reply to the original message.",
 
 // The room queue serializes execution with normal conversation. The roster lock reserves
 // this bot across rooms and permission reviews. Never hold a database transaction during I/O.
-fn prepare(engine: &Engine, room: &str, entry_id: &str) -> Result<Option<Step>> {
-    let _roster = engine.roster.lock().unwrap();
-    let entry = engine.tx(|repos, _| repos.transcript.by_id(room, entry_id))?;
+fn prepare(
+    store: &Store,
+    sessions: &AgentSessions,
+    room: &str,
+    entry_id: &str,
+) -> Result<Option<Step>> {
+    let _roster = sessions.roster.lock().unwrap();
+    let entry = store.tx(|repos, _| repos.transcript.by_id(room, entry_id))?;
     let task = &entry["task"];
     let execution = &task["execution"];
     let resume = match execution["state"].as_str() {
@@ -53,10 +55,10 @@ fn prepare(engine: &Engine, room: &str, entry_id: &str) -> Result<Option<Step>> 
         _ => return Ok(None),
     };
     let bot = need(task, "assigneeId")?;
-    if engine.active.lock().unwrap().contains_key(bot) {
+    if sessions.active.lock().unwrap().contains_key(bot) {
         return Ok(None);
     }
-    let (member, pending) = engine.tx(|repos, _| {
+    let (member, pending) = store.tx(|repos, _| {
         Ok((
             strings(&repos.chats.get(room)?["memberIds"])
                 .iter()
@@ -73,17 +75,17 @@ fn prepare(engine: &Engine, room: &str, entry_id: &str) -> Result<Option<Step>> 
         }
         let live = if resume {
             let pane = need(execution, "paneId")?;
-            let profile = engine.tx(|repos, _| repos.chats.get(bot))?;
+            let profile = store.tx(|repos, _| repos.chats.get(bot))?;
             if profile["bot"]["paneId"] != pane {
                 bail!("The assigned pane changed.");
             }
-            let live = engine.herdr.run(&["agent", "get", pane])?;
+            let live = sessions.herdr.run(&["agent", "get", pane])?;
             if live["agent"]["name"] != bot || live["agent"]["pane_id"] != pane {
                 bail!("The assigned pane changed.");
             }
             live["agent"].clone()
         } else {
-            crate::modules::bots::connect_for_turn(engine, bot)?
+            crate::modules::bots::connect_for_turn(store, &sessions.herdr, bot)?
         };
         let pane = need(&live, "pane_id")?;
         match string_field(&live, "agent_status") {
@@ -94,7 +96,7 @@ fn prepare(engine: &Engine, room: &str, entry_id: &str) -> Result<Option<Step>> 
         }
         Ok(Some(pane.into()))
     })();
-    let step = engine.tx(|repos, events| {
+    let step = store.tx(|repos, events| {
         let mut current = repos.transcript.by_id(room, entry_id)?;
         if current["task"]["execution"]["version"] != execution["version"] {
             return Ok(None);
@@ -113,7 +115,7 @@ fn prepare(engine: &Engine, room: &str, entry_id: &str) -> Result<Option<Step>> 
             (need(execution, "attemptId")?.to_owned(), None)
         } else {
             let attempt = id();
-            let prompt = instructions(engine, room, &current, &attempt)?;
+            let prompt = instructions(&sessions.herdr, room, &current, &attempt)?;
             current["task"]["execution"]["state"] = "running".into();
             current["task"]["execution"]["paneId"] = pane.clone().into();
             current["task"]["execution"]["attemptId"] = attempt.clone().into();
@@ -133,7 +135,7 @@ fn prepare(engine: &Engine, room: &str, entry_id: &str) -> Result<Option<Step>> 
             need(&entry, "content")?,
             need(task, "criteria")?
         );
-        engine
+        sessions
             .active
             .lock()
             .unwrap()
@@ -142,13 +144,23 @@ fn prepare(engine: &Engine, room: &str, entry_id: &str) -> Result<Option<Step>> 
     Ok(step)
 }
 
-pub(crate) fn execute(engine: &Engine, room: &str, entry_id: &str) -> Result<()> {
-    let Some(step) = prepare(engine, room, entry_id)? else {
+pub(crate) fn execute(
+    store: &Store,
+    sessions: &AgentSessions,
+    room: &str,
+    entry_id: &str,
+) -> Result<()> {
+    let Some(step) = prepare(store, sessions, room, entry_id)? else {
         return Ok(());
     };
-    let result = run_or_resume_prompt(engine, &step.bot, &step.pane, step.prompt.as_deref());
-    engine.active.lock().unwrap().remove(&step.bot);
-    engine.tx(|repos, events| {
+    let result = run_or_resume_prompt(
+        &sessions.herdr,
+        &step.bot,
+        &step.pane,
+        step.prompt.as_deref(),
+    );
+    sessions.active.lock().unwrap().remove(&step.bot);
+    store.tx(|repos, events| {
         let mut entry = repos.transcript.by_id(room, entry_id)?;
         let execution = &mut entry["task"]["execution"];
         if execution["state"] == "running" && execution["attemptId"] == step.attempt {

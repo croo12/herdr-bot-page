@@ -1,8 +1,7 @@
 use crate::{
     domain::{id, need, now, strings, Events},
     modules::transcript::{append, update_entry},
-    storage::Repositories,
-    Engine,
+    storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
@@ -19,10 +18,10 @@ pub(super) fn save(
     update_entry(repos, room, entry, events)
 }
 
-pub(crate) fn control(engine: &Engine, params: &Value, pause: bool) -> Result<Value> {
+pub(crate) fn control(store: &Store, params: &Value, pause: bool) -> Result<Value> {
     let room = need(params, "chatId")?;
     let entry_id = need(params, "entryId")?;
-    engine.tx(|repos, events| {
+    store.tx(|repos, events| {
         let mut entry = repos.transcript.by_id(room, entry_id)?;
         let task = &mut entry["task"];
         if !task.is_object() || task["status"] == "completed" {
@@ -63,14 +62,14 @@ pub(crate) fn control(engine: &Engine, params: &Value, pause: bool) -> Result<Va
     })
 }
 
-pub(crate) fn report(engine: &Engine, params: &Value) -> Result<Value> {
+pub(crate) fn report(store: &Store, params: &Value) -> Result<Value> {
     let room = need(params, "chatId")?;
     let entry_id = need(params, "entryId")?;
     let attempt = need(params, "attemptId")?;
     let pane = need(params, "paneId")?;
     let outcome = need(params, "outcome")?;
     let summary = need(params, "summary")?.trim();
-    engine.tx(|repos, events| {
+    store.tx(|repos, events| {
         let mut entry = repos.transcript.by_id(room, entry_id)?;
         let task = &mut entry["task"];
         let assignee = need(task, "assigneeId")?.to_owned();

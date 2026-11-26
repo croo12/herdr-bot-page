@@ -282,6 +282,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "serde_json",
+ "syn",
  "tempfile",
  "uuid",
  "wait-timeout",

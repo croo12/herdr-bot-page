@@ -1,4 +1,5 @@
-pub(crate) mod repository;
 mod service;
 
-pub(crate) use service::{append_reply, dispatch_reviews, review_reply, revoke_removed_members};
+pub(crate) use service::{
+    append_reply, dispatch_reviews, has_ticket, resolve_reply, revoke_removed_members,
+};

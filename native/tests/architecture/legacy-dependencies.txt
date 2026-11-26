@@ -1,0 +1,8 @@
+modules::bots -> modules::chats modules::settings modules::transcript
+modules::chats -> modules::reviews modules::tasks
+modules::prompts -> modules::chats modules::reviews modules::transcript
+modules::reviews -> modules::transcript
+modules::rooms -> modules::chats modules::reviews modules::tasks
+modules::tasks -> modules::bots modules::transcript modules::turns
+modules::transcript -> modules::chats
+modules::turns -> modules::bots modules::chats modules::transcript
