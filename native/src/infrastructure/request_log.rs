@@ -50,7 +50,10 @@ impl RequestLog {
     }
 
     fn append(&self, line: &[u8]) -> io::Result<()> {
-        let _guard = self.writer.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self
+            .writer
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         match fs::metadata(&self.path) {
             Ok(info) if info.len().saturating_add(line.len() as u64) > MAX_BYTES => {
                 fs::rename(&self.path, self.path.with_extension("1.jsonl"))?;

@@ -1,14 +1,14 @@
-use crate::domain::{now, patch, s};
-use serde_json::{json, Value as V};
-pub(crate) fn new_chat(id: &str, kind: &str, p: &V) -> V {
-    let t = now();
-    let mut v = json!({"id":id,"kind":kind,"name":s(p,"name"),"description":"","title":"","avatarShape":null,"avatarColor":null,
-        "createdAt":t,"updatedAt":t,"isRunning":false,"currentActivity":null,"lastMessagePreview":null,"lastMessageId":null,
-        "hasUnread":false,"unreadCount":0,"lastViewedAt":0,"lastActivityAt":t,"lastReadSeq":0,"lastIncomingSeq":0,"lastMessageAt":0,
+use crate::domain::{now, patch, string_field};
+use serde_json::{json, Value};
+pub(crate) fn new_chat(id: &str, kind: &str, params: &Value) -> Value {
+    let timestamp = now();
+    let mut chat = json!({"id":id,"kind":kind,"name":string_field(params,"name"),"description":"","title":"","avatarShape":null,"avatarColor":null,
+        "createdAt":timestamp,"updatedAt":timestamp,"isRunning":false,"currentActivity":null,"lastMessagePreview":null,"lastMessageId":null,
+        "hasUnread":false,"unreadCount":0,"lastViewedAt":0,"lastActivityAt":timestamp,"lastReadSeq":0,"lastIncomingSeq":0,"lastMessageAt":0,
         "awaitingUserResponse":null,"notifyOnUpdatesEnabled":true,"isHiddenFromSidebar":false,"isGroup":kind=="room","memberIds":[],"bot":null});
     patch(
-        &mut v,
-        p,
+        &mut chat,
+        params,
         &[
             "description",
             "title",
@@ -17,5 +17,5 @@ pub(crate) fn new_chat(id: &str, kind: &str, p: &V) -> V {
             "memberIds",
         ],
     );
-    v
+    chat
 }

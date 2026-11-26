@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use fs2::FileExt;
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -27,7 +27,7 @@ pub struct Engine {
     pub(crate) herdr: Herdr,
     _lock: File,
     seq: AtomicU64,
-    emit: Box<dyn Fn(V) + Send + Sync>,
+    emit: Box<dyn Fn(Value) + Send + Sync>,
     pub(crate) roster: Mutex<()>,
     pub(crate) active: Mutex<HashMap<String, Turn>>,
     pub(crate) queues: Mutex<HashMap<String, VecDeque<Job>>>,
@@ -38,7 +38,7 @@ impl Engine {
     pub fn start(
         home: PathBuf,
         cli: &Path,
-        emit: impl Fn(V) + Send + Sync + 'static,
+        emit: impl Fn(Value) + Send + Sync + 'static,
     ) -> Result<Arc<Self>> {
         fs::create_dir_all(&home)?;
         let lock = File::options()
@@ -80,21 +80,21 @@ impl Engine {
         ipc::listen(&engine)?;
         let weak = Arc::downgrade(&engine);
         thread::spawn(move || {
-            if let Some(e) = weak.upgrade() {
-                let _ = e.herdr.ensure();
+            if let Some(engine) = weak.upgrade() {
+                let _ = engine.herdr.ensure();
             }
-            while let Some(e) = weak.upgrade() {
-                let _ = crate::modules::prompts::refresh(&e);
-                drop(e);
+            while let Some(engine) = weak.upgrade() {
+                let _ = crate::modules::prompts::refresh(&engine);
+                drop(engine);
                 thread::sleep(Duration::from_secs(3));
             }
         });
         Ok(engine)
     }
-    pub(crate) fn tx<T>(
+    pub(crate) fn tx<Output>(
         &self,
-        work: impl FnOnce(&Repositories, &mut Events) -> Result<T>,
-    ) -> Result<T> {
+        work: impl FnOnce(&Repositories, &mut Events) -> Result<Output>,
+    ) -> Result<Output> {
         self.db.transaction(work, |events| {
             for (kind, payload) in events {
                 let seq = self.seq.fetch_add(1, Ordering::Relaxed) + 1;
@@ -102,7 +102,7 @@ impl Engine {
             }
         })
     }
-    pub(crate) fn host_status(&self) -> Result<V> {
+    pub(crate) fn host_status(&self) -> Result<Value> {
         self.tx(|repos, _| {
             let chats = repos.chats.list()?;
             let bots = chats.iter().filter(|chat| chat["kind"] == "bot").count();
@@ -114,6 +114,9 @@ impl Engine {
         })
     }
 }
-fn same_file_contents(a: &Path, b: &Path) -> Result<bool> {
-    Ok(fs::metadata(a)?.len() == fs::metadata(b)?.len() && fs::read(a)? == fs::read(b)?)
+fn same_file_contents(source: &Path, destination: &Path) -> Result<bool> {
+    Ok(
+        fs::metadata(source)?.len() == fs::metadata(destination)?.len()
+            && fs::read(source)? == fs::read(destination)?,
+    )
 }

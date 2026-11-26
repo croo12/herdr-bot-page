@@ -1,10 +1,10 @@
 use crate::{
-    domain::{need, now, patch, s, Events},
+    domain::{need, now, patch, string_field, Events},
     storage::Repositories,
     Engine,
 };
 use anyhow::Result;
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChatEdit {
@@ -14,44 +14,47 @@ pub(crate) enum ChatEdit {
     Read,
     Unread,
 }
-pub(crate) fn find_chats(engine: &Engine, query: &str) -> Result<V> {
-    engine.tx(|c, _| {
+pub(crate) fn find_chats(engine: &Engine, query: &str) -> Result<Value> {
+    engine.tx(|repos, _| {
         let query = query.to_lowercase();
-        let chats = c
+        let chats = repos
             .chats
             .list()?
             .into_iter()
-            .filter(|v| {
-                [s(v, "name"), s(v, "description")]
-                    .iter()
-                    .any(|text| text.to_lowercase().contains(&query))
+            .filter(|chat| {
+                [
+                    string_field(chat, "name"),
+                    string_field(chat, "description"),
+                ]
+                .iter()
+                .any(|text| text.to_lowercase().contains(&query))
             })
             .collect::<Vec<_>>();
         Ok(json!(chats))
     })
 }
-pub(crate) fn edit_chat(engine: &Engine, edit: ChatEdit, p: &V) -> Result<V> {
-    engine.tx(|c, events| {
-        let chat_id = s(p, "chatId");
-        let mut row = c.chats.get(chat_id)?;
+pub(crate) fn edit_chat(engine: &Engine, edit: ChatEdit, params: &Value) -> Result<Value> {
+    engine.tx(|repos, events| {
+        let chat_id = string_field(params, "chatId");
+        let mut row = repos.chats.get(chat_id)?;
         match edit {
             ChatEdit::Profile => {
-                if p.get("name").is_some() {
-                    need(p, "name")?;
+                if params.get("name").is_some() {
+                    need(params, "name")?;
                 }
                 patch(
                     &mut row,
-                    p,
+                    params,
                     &["name", "description", "title", "avatarColor", "avatarShape"],
                 );
             }
-            ChatEdit::Hidden => row["isHiddenFromSidebar"] = bool_field(p, "isHidden")?.into(),
+            ChatEdit::Hidden => row["isHiddenFromSidebar"] = bool_field(params, "isHidden")?.into(),
             ChatEdit::Notifications => {
-                row["notifyOnUpdatesEnabled"] = bool_field(p, "isEnabled")?.into()
+                row["notifyOnUpdatesEnabled"] = bool_field(params, "isEnabled")?.into()
             }
-            ChatEdit::Read | ChatEdit::Unread => mark_read(c, &mut row, edit, p)?,
+            ChatEdit::Read | ChatEdit::Unread => mark_read(repos, &mut row, edit, params)?,
         }
-        change(c, &row, events)?;
+        change(repos, &row, events)?;
         if edit == ChatEdit::Read {
             Ok(json!({"lastReadSeq":row["lastReadSeq"]}))
         } else {
@@ -59,35 +62,35 @@ pub(crate) fn edit_chat(engine: &Engine, edit: ChatEdit, p: &V) -> Result<V> {
         }
     })
 }
-fn bool_field(p: &V, key: &str) -> Result<bool> {
-    p[key]
+fn bool_field(params: &Value, key: &str) -> Result<bool> {
+    params[key]
         .as_bool()
         .ok_or_else(|| anyhow::anyhow!("invalid_args: expected boolean {key}"))
 }
-fn mark_read(c: &Repositories, row: &mut V, edit: ChatEdit, p: &V) -> Result<()> {
+fn mark_read(repos: &Repositories, row: &mut Value, edit: ChatEdit, params: &Value) -> Result<()> {
     let id = need(row, "id")?;
-    let latest = c.transcript.latest_seq(id)?;
+    let latest = repos.transcript.latest_seq(id)?;
     let through = if edit == ChatEdit::Read {
-        p["throughSeq"]
+        params["throughSeq"]
             .as_i64()
-            .filter(|n| *n >= 0)
+            .filter(|sequence| *sequence >= 0)
             .ok_or_else(|| anyhow::anyhow!("invalid_args: invalid sequence"))?
             .clamp(row["lastReadSeq"].as_i64().unwrap_or(0).min(latest), latest)
     } else {
         latest
     };
-    let unread = edit == ChatEdit::Unread && bool_field(p, "isUnread")?;
-    let n = c.transcript.unread_after(id, through)?;
+    let unread = edit == ChatEdit::Unread && bool_field(params, "isUnread")?;
+    let unread_count = repos.transcript.unread_after(id, through)?;
     if !unread {
         row["lastReadSeq"] = through.into();
         row["lastViewedAt"] = now().into();
     }
-    row["hasUnread"] = (unread || n > 0).into();
-    row["unreadCount"] = n.max(i64::from(unread)).into();
+    row["hasUnread"] = (unread || unread_count > 0).into();
+    row["unreadCount"] = unread_count.max(i64::from(unread)).into();
     Ok(())
 }
-pub(crate) fn change(c: &Repositories, v: &V, events: &mut Events) -> Result<()> {
-    c.chats.save(v)?;
-    events.push(("chat.changed", v.clone()));
+pub(crate) fn change(repos: &Repositories, chat: &Value, events: &mut Events) -> Result<()> {
+    repos.chats.save(chat)?;
+    events.push(("chat.changed", chat.clone()));
     Ok(())
 }

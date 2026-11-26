@@ -2,7 +2,7 @@ use crate::domain::need;
 use anyhow::anyhow;
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::Value as V;
+use serde_json::Value;
 pub(crate) struct Chats<'db> {
     db: &'db Connection,
 }
@@ -10,44 +10,44 @@ impl<'db> Chats<'db> {
     pub(crate) fn new(db: &'db Connection) -> Self {
         Self { db }
     }
-    pub(crate) fn list(&self) -> Result<Vec<V>> {
-        let mut q = self.db.prepare("SELECT data FROM chats ORDER BY rowid")?;
-        let rows = q
-            .query_map([], |r| r.get(0))?
+    pub(crate) fn list(&self) -> Result<Vec<Value>> {
+        let mut statement = self.db.prepare("SELECT data FROM chats ORDER BY rowid")?;
+        let rows = statement
+            .query_map([], |row| row.get(0))?
             .collect::<rusqlite::Result<_>>()?;
         Ok(rows)
     }
-    pub(crate) fn get(&self, id: &str) -> Result<V> {
+    pub(crate) fn get(&self, id: &str) -> Result<Value> {
         self.db
-            .query_row("SELECT data FROM chats WHERE id=?", [id], |r| r.get(0))
+            .query_row("SELECT data FROM chats WHERE id=?", [id], |row| row.get(0))
             .optional()?
             .ok_or_else(|| anyhow!("unknown_chat: {id}"))
     }
-    pub(crate) fn save(&self, v: &V) -> Result<()> {
+    pub(crate) fn save(&self, chat: &Value) -> Result<()> {
         self.db.execute(
             "INSERT INTO chats VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
-            params![need(v, "id")?, v],
+            params![need(chat, "id")?, chat],
         )?;
         Ok(())
     }
-    pub(crate) fn for_request(&self, p: &V) -> Result<Option<V>> {
-        if let Some(r) = p["requestId"].as_str() {
+    pub(crate) fn for_request(&self, params: &Value) -> Result<Option<Value>> {
+        if let Some(request_id) = params["requestId"].as_str() {
             return Ok(self
                 .db
                 .query_row(
                     "SELECT c.data FROM requests r JOIN chats c ON c.id=r.chat WHERE r.key=?",
-                    [r],
-                    |r| r.get(0),
+                    [request_id],
+                    |row| row.get(0),
                 )
                 .optional()?);
         }
         Ok(None)
     }
-    pub(crate) fn remember(&self, p: &V, v: &V) -> Result<()> {
-        if let Some(r) = p["requestId"].as_str() {
+    pub(crate) fn remember(&self, params: &Value, chat: &Value) -> Result<()> {
+        if let Some(request_id) = params["requestId"].as_str() {
             self.db.execute(
                 "INSERT INTO requests VALUES(?,?)",
-                params![r, need(v, "id")?],
+                params![request_id, need(chat, "id")?],
             )?;
         }
         Ok(())

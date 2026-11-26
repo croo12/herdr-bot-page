@@ -1,6 +1,6 @@
 use crate::domain::need;
 use anyhow::{anyhow, bail, Context, Result};
-use serde_json::Value as V;
+use serde_json::Value;
 use std::{
     env,
     ffi::OsStr,
@@ -19,7 +19,7 @@ struct HerdrFailure {
 }
 
 impl HerdrFailure {
-    fn from_json(error: &V) -> Option<Self> {
+    fn from_json(error: &Value) -> Option<Self> {
         Some(Self {
             code: error["code"].as_str()?.to_owned(),
             message: error["message"].as_str()?.to_owned(),
@@ -28,8 +28,8 @@ impl HerdrFailure {
 }
 
 impl std::fmt::Display for HerdrFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.code, self.message)
     }
 }
 
@@ -81,7 +81,7 @@ fn capture(cmd: &mut Command, seconds: u64) -> Result<String> {
         } else {
             err.trim()
         };
-        if let Ok(frame) = serde_json::from_str::<V>(detail) {
+        if let Ok(frame) = serde_json::from_str::<Value>(detail) {
             if let Some(failure) = HerdrFailure::from_json(&frame["error"]) {
                 return Err(failure.into());
             }
@@ -112,11 +112,12 @@ impl Herdr {
         }
     }
     fn process(&self) -> Command {
-        let mut c = command(&self.bin);
-        c.args(["--session", &self.session])
+        let mut process = command(&self.bin);
+        process
+            .args(["--session", &self.session])
             .env("HERDR_BOT_HOME", &self.home);
-        c.env_remove("HERDR_SOCKET_PATH");
-        c
+        process.env_remove("HERDR_SOCKET_PATH");
+        process
     }
     pub fn text(&self, args: &[&str], seconds: u64) -> Result<String> {
         capture(self.process().args(args), seconds).with_context(|| {
@@ -127,32 +128,35 @@ impl Herdr {
             )
         })
     }
-    pub fn run(&self, args: &[&str]) -> Result<V> {
+    pub fn run(&self, args: &[&str]) -> Result<Value> {
         self.run_timeout(args, 45)
     }
-    pub fn run_timeout(&self, args: &[&str], seconds: u64) -> Result<V> {
+    pub fn run_timeout(&self, args: &[&str], seconds: u64) -> Result<Value> {
         let text = self.text(args, seconds)?;
-        let v: V = serde_json::from_str(&text).context("herdr_error: invalid JSON from herdr")?;
-        if !v["error"].is_null() {
-            if let Some(failure) = HerdrFailure::from_json(&v["error"]) {
+        let response: Value =
+            serde_json::from_str(&text).context("herdr_error: invalid JSON from herdr")?;
+        if !response["error"].is_null() {
+            if let Some(failure) = HerdrFailure::from_json(&response["error"]) {
                 return Err(
                     anyhow!(failure).context(format!("herdr_error: herdr {} {}", args[0], args[1]))
                 );
             }
-            bail!("herdr_error: {}", v["error"]);
+            bail!("herdr_error: {}", response["error"]);
         }
-        v.get("result")
+        response
+            .get("result")
             .cloned()
             .ok_or_else(|| anyhow!("herdr_error: missing result"))
     }
     pub fn ensure(&self) -> Result<()> {
         let running = || -> Result<bool> {
-            let v: V = serde_json::from_str(&self.text(&["session", "list", "--json"], 5)?)?;
-            Ok(v["sessions"]
+            let response: Value =
+                serde_json::from_str(&self.text(&["session", "list", "--json"], 5)?)?;
+            Ok(response["sessions"]
                 .as_array()
                 .into_iter()
                 .flatten()
-                .any(|a| a["name"] == self.session && a["running"] == true))
+                .any(|session| session["name"] == self.session && session["running"] == true))
         };
         if running()? {
             return Ok(());
@@ -179,13 +183,13 @@ impl Herdr {
         }
         bail!("herdr_error: session {} did not start", self.session)
     }
-    pub fn agents(&self) -> Result<Vec<V>> {
+    pub fn agents(&self) -> Result<Vec<Value>> {
         Ok(self.run(&["agent", "list"])?["agents"]
             .as_array()
             .cloned()
             .unwrap_or_default())
     }
-    pub fn launch(&self, id: &str, bot: &V) -> Result<V> {
+    pub fn launch(&self, id: &str, bot: &Value) -> Result<Value> {
         let cwd = need(bot, "cwd")?;
         let kind = need(bot, "provider")?;
         let label = format!("herdr-bot: {cwd}");
@@ -194,13 +198,13 @@ impl Herdr {
             .as_array()
             .into_iter()
             .flatten()
-            .find(|w| w["label"] == label);
-        let location = if let Some(w) = existing {
+            .find(|workspace| workspace["label"] == label);
+        let location = if let Some(workspace) = existing {
             self.run(&[
                 "tab",
                 "create",
                 "--workspace",
-                need(w, "workspace_id")?,
+                need(workspace, "workspace_id")?,
                 "--cwd",
                 cwd,
                 "--label",
@@ -229,13 +233,14 @@ impl Herdr {
         if let Some(model) = bot["model"].as_str() {
             opts.extend(["--model".into(), model.into()]);
         }
-        if let Some(e) = bot["reasoningEffort"].as_str() {
+        if let Some(effort) = bot["reasoningEffort"].as_str() {
             match kind {
-                "claude" => opts.extend(["--effort".into(), e.into()]),
-                "grok" => opts.extend(["--reasoning-effort".into(), e.into()]),
-                "codex" => {
-                    opts.extend(["--config".into(), format!("model_reasoning_effort=\"{e}\"")])
-                }
+                "claude" => opts.extend(["--effort".into(), effort.into()]),
+                "grok" => opts.extend(["--reasoning-effort".into(), effort.into()]),
+                "codex" => opts.extend([
+                    "--config".into(),
+                    format!("model_reasoning_effort=\"{effort}\""),
+                ]),
                 _ => {}
             }
         }
@@ -255,8 +260,8 @@ impl Herdr {
             args.extend(opts.iter().map(String::as_str));
         }
         match self.run(&args) {
-            Ok(v) => Ok(v["agent"].clone()),
-            Err(e) => {
+            Ok(response) => Ok(response["agent"].clone()),
+            Err(error) => {
                 // First launch can stop at a provider's sign-in or trust screen.
                 // Keep that pane reachable from the UI so the user can finish setup.
                 if let Ok(live) = self.run(&["agent", "get", pane]) {
@@ -272,7 +277,7 @@ impl Herdr {
                     }
                 }
                 let _ = self.run(&["pane", "close", pane]);
-                Err(e)
+                Err(error)
             }
         }
     }
@@ -280,20 +285,20 @@ impl Herdr {
         self.run(&["agent", "focus", pane])?;
         #[cfg(windows)]
         {
-            let mut c = Command::new(&self.bin);
+            let mut process = Command::new(&self.bin);
             use std::os::windows::process::CommandExt;
-            c.creation_flags(0x10);
-            for (k, _) in env::vars_os() {
-                if k.to_string_lossy().starts_with("HERDR_") {
-                    c.env_remove(k);
+            process.creation_flags(0x10);
+            for (key, _) in env::vars_os() {
+                if key.to_string_lossy().starts_with("HERDR_") {
+                    process.env_remove(key);
                 }
             }
-            c.args(["session", "attach", &self.session]).spawn()?;
+            process.args(["session", "attach", &self.session]).spawn()?;
         }
         #[cfg(target_os = "macos")]
         {
-            fn quote(s: &str) -> String {
-                format!("'{}'", s.replace('\'', "'\\''"))
+            fn quote(argument: &str) -> String {
+                format!("'{}'", argument.replace('\'', "'\\''"))
             }
             let line = format!(
                 "{} session attach {}",

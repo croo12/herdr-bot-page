@@ -3,49 +3,49 @@ use crate::{
     Engine,
 };
 use anyhow::{bail, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 
-pub(crate) fn delete_chats(engine: &Engine, p: &V) -> Result<V> {
+pub(crate) fn delete_chats(engine: &Engine, params: &Value) -> Result<Value> {
     let _guard = engine.roster.lock().unwrap();
-    let ids = strings(&p["chatIds"]);
+    let ids = strings(&params["chatIds"]);
     let mut deleted = vec![];
     for id in ids {
-        let v = engine.tx(|c, _| c.chats.get(&id))?;
+        let chat = engine.tx(|repos, _| repos.chats.get(&id))?;
         if engine
             .active
             .lock()
             .unwrap()
             .iter()
-            .any(|(bot, t)| bot == &id || t.chat == id)
+            .any(|(bot, turn)| bot == &id || turn.chat == id)
         {
             bail!("bot_not_ready: {id} has an active turn")
         }
-        if v["kind"] == "bot" {
+        if chat["kind"] == "bot" {
             let agents = engine.herdr.agents()?;
             if agents
                 .iter()
-                .any(|a| a["name"] == id && a["pane_id"] == v["bot"]["paneId"])
+                .any(|agent| agent["name"] == id && agent["pane_id"] == chat["bot"]["paneId"])
             {
-                let pane = need(&v["bot"], "paneId")?;
-                if v["bot"]["adopted"] == true {
+                let pane = need(&chat["bot"], "paneId")?;
+                if chat["bot"]["adopted"] == true {
                     engine.herdr.run(&["agent", "rename", pane, "--clear"])?;
                 } else {
                     engine.herdr.run(&["pane", "close", pane])?;
                 }
             }
         }
-        engine.tx(|c, ev| {
-            for mut room in c.chats.list()? {
+        engine.tx(|repos, events| {
+            for mut room in repos.chats.list()? {
                 let mut members = strings(&room["memberIds"]);
                 if members.contains(&id) {
-                    members.retain(|x| x != &id);
+                    members.retain(|member| member != &id);
                     room["memberIds"] = json!(members);
-                    crate::modules::reviews::revoke_removed_members(c, ev, &room)?;
-                    c.chats.save(&room)?;
+                    crate::modules::reviews::revoke_removed_members(repos, events, &room)?;
+                    repos.chats.save(&room)?;
                 }
             }
-            c.chats.delete(&id)?;
-            ev.push(("chat.listChanged", json!(c.chats.list()?)));
+            repos.chats.delete(&id)?;
+            events.push(("chat.listChanged", json!(repos.chats.list()?)));
             Ok(())
         })?;
         deleted.push(id);

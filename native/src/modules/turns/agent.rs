@@ -5,7 +5,7 @@ use crate::{
     Engine,
 };
 use anyhow::{anyhow, bail, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 use std::sync::Arc;
 #[derive(PartialEq, Eq)]
 pub(crate) enum AgentAction {
@@ -15,35 +15,40 @@ pub(crate) enum AgentAction {
     Profile,
     UpdateProfile,
 }
-pub(crate) fn say(engine: &Arc<Engine>, p: V) -> Result<V> {
-    if !p["replyTo"].is_null() {
-        let assigned = engine.tx(|c, _| c.reviews.ticket_exists(need(&p, "replyTo")?))?;
-        if assigned || !p["decision"].is_null() {
-            return reviews::review_reply(engine, &p);
+pub(crate) fn say(engine: &Arc<Engine>, params: Value) -> Result<Value> {
+    if !params["replyTo"].is_null() {
+        let assigned =
+            engine.tx(|repos, _| repos.reviews.ticket_exists(need(&params, "replyTo")?))?;
+        if assigned || !params["decision"].is_null() {
+            return reviews::review_reply(engine, &params);
         }
-    } else if !p["decision"].is_null() {
+    } else if !params["decision"].is_null() {
         bail!("invalid_args: reply to a permission request")
     }
-    agent_action(engine, AgentAction::Say, p)
+    agent_action(engine, AgentAction::Say, params)
 }
-pub(crate) fn agent_action(engine: &Arc<Engine>, action: AgentAction, p: V) -> Result<V> {
-    let pane = need(&p, "paneId")?;
+pub(crate) fn agent_action(
+    engine: &Arc<Engine>,
+    action: AgentAction,
+    params: Value,
+) -> Result<Value> {
+    let pane = need(&params, "paneId")?;
     let bot = engine
-        .tx(|c, _| c.chats.list())?
+        .tx(|repos, _| repos.chats.list())?
         .into_iter()
-        .find(|x| x["bot"]["paneId"] == pane)
+        .find(|chat| chat["bot"]["paneId"] == pane)
         .ok_or_else(|| anyhow!("unknown_bot: pane {pane}"))?;
     let bot_id = need(&bot, "id")?;
     if action == AgentAction::Profile {
         return Ok(bot);
     }
     if action == AgentAction::UpdateProfile {
-        let mut patch = p;
+        let mut patch = params;
         patch["chatId"] = bot_id.into();
         return chats::edit_chat(engine, ChatEdit::Profile, &patch);
     }
-    let target = need(&p, "chatId")?;
-    let target_chat = engine.tx(|c, _| c.chats.get(target))?;
+    let target = need(&params, "chatId")?;
+    let target_chat = engine.tx(|repos, _| repos.chats.get(target))?;
     let mut active = engine.active.lock().unwrap();
     let turn = active
         .get_mut(bot_id)
@@ -69,16 +74,16 @@ pub(crate) fn agent_action(engine: &Arc<Engine>, action: AgentAction, p: V) -> R
         turn.passed = true;
         return Ok(json!({"passed":true}));
     }
-    let text = need(&p, "text")?;
-    let e = engine.tx(|c, ev| {
+    let text = need(&params, "text")?;
+    let posted_entry = engine.tx(|repos, events| {
         let mut entry = json!({"kind":"send-message","message":{"type":"text","content":text},"author":{"id":bot_id,"name":bot["name"]}});
-        if let Some(parent) = p["replyTo"].as_str() {
-            if !c.transcript.contains(target, parent)? {
+        if let Some(parent) = params["replyTo"].as_str() {
+            if !repos.transcript.contains(target, parent)? {
                 bail!("invalid_args: reply target is not in this chat");
             }
             entry["replyTo"] = parent.into();
         }
-        append(c, target, entry, ev)
+        append(repos, target, entry, events)
     })?;
     turn.spoken += 1;
     if cross {
@@ -101,5 +106,5 @@ pub(crate) fn agent_action(engine: &Arc<Engine>, action: AgentAction, p: V) -> R
             },
         );
     }
-    Ok(json!({"entryId":e["id"]}))
+    Ok(json!({"entryId":posted_entry["id"]}))
 }

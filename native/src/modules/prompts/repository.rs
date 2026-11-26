@@ -1,6 +1,6 @@
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension};
-use serde_json::Value as V;
+use serde_json::Value;
 
 pub(crate) struct Prompts<'db> {
     db: &'db Connection,
@@ -10,7 +10,7 @@ impl<'db> Prompts<'db> {
         Self { db }
     }
 
-    pub(crate) fn pending(&self, bot: &str) -> Result<Option<(String, V)>> {
+    pub(crate) fn pending(&self, bot: &str) -> Result<Option<(String, Value)>> {
         Ok(self
             .db
             .query_row(
@@ -22,7 +22,7 @@ impl<'db> Prompts<'db> {
             )
             .optional()?)
     }
-    pub(crate) fn matching(&self, bot: &str, signature: &str) -> Result<Option<(String, V)>> {
+    pub(crate) fn matching(&self, bot: &str, signature: &str) -> Result<Option<(String, Value)>> {
         Ok(self.db.query_row(
             "SELECT chat,data FROM entries WHERE json_extract(data,'$.author.id')=?
              AND json_extract(data,'$.status')='pending' AND json_extract(data,'$.prompt.signature')=?

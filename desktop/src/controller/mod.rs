@@ -13,26 +13,26 @@ pub(crate) async fn call(
     tauri::async_runtime::spawn_blocking(move || {
         engine
             .call(&method, params.unwrap_or(Value::Null))
-            .map_err(|e| wire_error(&e))
+            .map_err(|error| wire_error(&error))
     })
     .await
-    .map_err(|e| json!({"code":"internal","message":e.to_string()}))?
+    .map_err(|error| json!({"code":"internal","message":error.to_string()}))?
 }
 
 #[tauri::command]
 pub(crate) fn open_external(url: String) -> Result<(), String> {
-    let parsed = tauri::Url::parse(&url).map_err(|e| e.to_string())?;
+    let parsed = tauri::Url::parse(&url).map_err(|error| error.to_string())?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err("Unsupported link".into());
     }
-    open::that_detached(parsed.as_str()).map_err(|e| e.to_string())
+    open::that_detached(parsed.as_str()).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub(crate) async fn pick(avatar: bool, default_path: Option<String>) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut dialog = rfd::FileDialog::new();
-        if let Some(dir) = default_path.filter(|p| Path::new(p).is_dir()) {
+        if let Some(dir) = default_path.filter(|path| Path::new(path).is_dir()) {
             dialog = dialog.set_directory(dir);
         }
         if !avatar {
@@ -50,5 +50,5 @@ pub(crate) async fn pick(avatar: bool, default_path: Option<String>) -> Result<V
             .unwrap_or(Value::Null)
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|error| error.to_string())
 }

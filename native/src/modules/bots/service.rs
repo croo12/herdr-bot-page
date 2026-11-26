@@ -2,54 +2,56 @@ use super::validation::{bot_id, validate};
 use crate::modules::chats::new_chat;
 use crate::modules::{settings, turns};
 use crate::{
-    domain::{id, need, patch, s},
+    domain::{id, need, patch, string_field},
     infrastructure::herdr,
     modules::{chats::change, turns::Job},
     Engine,
 };
 use anyhow::{bail, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
-pub(crate) fn focus_bot(engine: &Engine, p: &V) -> Result<V> {
-    let v = engine.tx(|c, _| c.chats.get(need(p, "botId")?))?;
-    engine.herdr.focus(need(&v["bot"], "paneId")?)?;
-    Ok(V::Null)
+pub(crate) fn focus_bot(engine: &Engine, params: &Value) -> Result<Value> {
+    let chat = engine.tx(|repos, _| repos.chats.get(need(params, "botId")?))?;
+    engine.herdr.focus(need(&chat["bot"], "paneId")?)?;
+    Ok(Value::Null)
 }
-pub(crate) fn list_models(provider: &str) -> Result<V> {
-    Ok(herdr::models(provider)
-        .unwrap_or_else(|e| json!({"models":[],"source":"unavailable","error":format!("{e:#}")})))
+pub(crate) fn list_models(provider: &str) -> Result<Value> {
+    Ok(herdr::models(provider).unwrap_or_else(
+        |error| json!({"models":[],"source":"unavailable","error":format!("{error:#}")}),
+    ))
 }
-pub(crate) fn adoptable_bots(engine: &Engine) -> Result<V> {
+pub(crate) fn adoptable_bots(engine: &Engine) -> Result<Value> {
     let _guard = engine.roster.lock().unwrap();
     engine.herdr.ensure()?;
     let agents = engine.herdr.agents()?;
-    let chats = engine.tx(|c, _| c.chats.list())?;
-    Ok(json!(agents.into_iter().filter(|a|!chats.iter().any(|c|c["bot"]["paneId"]==a["pane_id"])).map(|a|json!({
-            "name":a["name"],"provider":a["agent"],"status":a["agent_status"],"paneId":a["pane_id"],"cwd":a["cwd"]})).collect::<Vec<_>>()))
+    let chats = engine.tx(|repos, _| repos.chats.list())?;
+    Ok(json!(agents.into_iter().filter(|agent|!chats.iter().any(|chat|chat["bot"]["paneId"]==agent["pane_id"])).map(|agent|json!({
+            "name":agent["name"],"provider":agent["agent"],"status":agent["agent_status"],"paneId":agent["pane_id"],"cwd":agent["cwd"]})).collect::<Vec<_>>()))
 }
-pub(crate) fn relaunch_bot(engine: &Engine, p: &V) -> Result<V> {
+pub(crate) fn relaunch_bot(engine: &Engine, params: &Value) -> Result<Value> {
     let _guard = engine.roster.lock().unwrap();
-    let bot_id = need(p, "botId")?;
-    let mut v = engine.tx(|c, _| c.chats.get(bot_id))?;
-    if v["kind"] != "bot" {
+    let bot_id = need(params, "botId")?;
+    let mut chat = engine.tx(|repos, _| repos.chats.get(bot_id))?;
+    if chat["kind"] != "bot" {
         bail!("unknown_bot: {bot_id}")
     }
     if engine.active.lock().unwrap().contains_key(bot_id) {
         bail!("bot_not_ready: bot is taking a turn")
     }
-    let mut bot = v["bot"].clone();
+    let mut bot = chat["bot"].clone();
     patch(
         &mut bot,
-        p,
+        params,
         &["cwd", "permissionMode", "model", "reasoningEffort"],
     );
     if bot["permissionMode"].is_null() {
-        bot["permissionMode"] = engine.tx(|c, _| settings::defaults(c))?["permissionMode"].clone();
+        bot["permissionMode"] =
+            engine.tx(|repos, _| settings::defaults(repos))?["permissionMode"].clone();
     }
     validate(
         &mut bot,
-        p["allowHomeCwd"] == true || bot_cwd_unchanged(&v, p),
+        params["allowHomeCwd"] == true || bot_cwd_unchanged(&chat, params),
         false,
     )?;
     engine.herdr.ensure()?;
@@ -61,24 +63,24 @@ pub(crate) fn relaunch_bot(engine: &Engine, p: &V) -> Result<V> {
         .herdr
         .agents()?
         .into_iter()
-        .find(|a| a["pane_id"] == v["bot"]["paneId"] && a["name"] == bot_id);
+        .find(|agent| agent["pane_id"] == chat["bot"]["paneId"] && agent["name"] == bot_id);
     let replaced = (|| -> Result<()> {
-        if let Some(a) = &old {
+        if let Some(agent) = &old {
             engine
                 .herdr
-                .run(&["agent", "rename", need(a, "pane_id")?, "--clear"])?;
+                .run(&["agent", "rename", need(agent, "pane_id")?, "--clear"])?;
         }
         engine.herdr.run(&["agent", "rename", new_pane, bot_id])?;
         Ok(())
     })();
-    if let Err(e) = replaced {
+    if let Err(error) = replaced {
         let _ = engine.herdr.run(&["pane", "close", new_pane]);
-        if let Some(a) = &old {
+        if let Some(agent) = &old {
             let _ = engine
                 .herdr
-                .run(&["agent", "rename", s(a, "pane_id"), bot_id]);
+                .run(&["agent", "rename", string_field(agent, "pane_id"), bot_id]);
         }
-        return Err(e);
+        return Err(error);
     }
     if let Some(old) = old {
         if bot["adopted"] != true {
@@ -90,50 +92,56 @@ pub(crate) fn relaunch_bot(engine: &Engine, p: &V) -> Result<V> {
     bot["adopted"] = false.into();
     bot["paneId"] = new_pane.into();
     bot["status"] = agent["agent_status"].clone();
-    bot["pendingPrompt"] = V::Null;
-    engine.tx(|c, ev| {
-        v = c.chats.get(bot_id)?;
-        v["bot"] = bot;
-        change(c, &v, ev)?;
-        Ok(json!({"chat":v}))
+    bot["pendingPrompt"] = Value::Null;
+    engine.tx(|repos, events| {
+        chat = repos.chats.get(bot_id)?;
+        chat["bot"] = bot;
+        change(repos, &chat, events)?;
+        Ok(json!({"chat":chat}))
     })
 }
-pub(crate) fn create_bot(engine: &Arc<Engine>, mut p: V, quick: bool) -> Result<V> {
+pub(crate) fn create_bot(engine: &Arc<Engine>, mut params: Value, quick: bool) -> Result<Value> {
     let _guard = engine.roster.lock().unwrap();
-    if let Some(v) = engine.tx(|c, _| c.chats.for_request(&p))? {
-        return Ok(json!({"chat":v}));
+    if let Some(chat) = engine.tx(|repos, _| repos.chats.for_request(&params))? {
+        return Ok(json!({"chat":chat}));
     }
-    let defaults = engine.tx(|c, _| settings::defaults(c))?;
+    let defaults = engine.tx(|repos, _| settings::defaults(repos))?;
 
-    if quick && s(&p, "name").trim().is_empty() {
-        p["name"] = p["provider"].clone();
+    if quick && string_field(&params, "name").trim().is_empty() {
+        params["name"] = params["provider"].clone();
     }
-    need(&p, "name")?;
-    let bot_id = bot_id(&p)?;
-    if engine.tx(|c, _| Ok(c.chats.list()?.iter().any(|x| x["id"] == bot_id)))? {
+    need(&params, "name")?;
+    let bot_id = bot_id(&params)?;
+    if engine.tx(|repos, _| Ok(repos.chats.list()?.iter().any(|chat| chat["id"] == bot_id)))? {
         bail!("bot_exists: {bot_id}")
     }
-    let mut bot = json!({"provider":p["provider"],"cwd":p["cwd"].as_str().unwrap_or(s(&defaults,"cwd")),
-        "permissionMode":p["permissionMode"].as_str().unwrap_or(s(&defaults,"permissionMode")),"model":p["model"],"reasoningEffort":p["reasoningEffort"],
+    let mut bot = json!({"provider":params["provider"],"cwd":params["cwd"].as_str().unwrap_or(string_field(&defaults,"cwd")),
+        "permissionMode":params["permissionMode"].as_str().unwrap_or(string_field(&defaults,"permissionMode")),"model":params["model"],"reasoningEffort":params["reasoningEffort"],
         "adopted":false,"pendingPrompt":null,"onboarding":null});
-    if p["adoptPaneId"].is_null() {
-        validate(&mut bot, p["allowHomeCwd"] == true, true)?;
+    if params["adoptPaneId"].is_null() {
+        validate(&mut bot, params["allowHomeCwd"] == true, true)?;
     }
     engine.herdr.ensure()?;
     let agents = engine.herdr.agents()?;
     if agents
         .iter()
-        .any(|a| a["name"] == bot_id && a["pane_id"] != p["adoptPaneId"])
+        .any(|agent| agent["name"] == bot_id && agent["pane_id"] != params["adoptPaneId"])
     {
         bail!("bot_exists: agent {bot_id} already exists")
     }
-    let a = if let Some(pane) = p["adoptPaneId"].as_str() {
-        if engine.tx(|c, _| Ok(c.chats.list()?.iter().any(|x| x["bot"]["paneId"] == pane)))? {
+    let agent = if let Some(pane) = params["adoptPaneId"].as_str() {
+        if engine.tx(|repos, _| {
+            Ok(repos
+                .chats
+                .list()?
+                .iter()
+                .any(|chat| chat["bot"]["paneId"] == pane))
+        })? {
             bail!("bot_exists: pane already adopted")
         }
         let agent = agents
             .into_iter()
-            .find(|a| a["pane_id"] == pane)
+            .find(|agent| agent["pane_id"] == pane)
             .ok_or_else(|| anyhow::anyhow!("unknown_bot: pane {pane}"))?;
         engine.herdr.run(&["agent", "rename", pane, &bot_id])?;
         bot["adopted"] = true.into();
@@ -143,14 +151,14 @@ pub(crate) fn create_bot(engine: &Arc<Engine>, mut p: V, quick: bool) -> Result<
     } else {
         engine.herdr.launch(&bot_id, &bot)?
     };
-    bot["paneId"] = a["pane_id"].clone();
-    bot["status"] = a["agent_status"].clone();
-    let mut v = new_chat(&bot_id, "bot", &p);
-    v["bot"] = bot;
-    engine.tx(|c, ev| {
-        c.chats.save(&v)?;
-        c.chats.remember(&p, &v)?;
-        ev.push(("chat.listChanged", json!(c.chats.list()?)));
+    bot["paneId"] = agent["pane_id"].clone();
+    bot["status"] = agent["agent_status"].clone();
+    let mut chat = new_chat(&bot_id, "bot", &params);
+    chat["bot"] = bot;
+    engine.tx(|repos, events| {
+        repos.chats.save(&chat)?;
+        repos.chats.remember(&params, &chat)?;
+        events.push(("chat.listChanged", json!(repos.chats.list()?)));
         Ok(())
     })?;
     if quick {
@@ -158,14 +166,17 @@ pub(crate) fn create_bot(engine: &Arc<Engine>, mut p: V, quick: bool) -> Result<
             engine,
             &bot_id,
             Job {
-                seed: format!("Introduce yourself in {} in one sentence.", s(&p, "locale")),
+                seed: format!(
+                    "Introduce yourself in {} in one sentence.",
+                    string_field(&params, "locale")
+                ),
                 depth: 0,
                 exclude: None,
             },
         );
     }
-    Ok(json!({"chat":v}))
+    Ok(json!({"chat":chat}))
 }
-fn bot_cwd_unchanged(v: &V, p: &V) -> bool {
-    p["cwd"].is_null() || p["cwd"] == v["bot"]["cwd"]
+fn bot_cwd_unchanged(chat: &Value, params: &Value) -> bool {
+    params["cwd"].is_null() || params["cwd"] == chat["bot"]["cwd"]
 }

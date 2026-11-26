@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use regex::Regex;
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 use std::{sync::LazyLock, thread, time::Duration};
 static ROW: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(❯|›)?\s*(\d+)\.\s+(?:\[([ ✔✓xX])\]\s*)?(.+)$").unwrap());
@@ -9,19 +9,19 @@ static LETTER: LazyLock<Regex> =
 static QUESTION_HEADER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^Question (\d+)/(\d+)\b").unwrap());
 
-fn codex_menu(raw: &str) -> Option<V> {
+fn codex_menu(raw: &str) -> Option<Value> {
     let lines: Vec<_> = raw
         .lines()
         .map(str::trim_end)
-        .filter(|l| !l.is_empty())
+        .filter(|line| !line.is_empty())
         .collect();
     let end = lines.len();
     let footer_start = lines.iter().rposition(|line| {
-        let s = line.trim_start().to_ascii_lowercase();
-        s.starts_with("press enter to confirm")
-            || s.starts_with("enter continue")
-            || s.contains("enter to submit answer")
-            || s.contains("enter to submit all")
+        let normalized_line = line.trim_start().to_ascii_lowercase();
+        normalized_line.starts_with("press enter to confirm")
+            || normalized_line.starts_with("enter continue")
+            || normalized_line.contains("enter to submit answer")
+            || normalized_line.contains("enter to submit all")
     })?;
     let footer = lines[footer_start..].join(" ").to_ascii_lowercase();
     if !footer.contains("esc ") || end - footer_start > 3 {
@@ -42,14 +42,15 @@ fn codex_menu(raw: &str) -> Option<V> {
     })?;
     let form = &above[heading..];
     let header = form[0].trim();
-    let first = form
-        .iter()
-        .position(|l| ROW.captures(l).is_some_and(|c| &c[2] == "1"));
+    let first = form.iter().position(|line| {
+        ROW.captures(line)
+            .is_some_and(|captures| &captures[2] == "1")
+    });
     let input = form
         .iter()
-        .position(|l| l.trim().starts_with("› Type your answer"));
+        .position(|line| line.trim().starts_with("› Type your answer"));
     let start = first.or(input)?;
-    let context: Vec<_> = form[1..start].iter().map(|l| l.trim()).collect();
+    let context: Vec<_> = form[1..start].iter().map(|line| line.trim()).collect();
     let (question, body) = if is_permission || is_update {
         (header.to_owned(), context)
     } else {
@@ -58,8 +59,8 @@ fn codex_menu(raw: &str) -> Option<V> {
     if question.is_empty() {
         return None;
     }
-    let mut options: Vec<V> = vec![];
-    let mut free = V::Null;
+    let mut options: Vec<Value> = vec![];
+    let mut free = Value::Null;
     let navigation = if first.is_some() {
         for line in &form[start..] {
             if let Some(row) = ROW.captures(line) {
@@ -74,7 +75,12 @@ fn codex_menu(raw: &str) -> Option<V> {
                 return None;
             }
         }
-        if options.iter().filter(|o| o["selected"] == true).count() != 1 {
+        if options
+            .iter()
+            .filter(|option| option["selected"] == true)
+            .count()
+            != 1
+        {
             return None;
         }
         "cursor"
@@ -86,7 +92,10 @@ fn codex_menu(raw: &str) -> Option<V> {
         options.push(json!({"key":"text","label":form[start].trim().trim_start_matches('›').trim(),"detail":null,"checked":null,"selected":false}));
         "text"
     };
-    let labels: Vec<_> = options.iter().map(|o| (&o["key"], &o["label"])).collect();
+    let labels: Vec<_> = options
+        .iter()
+        .map(|option| (&option["key"], &option["label"]))
+        .collect();
     let signature = json!(["codex-menu", header, question, body, labels]).to_string();
     Some(
         json!({"kind":if is_permission {"permission"} else {"question"},"title":null,
@@ -95,7 +104,7 @@ fn codex_menu(raw: &str) -> Option<V> {
         "freeTextKey":free,"signature":signature,"navigation":navigation}),
     )
 }
-pub(super) fn parse_screen(raw: &str, provider: &str) -> V {
+pub(super) fn parse_screen(raw: &str, provider: &str) -> Value {
     if provider == "codex" {
         if let Some(menu) = codex_menu(raw) {
             return menu;
@@ -104,8 +113,8 @@ pub(super) fn parse_screen(raw: &str, provider: &str) -> V {
     let sections: Vec<Vec<&str>> = raw
         .lines()
         .collect::<Vec<_>>()
-        .split(|s| s.trim().starts_with("────────"))
-        .map(|s| s.to_vec())
+        .split(|line| line.trim().starts_with("────────"))
+        .map(|section| section.to_vec())
         .collect();
     for lines in sections.iter().rev() {
         if provider == "codex" {
@@ -113,19 +122,19 @@ pub(super) fn parse_screen(raw: &str, provider: &str) -> V {
         }
         let compact = lines
             .iter()
-            .any(|l| l.contains("overrides auto mode for this command"));
+            .any(|line| line.contains("overrides auto mode for this command"));
         let rx = if compact && !lines.iter().any(|line| ROW.is_match(line)) {
             &*LETTER
         } else {
             &*ROW
         };
-        let Some(first) = lines.iter().position(|l| rx.is_match(l)) else {
+        let Some(first) = lines.iter().position(|line| rx.is_match(line)) else {
             continue;
         };
         let before: Vec<_> = lines[..first]
             .iter()
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
             .collect();
         let question = before.last().copied().unwrap_or("Select an option");
         if !(compact || question.contains(['?', '？']) || question.contains("Review your answers"))
@@ -133,10 +142,10 @@ pub(super) fn parse_screen(raw: &str, provider: &str) -> V {
             continue;
         }
         let mut options = vec![];
-        let mut free = V::Null;
+        let mut free = Value::Null;
         let mut multi = false;
-        for l in &lines[first..] {
-            if let Some(cap) = rx.captures(l) {
+        for line in &lines[first..] {
+            if let Some(cap) = rx.captures(line) {
                 let label = cap[4].trim();
                 if label.eq_ignore_ascii_case("chat about this") {
                     continue;
@@ -150,8 +159,8 @@ pub(super) fn parse_screen(raw: &str, provider: &str) -> V {
                 }
                 let checked = cap
                     .get(3)
-                    .filter(|x| !x.as_str().is_empty())
-                    .map(|x| x.as_str() != " ");
+                    .filter(|marker| !marker.as_str().is_empty())
+                    .map(|marker| marker.as_str() != " ");
                 multi |= checked.is_some();
                 options.push(json!({"key":key,"label":label,"detail":null,"selected":cap.get(1).is_some(),"checked":checked}));
             }
@@ -160,7 +169,7 @@ pub(super) fn parse_screen(raw: &str, provider: &str) -> V {
             before,
             options
                 .iter()
-                .map(|o| (&o["key"], &o["label"]))
+                .map(|option| (&option["key"], &option["label"]))
                 .collect::<Vec<_>>()
         ])
         .to_string();
@@ -170,7 +179,7 @@ pub(super) fn parse_screen(raw: &str, provider: &str) -> V {
     let body = raw
         .lines()
         .rev()
-        .filter(|s| !s.trim().is_empty())
+        .filter(|line| !line.trim().is_empty())
         .take(8)
         .collect::<Vec<_>>()
         .into_iter()
@@ -190,7 +199,7 @@ pub(super) fn parse_screen(raw: &str, provider: &str) -> V {
     json!({"kind":"unknown","title":null,"header":null,"question":question,"body":detail,"progress":null,"options":[],"multiSelect":false,"freeTextKey":null,"signature":body.join("\n")})
 }
 
-fn cursor_position(menu: &V) -> Option<usize> {
+fn cursor_position(menu: &Value) -> Option<usize> {
     menu["options"]
         .as_array()?
         .iter()
@@ -198,14 +207,14 @@ fn cursor_position(menu: &V) -> Option<usize> {
 }
 
 pub(super) fn select_menu_option(
-    initial: &V,
+    initial: &Value,
     key: &str,
-    mut read: impl FnMut() -> Result<V>,
+    mut read: impl FnMut() -> Result<Value>,
     mut press: impl FnMut(&str) -> Result<()>,
 ) -> Result<()> {
     let target = initial["options"]
         .as_array()
-        .and_then(|rows| rows.iter().position(|o| o["key"] == key))
+        .and_then(|rows| rows.iter().position(|option| option["key"] == key))
         .ok_or_else(|| anyhow!("invalid_answer: unknown menu option"))?;
     let mut position =
         cursor_position(initial).ok_or_else(|| anyhow!("prompt_changed: no menu cursor"))?;
@@ -317,8 +326,8 @@ mod tests {
             &first,
             "3",
             || Ok(screens.next().unwrap()),
-            |k| {
-                keys.push(k.to_owned());
+            |key| {
+                keys.push(key.to_owned());
                 Ok(())
             },
         )
@@ -335,8 +344,8 @@ mod tests {
             &first,
             "2",
             || Ok(changed.clone()),
-            |k| {
-                keys.push(k.to_owned());
+            |key| {
+                keys.push(key.to_owned());
                 Ok(())
             }
         )

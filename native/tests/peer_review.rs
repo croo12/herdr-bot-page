@@ -94,13 +94,13 @@ fn only_assigned_peer_can_decide_the_current_request() {
             .unwrap()
             .iter()
             .rev()
-            .find(|e| e["kind"] == "prompt")
+            .find(|entry| entry["kind"] == "prompt")
             .unwrap();
         let replies: Vec<_> = transcript["entries"]
             .as_array()
             .unwrap()
             .iter()
-            .filter(|e| e["replyTo"] == card["id"])
+            .filter(|entry| entry["replyTo"] == card["id"])
             .collect();
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0]["message"]["content"], "Test scope checked");
@@ -131,7 +131,7 @@ fn only_assigned_peer_can_decide_the_current_request() {
             bots.as_array()
                 .unwrap()
                 .iter()
-                .any(|b| b["id"] == "worker" && b["bot"]["status"] == "idle")
+                .any(|bot| bot["id"] == "worker" && bot["bot"]["status"] == "idle")
         });
     }
 }

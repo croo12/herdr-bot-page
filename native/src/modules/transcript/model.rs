@@ -1,8 +1,8 @@
-use serde_json::Value as V;
-pub(crate) fn content(e: &V) -> &str {
-    e["content"]
+use serde_json::Value;
+pub(crate) fn content(entry: &Value) -> &str {
+    entry["content"]
         .as_str()
-        .or(e["message"]["content"].as_str())
-        .or(e["prompt"]["question"].as_str())
+        .or(entry["message"]["content"].as_str())
+        .or(entry["prompt"]["question"].as_str())
         .unwrap_or_default()
 }

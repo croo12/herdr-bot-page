@@ -10,7 +10,7 @@ fn file_name(raw: &str) -> String {
     let name = raw.rsplit(['/', '\\']).next().unwrap_or("attachment");
     let clean: String = name
         .chars()
-        .filter(|c| !c.is_control() && !r#"<>:"/\|?*"#.contains(*c))
+        .filter(|character| !character.is_control() && !r#"<>:"/\|?*"#.contains(*character))
         .take(120)
         .collect();
     let clean = clean.trim_matches(['.', ' ']);
@@ -60,7 +60,7 @@ pub(super) fn access(
         }
         "text" => {
             let (size, data) = repository::read_prefix(&path, 1024 * 1024)?;
-            if data.iter().take(8000).any(|b| *b == 0) {
+            if data.iter().take(8000).any(|byte| *byte == 0) {
                 json!({"kind":"binary","bytes":size})
             } else {
                 json!({"kind":"text","text":String::from_utf8_lossy(&data),"bytes":size,"truncated":size>data.len() as u64})

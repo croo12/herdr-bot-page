@@ -1,19 +1,19 @@
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::Value as V;
+use serde_json::Value;
 
 pub(crate) struct UnassignedReview {
     pub chat_id: String,
-    pub entry: V,
-    pub requester: V,
-    pub room: V,
+    pub entry: Value,
+    pub requester: Value,
+    pub room: Value,
 }
 
 pub(crate) struct AssignedReview {
     pub chat_id: String,
-    pub entry: V,
-    pub requester: V,
-    pub reviewer: V,
+    pub entry: Value,
+    pub requester: Value,
+    pub reviewer: Value,
 }
 
 pub(crate) struct Reviews<'db> {
@@ -27,30 +27,30 @@ impl<'db> Reviews<'db> {
         Ok(self.db.query_row(
         "SELECT EXISTS(SELECT 1 FROM permission_reviews r JOIN entries e ON e.chat=r.chat AND e.seq=r.seq
          WHERE r.reviewer=? AND json_extract(e.data,'$.status')='pending' AND json_extract(e.data,'$.permissionReview.decision')='pending')",
-        [reviewer], |r| r.get(0),
+        [reviewer], |row| row.get(0),
     )?)
     }
     pub(crate) fn ticket_exists(&self, ticket: &str) -> Result<bool> {
         Ok(self.db.query_row(
             "SELECT EXISTS(SELECT 1 FROM permission_reviews WHERE ticket=?)",
             [ticket],
-            |r| r.get(0),
+            |row| row.get(0),
         )?)
     }
-    pub(crate) fn pending_in_room(&self, room_id: &str) -> Result<Vec<(String, String, V)>> {
-        let mut q = self.db.prepare("SELECT r.target,r.reviewer,e.data FROM permission_reviews r JOIN entries e ON e.chat=r.chat AND e.seq=r.seq WHERE r.chat=? AND json_extract(e.data,'$.status')='pending'")?;
-        let rows = q
-            .query_map([room_id], |r| {
+    pub(crate) fn pending_in_room(&self, room_id: &str) -> Result<Vec<(String, String, Value)>> {
+        let mut statement = self.db.prepare("SELECT r.target,r.reviewer,e.data FROM permission_reviews r JOIN entries e ON e.chat=r.chat AND e.seq=r.seq WHERE r.chat=? AND json_extract(e.data,'$.status')='pending'")?;
+        let rows = statement
+            .query_map([room_id], |row| {
                 Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, V>(2)?,
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Value>(2)?,
                 ))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }
-    pub(crate) fn revoke(&self, room: &str, seq: &V) -> Result<()> {
+    pub(crate) fn revoke(&self, room: &str, seq: &Value) -> Result<()> {
         self.db.execute(
             "DELETE FROM permission_reviews WHERE chat=? AND seq=?",
             params![room, seq],
@@ -58,17 +58,17 @@ impl<'db> Reviews<'db> {
         Ok(())
     }
     pub(crate) fn unassigned(&self) -> Result<Vec<UnassignedReview>> {
-        let mut q = self.db.prepare("SELECT e.chat,e.data,b.data,room.data FROM entries e JOIN chats room ON room.id=e.chat
+        let mut statement = self.db.prepare("SELECT e.chat,e.data,b.data,room.data FROM entries e JOIN chats room ON room.id=e.chat
                 JOIN chats b ON b.id=json_extract(e.data,'$.author.id')
                 WHERE json_extract(room.data,'$.kind')='room'
                 AND json_extract(e.data,'$.status')='pending' AND json_extract(e.data,'$.prompt.kind')='permission'
                 AND json_extract(e.data,'$.permissionReview') IS NULL")?;
-        let rows = q.query_map([], |r| {
+        let rows = statement.query_map([], |row| {
             Ok(UnassignedReview {
-                chat_id: r.get(0)?,
-                entry: r.get(1)?,
-                requester: r.get(2)?,
-                room: r.get(3)?,
+                chat_id: row.get(0)?,
+                entry: row.get(1)?,
+                requester: row.get(2)?,
+                room: row.get(3)?,
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
@@ -77,7 +77,7 @@ impl<'db> Reviews<'db> {
         &self,
         ticket: &str,
         chat: &str,
-        entry: &V,
+        entry: &Value,
         target: &str,
         reviewer: &str,
         pane: &str,
@@ -112,11 +112,11 @@ impl<'db> Reviews<'db> {
                 AND json_extract(e.data,'$.status')='pending' AND json_extract(e.data,'$.permissionReview.decision')='pending'
                 AND json_extract(e.data,'$.prompt.signature')=r.signature",
                 params![ticket, pane, chat],
-                |r| Ok(AssignedReview {
-                    chat_id: r.get(0)?,
-                    entry: r.get(1)?,
-                    requester: r.get(2)?,
-                    reviewer: r.get(3)?,
+                |row| Ok(AssignedReview {
+                    chat_id: row.get(0)?,
+                    entry: row.get(1)?,
+                    requester: row.get(2)?,
+                    reviewer: row.get(3)?,
                 }),
             ).optional()?)
     }

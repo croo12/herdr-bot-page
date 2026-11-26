@@ -1,8 +1,8 @@
 use crate::{domain::patch, storage::Repositories, Engine};
 use anyhow::Result;
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 
-fn load(repos: &Repositories) -> Result<V> {
+fn load(repos: &Repositories) -> Result<Value> {
     Ok(repos.settings.get()?.unwrap_or_else(|| {
         json!({
             "defaultWorkingFolder": null,
@@ -13,15 +13,15 @@ fn load(repos: &Repositories) -> Result<V> {
     }))
 }
 
-pub(crate) fn get_settings(engine: &Engine) -> Result<V> {
+pub(crate) fn get_settings(engine: &Engine) -> Result<Value> {
     engine.tx(|repos, _| load(repos))
 }
-pub(crate) fn update_settings(engine: &Engine, p: &V) -> Result<V> {
-    engine.tx(|c, _| {
-        let mut value = load(c)?;
+pub(crate) fn update_settings(engine: &Engine, params: &Value) -> Result<Value> {
+    engine.tx(|repos, _| {
+        let mut value = load(repos)?;
         patch(
             &mut value,
-            p,
+            params,
             &[
                 "defaultWorkingFolder",
                 "defaultProvider",
@@ -29,24 +29,24 @@ pub(crate) fn update_settings(engine: &Engine, p: &V) -> Result<V> {
                 "terminal",
             ],
         );
-        c.settings.save(&value)?;
+        repos.settings.save(&value)?;
         Ok(value)
     })
 }
-pub(crate) fn bot_defaults(engine: &Engine) -> Result<V> {
-    engine.tx(|c, _| defaults(c))
+pub(crate) fn bot_defaults(engine: &Engine) -> Result<Value> {
+    engine.tx(|repos, _| defaults(repos))
 }
-pub(crate) fn defaults(c: &Repositories) -> Result<V> {
-    let v = load(c)?;
-    let last = c
+pub(crate) fn defaults(repos: &Repositories) -> Result<Value> {
+    let settings = load(repos)?;
+    let last = repos
         .chats
         .list()?
         .into_iter()
         .rev()
-        .find_map(|v| v["bot"]["cwd"].as_str().map(String::from));
+        .find_map(|chat| chat["bot"]["cwd"].as_str().map(String::from));
     Ok(
-        json!({"cwd":std::env::var("HERDR_BOT_DEFAULT_CWD").ok().or_else(||v["defaultWorkingFolder"].as_str().map(String::from)).or(last).unwrap_or_default(),
-        "provider":v["defaultProvider"].as_str().map(String::from).or_else(||std::env::var("HERDR_BOT_DEFAULT_KIND").ok()).unwrap_or("claude".into()),
-        "permissionMode":v["defaultPermissionMode"].as_str().unwrap_or("ask"),"homeDir":dirs::home_dir()}),
+        json!({"cwd":std::env::var("HERDR_BOT_DEFAULT_CWD").ok().or_else(||settings["defaultWorkingFolder"].as_str().map(String::from)).or(last).unwrap_or_default(),
+        "provider":settings["defaultProvider"].as_str().map(String::from).or_else(||std::env::var("HERDR_BOT_DEFAULT_KIND").ok()).unwrap_or("claude".into()),
+        "permissionMode":settings["defaultPermissionMode"].as_str().unwrap_or("ask"),"homeDir":dirs::home_dir()}),
     )
 }

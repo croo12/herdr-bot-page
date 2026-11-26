@@ -28,10 +28,10 @@ fn main() {
             controller::pick
         ])
         .run(tauri::generate_context!());
-    if let Err(e) = result {
+    if let Err(error) = result {
         rfd::MessageDialog::new()
             .set_title("herdr-bot")
-            .set_description(e.to_string())
+            .set_description(error.to_string())
             .set_level(rfd::MessageLevel::Error)
             .show();
         std::process::exit(1);

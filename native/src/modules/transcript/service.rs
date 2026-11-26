@@ -1,22 +1,22 @@
 use crate::modules::transcript::content;
 use crate::modules::turns;
 use crate::{
-    domain::{id, need, now, patch, s, strings, Events},
+    domain::{id, need, now, patch, string_field, strings, Events},
     modules::{chats::change, turns::Job},
     storage::Repositories,
     Engine,
 };
 use anyhow::{bail, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 use std::sync::Arc;
-pub(crate) fn transcript_page(engine: &Engine, p: &V) -> Result<V> {
-    let chat_id = s(p, "chatId");
-    engine.tx(|c, _| {
-        c.chats.get(chat_id)?;
-        let limit = p["limit"].as_i64().unwrap_or(200).clamp(1, 1000);
-        let mut rows = c.transcript.page(
+pub(crate) fn transcript_page(engine: &Engine, params: &Value) -> Result<Value> {
+    let chat_id = string_field(params, "chatId");
+    engine.tx(|repos, _| {
+        repos.chats.get(chat_id)?;
+        let limit = params["limit"].as_i64().unwrap_or(200).clamp(1, 1000);
+        let mut rows = repos.transcript.page(
             chat_id,
-            p["beforeSeq"].as_i64().unwrap_or(i64::MAX),
+            params["beforeSeq"].as_i64().unwrap_or(i64::MAX),
             limit + 1,
         )?;
         let mut result = json!({});
@@ -28,65 +28,65 @@ pub(crate) fn transcript_page(engine: &Engine, p: &V) -> Result<V> {
         Ok(result)
     })
 }
-pub(crate) fn transcript_thread(engine: &Engine, p: &V) -> Result<V> {
-    engine.tx(|c, _| Ok(json!({"entries":c.transcript.thread(s(p,"chatId"),need(p,"rootId")?)?})))
+pub(crate) fn transcript_thread(engine: &Engine, params: &Value) -> Result<Value> {
+    engine.tx(|repos, _| Ok(json!({"entries":repos.transcript.thread(string_field(params,"chatId"),need(params,"rootId")?)?})))
 }
-pub(crate) fn react(engine: &Engine, p: &V) -> Result<V> {
-    let chat_id = s(p, "chatId");
-    engine.tx(|c, events| {
-        let mut entry = c.transcript.by_id(chat_id, need(p, "entryId")?)?;
+pub(crate) fn react(engine: &Engine, params: &Value) -> Result<Value> {
+    let chat_id = string_field(params, "chatId");
+    engine.tx(|repos, events| {
+        let mut entry = repos.transcript.by_id(chat_id, need(params, "entryId")?)?;
         let mut reactions = entry["reactions"].as_array().cloned().unwrap_or_default();
-        let reaction = json!({"by":"me","emoji":need(p,"emoji")?});
-        if let Some(i) = reactions.iter().position(|v| v == &reaction) {
-            reactions.remove(i);
+        let reaction = json!({"by":"me","emoji":need(params,"emoji")?});
+        if let Some(index) = reactions.iter().position(|existing| existing == &reaction) {
+            reactions.remove(index);
         } else {
             reactions.push(reaction);
         }
         entry["reactions"] = json!(reactions);
-        update_entry(c, chat_id, &entry, events)?;
+        update_entry(repos, chat_id, &entry, events)?;
         Ok(json!({"entry":entry}))
     })
 }
-pub(crate) fn search_messages(engine: &Engine, query: &str) -> Result<V> {
-    engine.tx(|c, _| {
+pub(crate) fn search_messages(engine: &Engine, query: &str) -> Result<Value> {
+    engine.tx(|repos, _| {
         let query = query.trim().to_lowercase();
         let mut hits = vec![];
         if query.is_empty() {
             return Ok(json!(hits));
         }
-        c.transcript.visit_messages(|chat, e| {
-            let text = content(&e);
+        repos.transcript.visit_messages(|chat, entry| {
+            let text = content(&entry);
             if !text.to_lowercase().contains(&query) {
                 return true;
             }
             hits.push(
-                json!({"chatId":chat["id"],"chatName":chat["name"],"entryId":e["id"],
-        "role":if e["kind"]=="message"{"user"}else{"assistant"},"author":e["author"]["name"],
-        "timestampMs":e["timestampMs"],"snippet":text.chars().take(240).collect::<String>()}),
+                json!({"chatId":chat["id"],"chatName":chat["name"],"entryId":entry["id"],
+        "role":if entry["kind"]=="message"{"user"}else{"assistant"},"author":entry["author"]["name"],
+        "timestampMs":entry["timestampMs"],"snippet":text.chars().take(240).collect::<String>()}),
             );
             hits.len() < 100
         })?;
         Ok(json!(hits))
     })
 }
-pub(crate) fn send(engine: &Arc<Engine>, p: &V) -> Result<V> {
-    let chat_id = need(p, "chatId")?;
-    let mut text = s(p, "text").to_owned();
-    let paths = strings(&p["attachmentPaths"]);
+pub(crate) fn send(engine: &Arc<Engine>, params: &Value) -> Result<Value> {
+    let chat_id = need(params, "chatId")?;
+    let mut text = string_field(params, "text").to_owned();
+    let paths = strings(&params["attachmentPaths"]);
     if !paths.is_empty() {
         text.push_str("\n\n");
         text += &paths
             .iter()
-            .map(|x| format!("(attached: {x})"))
+            .map(|path| format!("(attached: {path})"))
             .collect::<Vec<_>>()
             .join("\n");
     }
     if text.trim().is_empty() {
         bail!("invalid_args: message is empty")
     }
-    let (entry, new) = engine.tx(|c, ev| {
-        if let Some(nonce) = p["clientNonce"].as_str() {
-            if let Some(row) = c.transcript.by_nonce(chat_id, nonce)? {
+    let (entry, new) = engine.tx(|repos, events| {
+        if let Some(nonce) = params["clientNonce"].as_str() {
+            if let Some(row) = repos.transcript.by_nonce(chat_id, nonce)? {
                 return Ok((row, false));
             }
         }
@@ -94,8 +94,8 @@ pub(crate) fn send(engine: &Arc<Engine>, p: &V) -> Result<V> {
             "kind": "message", "role": "user", "author": {"id": "user", "name": engine.user},
             "content": text, "isStreaming": false
         });
-        patch(&mut entry, p, &["clientNonce", "replyTo", "richText"]);
-        Ok((append(c, chat_id, entry, ev)?, true))
+        patch(&mut entry, params, &["clientNonce", "replyTo", "richText"]);
+        Ok((append(repos, chat_id, entry, events)?, true))
     })?;
     if new {
         turns::enqueue(
@@ -110,41 +110,46 @@ pub(crate) fn send(engine: &Arc<Engine>, p: &V) -> Result<V> {
     }
     Ok(json!({"entryId":entry["id"]}))
 }
-pub(crate) fn append(c: &Repositories, chat_id: &str, mut e: V, events: &mut Events) -> Result<V> {
-    let mut v = c.chats.get(chat_id)?;
-    let seq = c.transcript.latest_seq(chat_id)? + 1;
-    let t = now();
-    e["seq"] = seq.into();
-    e["id"] = id().into();
-    e["timestampMs"] = t.into();
-    c.transcript.insert(chat_id, seq, &e)?;
-    v["updatedAt"] = t.into();
-    v["lastActivityAt"] = t.into();
-    v["lastMessageAt"] = t.into();
-    v["lastMessagePreview"] = content(&e).chars().take(180).collect::<String>().into();
-    v["lastMessageId"] = e["id"].clone();
-    if e["kind"] != "message" {
-        v["lastIncomingSeq"] = seq.into();
-        v["hasUnread"] = true.into();
-        v["unreadCount"] = (v["unreadCount"].as_i64().unwrap_or(0) + 1).into();
+pub(crate) fn append(
+    repos: &Repositories,
+    chat_id: &str,
+    mut entry: Value,
+    events: &mut Events,
+) -> Result<Value> {
+    let mut chat = repos.chats.get(chat_id)?;
+    let seq = repos.transcript.latest_seq(chat_id)? + 1;
+    let timestamp = now();
+    entry["seq"] = seq.into();
+    entry["id"] = id().into();
+    entry["timestampMs"] = timestamp.into();
+    repos.transcript.insert(chat_id, seq, &entry)?;
+    chat["updatedAt"] = timestamp.into();
+    chat["lastActivityAt"] = timestamp.into();
+    chat["lastMessageAt"] = timestamp.into();
+    chat["lastMessagePreview"] = content(&entry).chars().take(180).collect::<String>().into();
+    chat["lastMessageId"] = entry["id"].clone();
+    if entry["kind"] != "message" {
+        chat["lastIncomingSeq"] = seq.into();
+        chat["hasUnread"] = true.into();
+        chat["unreadCount"] = (chat["unreadCount"].as_i64().unwrap_or(0) + 1).into();
     }
     events.push((
         "transcript.entryAppended",
-        json!({"chatId":chat_id,"entry":e}),
+        json!({"chatId":chat_id,"entry":entry}),
     ));
-    change(c, &v, events)?;
-    Ok(e)
+    change(repos, &chat, events)?;
+    Ok(entry)
 }
 pub(crate) fn update_entry(
-    c: &Repositories,
+    repos: &Repositories,
     chat_id: &str,
-    e: &V,
+    entry: &Value,
     events: &mut Events,
 ) -> Result<()> {
-    c.transcript.update(chat_id, e)?;
+    repos.transcript.update(chat_id, entry)?;
     events.push((
         "transcript.entryUpdated",
-        json!({"chatId":chat_id,"entry":e}),
+        json!({"chatId":chat_id,"entry":entry}),
     ));
     Ok(())
 }

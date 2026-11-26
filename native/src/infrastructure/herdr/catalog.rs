@@ -1,6 +1,6 @@
 use super::{capture, command};
 use anyhow::{bail, Context, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 
 use std::{
     io::{BufRead, BufReader, Write},
@@ -8,7 +8,7 @@ use std::{
     thread,
     time::Duration,
 };
-fn codex_catalog() -> Result<V> {
+fn codex_catalog() -> Result<Value> {
     let mut child = provider_command("codex")
         .arg("app-server")
         .stdin(Stdio::piped())
@@ -19,11 +19,11 @@ fn codex_catalog() -> Result<V> {
     let output = child.stdout.take().unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     thread::spawn(move || {
-        let result = (|| -> Result<V> {
+        let result = (|| -> Result<Value> {
             let init = json!({"id":1,"method":"initialize","params":{"clientInfo":{"name":"herdr-bot","version":"1.3.0"}}});
             writeln!(input, "{init}")?;
             for line in BufReader::new(output).lines() {
-                let Ok(frame) = serde_json::from_str::<V>(&line?) else {
+                let Ok(frame) = serde_json::from_str::<Value>(&line?) else {
                     continue;
                 };
                 if !frame["error"].is_null() {
@@ -49,7 +49,7 @@ fn codex_catalog() -> Result<V> {
     result.context("Codex model query timed out")?
 }
 
-pub fn models(provider: &str) -> Result<V> {
+pub fn models(provider: &str) -> Result<Value> {
     let aliases = match provider {
         "claude" => vec!["fable", "opus", "sonnet", "haiku"],
         "gemini" => vec!["auto", "pro", "flash", "flash-lite"],
@@ -58,26 +58,30 @@ pub fn models(provider: &str) -> Result<V> {
     let entry = |id: &str, label: &str| json!({"id":id,"label":label});
     if !aliases.is_empty() {
         return Ok(
-            json!({"source":"latest-alias","models":aliases.into_iter().map(|x|entry(x,x)).collect::<Vec<_>>()}),
+            json!({"source":"latest-alias","models":aliases.into_iter().map(|alias|entry(alias,alias)).collect::<Vec<_>>()}),
         );
     }
     let mut items = Vec::new();
     if provider == "codex" {
         let catalog = codex_catalog()?;
-        for m in catalog["data"].as_array().into_iter().flatten() {
-            if let Some(id) = m["model"].as_str().or(m["id"].as_str()) {
-                items.push(entry(id, m["displayName"].as_str().unwrap_or(id)));
+        for model in catalog["data"].as_array().into_iter().flatten() {
+            if let Some(id) = model["model"].as_str().or(model["id"].as_str()) {
+                items.push(entry(id, model["displayName"].as_str().unwrap_or(id)));
             }
         }
     } else if matches!(provider, "grok" | "agy" | "opencode") {
         let output = capture(provider_command(provider).arg("models"), 8)?;
-        for line in output.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        for line in output
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+        {
             match provider {
                 "grok" => {
                     if let Some(id) = line
                         .strip_prefix("- ")
                         .or(line.strip_prefix("* "))
-                        .and_then(|x| x.split_whitespace().next())
+                        .and_then(|text| text.split_whitespace().next())
                     {
                         items.push(entry(id, id));
                     }

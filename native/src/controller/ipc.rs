@@ -1,6 +1,6 @@
 use crate::{wire_error, Engine};
 use anyhow::{bail, Context, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 use std::{
     fs,
     io::{BufRead, BufReader, Read, Write},
@@ -44,27 +44,27 @@ fn serve_client(mut stream: TcpStream, engine: &Arc<Engine>, secret: &str) -> Re
     if line.len() as u64 > REQUEST_LIMIT {
         bail!("request too large")
     }
-    let v: V = serde_json::from_str(&line)?;
-    if v["token"] != secret {
+    let request: Value = serde_json::from_str(&line)?;
+    if request["token"] != secret {
         bail!("invalid token")
     }
-    let method = v["method"].as_str().unwrap_or_default();
-    let res = engine.call_from(super::Source::Ipc, method, v["params"].clone());
+    let method = request["method"].as_str().unwrap_or_default();
+    let res = engine.call_from(super::Source::Ipc, method, request["params"].clone());
     let response = match res {
         Ok(value) => json!({"value":value}),
-        Err(e) => json!({"error":wire_error(&e)}),
+        Err(error) => json!({"error":wire_error(&error)}),
     };
     serde_json::to_writer(&mut stream, &response)?;
     stream.write_all(b"\n")?;
     Ok(())
 }
-pub fn request(home: &Path, method: &str, p: V) -> Result<V> {
-    let endpoint: V = serde_json::from_slice(
+pub fn request(home: &Path, method: &str, params: Value) -> Result<Value> {
+    let endpoint: Value = serde_json::from_slice(
         &fs::read(home.join(ENDPOINT)).context("Open herdr-bot or start herdr-bot serve first")?,
     )?;
     let port = endpoint["port"]
         .as_u64()
-        .and_then(|p| u16::try_from(p).ok())
+        .and_then(|port| u16::try_from(port).ok())
         .context("invalid host endpoint")?;
     let mut stream =
         TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, port).into(), Duration::from_secs(3))
@@ -72,12 +72,12 @@ pub fn request(home: &Path, method: &str, p: V) -> Result<V> {
     stream.set_read_timeout(Some(Duration::from_secs(150)))?;
     serde_json::to_writer(
         &mut stream,
-        &json!({"token":endpoint["token"],"method":method,"params":p}),
+        &json!({"token":endpoint["token"],"method":method,"params":params}),
     )?;
     stream.write_all(b"\n")?;
-    let result: V = serde_json::from_reader(stream)?;
-    if let Some(e) = result.get("error") {
-        bail!("{}", e["message"].as_str().unwrap_or("host error"))
+    let result: Value = serde_json::from_reader(stream)?;
+    if let Some(error) = result.get("error") {
+        bail!("{}", error["message"].as_str().unwrap_or("host error"))
     }
     Ok(result["value"].clone())
 }

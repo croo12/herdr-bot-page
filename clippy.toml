@@ -1,0 +1,2 @@
+min-ident-chars-threshold = 1
+allowed-idents-below-min-chars = []

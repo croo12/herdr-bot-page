@@ -70,9 +70,9 @@ fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
     ))
     .unwrap();
     let id = room["chat"]["id"].as_str().unwrap();
-    let p = json!({"chatId":id,"clientNonce":"same-request","text":"hello"});
-    let first = ipc::request(&home, "message.send", p.clone()).unwrap();
-    assert_eq!(ipc::request(&home, "message.send", p).unwrap(), first);
+    let params = json!({"chatId":id,"clientNonce":"same-request","text":"hello"});
+    let first = ipc::request(&home, "message.send", params.clone()).unwrap();
+    assert_eq!(ipc::request(&home, "message.send", params).unwrap(), first);
     wait(|| cli(&home, &["read", id]).contains("native-reply 안녕하세요"));
     wait(|| {
         ipc::request(&home, "host.status", Value::Null).unwrap()["runningChatIds"] == json!([])
@@ -81,13 +81,13 @@ fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
         ipc::request(&home, "transcript.page", json!({"chatId":id})).unwrap()["entries"].clone();
     assert_eq!(entries.as_array().unwrap().len(), 2);
     let entry = &entries[1]["id"];
-    let r = ipc::request(
+    let reaction = ipc::request(
         &home,
         "message.react",
         json!({"chatId":id,"entryId":entry,"emoji":"👍"}),
     )
     .unwrap();
-    assert_eq!(r["entry"]["reactions"][0]["emoji"], "👍");
+    assert_eq!(reaction["entry"]["reactions"][0]["emoji"], "👍");
     let hits = ipc::request(&home, "message.search", json!({"query":"안녕"})).unwrap();
     assert_eq!(hits[0]["entryId"], *entry);
     let outsider = ipc::request(
@@ -155,6 +155,6 @@ fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
     let entries = transcript["entries"].as_array().unwrap();
     assert!(entries
         .iter()
-        .any(|e| e["message"]["content"] == "finished after approval"));
-    assert!(!entries.iter().any(|e| e["kind"] == "notice"));
+        .any(|entry| entry["message"]["content"] == "finished after approval"));
+    assert!(!entries.iter().any(|entry| entry["kind"] == "notice"));
 }

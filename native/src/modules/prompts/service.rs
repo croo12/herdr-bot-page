@@ -1,7 +1,7 @@
 use super::screen::{parse_screen, select_menu_option};
 use crate::modules::reviews;
 use crate::{
-    domain::{need, s},
+    domain::{need, string_field},
     modules::{
         chats::change,
         transcript::{append, update_entry},
@@ -9,9 +9,9 @@ use crate::{
     Engine,
 };
 use anyhow::{anyhow, bail, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 use std::{thread, time::Duration};
-fn read_prompt(engine: &Engine, pane: &str, provider: &str) -> Result<V> {
+fn read_prompt(engine: &Engine, pane: &str, provider: &str) -> Result<Value> {
     Ok(parse_screen(
         &engine.herdr.text(
             &[
@@ -32,31 +32,35 @@ pub(crate) fn refresh(engine: &Engine) -> Result<()> {
     let Ok(_guard) = engine.roster.try_lock() else {
         return Ok(());
     };
-    let chats = engine.tx(|c, _| c.chats.list())?;
-    if !chats.iter().any(|v| v["kind"] == "bot") {
+    let chats = engine.tx(|repos, _| repos.chats.list())?;
+    if !chats.iter().any(|chat| chat["kind"] == "bot") {
         return Ok(());
     }
     let agents = engine.herdr.agents()?;
-    for v in chats.iter().filter(|v| v["kind"] == "bot") {
-        let id = need(v, "id")?;
+    for chat in chats.iter().filter(|chat| chat["kind"] == "bot") {
+        let id = need(chat, "id")?;
         let live = agents
             .iter()
-            .find(|a| a["name"] == id && a["pane_id"] == v["bot"]["paneId"]);
+            .find(|agent| agent["name"] == id && agent["pane_id"] == chat["bot"]["paneId"]);
         let status = live
-            .and_then(|a| a["agent_status"].as_str())
+            .and_then(|agent| agent["agent_status"].as_str())
             .unwrap_or("offline");
         let prompt = if status == "blocked" {
-            read_prompt(engine, need(&v["bot"], "paneId")?, s(&v["bot"], "provider"))
-                .unwrap_or(V::Null)
+            read_prompt(
+                engine,
+                need(&chat["bot"], "paneId")?,
+                string_field(&chat["bot"], "provider"),
+            )
+            .unwrap_or(Value::Null)
         } else {
-            V::Null
+            Value::Null
         };
         let active_chat = engine
             .active
             .lock()
             .unwrap()
             .get(id)
-            .map(|t| t.chat.clone());
+            .map(|turn| turn.chat.clone());
         engine.tx(|repos, events| {
             let mut row = repos.chats.get(id)?;
             if row["bot"]["status"] == status && row["bot"]["pendingPrompt"] == prompt {
@@ -82,11 +86,11 @@ pub(crate) fn refresh(engine: &Engine) -> Result<()> {
             row["bot"]["status"] = status.into();
             row["bot"]["pendingPrompt"] = prompt;
             row["isRunning"] = (status == "working").into();
-            row["currentActivity"] = if status == "working" { json!({"verb":"working"}) } else { V::Null };
+            row["currentActivity"] = if status == "working" { json!({"verb":"working"}) } else { Value::Null };
             row["awaitingUserResponse"] = match status {
                 "blocked" => json!({"reason": "approval"}),
                 "offline" => json!({"reason": "offline"}),
-                _ => V::Null,
+                _ => Value::Null,
             };
             change(repos, &row, events)
         })?;
@@ -96,13 +100,17 @@ pub(crate) fn refresh(engine: &Engine) -> Result<()> {
     }
     Ok(())
 }
-pub(crate) fn answer(engine: &Engine, p: &V) -> Result<V> {
+pub(crate) fn answer(engine: &Engine, params: &Value) -> Result<Value> {
     let _guard = engine.roster.lock().unwrap();
-    answer_locked(engine, p, None)
+    answer_locked(engine, params, None)
 }
-pub(crate) fn answer_locked(engine: &Engine, p: &V, review: Option<&V>) -> Result<V> {
-    let id = need(p, "botId")?;
-    let row = engine.tx(|c, _| c.chats.get(id))?;
+pub(crate) fn answer_locked(
+    engine: &Engine,
+    params: &Value,
+    review: Option<&Value>,
+) -> Result<Value> {
+    let id = need(params, "botId")?;
+    let row = engine.tx(|repos, _| repos.chats.get(id))?;
     let pane = need(&row["bot"], "paneId")?;
     let live = engine.herdr.run(&["agent", "get", pane])?;
     if live["agent"]["agent_status"] != "blocked" || live["agent"]["name"] != id {
@@ -110,22 +118,27 @@ pub(crate) fn answer_locked(engine: &Engine, p: &V, review: Option<&V>) -> Resul
     }
     let provider = need(&row["bot"], "provider")?;
     let prompt = read_prompt(engine, pane, provider)?;
-    if prompt["signature"] != p["signature"] {
+    if prompt["signature"] != params["signature"] {
         bail!("prompt_changed: form changed")
     }
-    let pending = engine.tx(|c, _| Ok(c.prompts.matching(id, need(p, "signature")?)?.is_some()))?;
+    let pending = engine.tx(|repos, _| {
+        Ok(repos
+            .prompts
+            .matching(id, need(params, "signature")?)?
+            .is_some())
+    })?;
     if !pending {
         bail!("prompt_changed: request already answered")
     }
     let press = |key: &str| engine.herdr.run(&["agent", "send-keys", pane, key]);
-    let answer = match need(p, "action")? {
+    let answer = match need(params, "action")? {
         "option" => {
-            let key = need(p, "key")?;
+            let key = need(params, "key")?;
             let option = prompt["options"]
                 .as_array()
                 .into_iter()
                 .flatten()
-                .find(|v| v["key"] == key)
+                .find(|option| option["key"] == key)
                 .ok_or_else(|| anyhow!("invalid_answer: unknown option"))?;
             if prompt["navigation"] == "cursor" {
                 select_menu_option(
@@ -145,12 +158,12 @@ pub(crate) fn answer_locked(engine: &Engine, p: &V, review: Option<&V>) -> Resul
         }
         "next" if prompt["multiSelect"] == true => {
             press("tab")?;
-            V::Null
+            Value::Null
         }
         "text" if prompt["freeTextKey"].is_string() => {
-            let text = need(p, "text")?.lines().collect::<Vec<_>>().join(" ");
+            let text = need(params, "text")?.lines().collect::<Vec<_>>().join(" ");
             if prompt["navigation"] != "text" {
-                press(s(&prompt, "freeTextKey"))?;
+                press(string_field(&prompt, "freeTextKey"))?;
                 thread::sleep(Duration::from_millis(500));
             }
             engine.herdr.run(&["pane", "send-text", pane, &text])?;
@@ -162,7 +175,7 @@ pub(crate) fn answer_locked(engine: &Engine, p: &V, review: Option<&V>) -> Resul
     };
     engine.tx(|repos, events| {
         if !answer.is_null() && prompt["multiSelect"] != true {
-            if let Some((target, mut entry)) = repos.prompts.matching(id, need(p, "signature")?)? {
+            if let Some((target, mut entry)) = repos.prompts.matching(id, need(params, "signature")?)? {
                 if let Some(review) = review {
                     entry["permissionReview"] = review.clone();
                 } else if entry["permissionReview"]["decision"] == "pending" {
@@ -175,8 +188,8 @@ pub(crate) fn answer_locked(engine: &Engine, p: &V, review: Option<&V>) -> Resul
                     reviews::append_reply(repos, events, &target, &entry, review)?;
                 } else {
                     let text = match entry["answer"]["kind"].as_str() {
-                        Some("option") => s(&entry["answer"], "label"),
-                        Some("text") => s(&entry["answer"], "text"),
+                        Some("option") => string_field(&entry["answer"], "label"),
+                        Some("text") => string_field(&entry["answer"], "text"),
                         _ => "Esc",
                     };
                     let reply = json!({

@@ -15,9 +15,9 @@ pub fn stage(state: State<'_, Arc<Engine>>, request: Request<'_>) -> Value {
     let name = request
         .headers()
         .get("x-filename")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| STANDARD.decode(v).ok())
-        .and_then(|v| String::from_utf8(v).ok())
+        .and_then(|header| header.to_str().ok())
+        .and_then(|encoded_name| STANDARD.decode(encoded_name).ok())
+        .and_then(|bytes| String::from_utf8(bytes).ok())
         .unwrap_or("attachment".into());
     service::stage(&state.home, &name, bytes)
 }
@@ -36,6 +36,6 @@ pub async fn attachment(
         })
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())
+    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())
 }

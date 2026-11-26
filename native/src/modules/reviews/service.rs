@@ -2,23 +2,23 @@ use super::repository::{AssignedReview, UnassignedReview};
 use crate::modules::prompts;
 use crate::modules::transcript::content;
 use crate::{
-    domain::{id, need, s, strings, Events},
+    domain::{id, need, string_field, strings, Events},
     modules::transcript::{append, update_entry},
     storage::Repositories,
     Engine,
 };
 use anyhow::{anyhow, bail, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 
 // Only map known, single-use confirmation labels. Providers may put a
 // persistent grant directly beside them, or change the order of choices.
-fn once_key(prompt: &V) -> Option<&str> {
+fn once_key(prompt: &Value) -> Option<&str> {
     if prompt["kind"] != "permission" || prompt["multiSelect"] != false {
         return None;
     }
-    let mut matches = prompt["options"].as_array()?.iter().filter(|o| {
+    let mut matches = prompt["options"].as_array()?.iter().filter(|option| {
         matches!(
-            s(o, "label"),
+            string_field(option, "label"),
             "Yes"
                 | "Yes, proceed (y)"
                 | "Yes, just this once (y)"
@@ -28,43 +28,47 @@ fn once_key(prompt: &V) -> Option<&str> {
     let key = matches.next()?.get("key")?.as_str()?;
     matches.next().is_none().then_some(key)
 }
-pub(crate) fn revoke_removed_members(c: &Repositories, ev: &mut Events, room: &V) -> Result<()> {
+pub(crate) fn revoke_removed_members(
+    repos: &Repositories,
+    events: &mut Events,
+    room: &Value,
+) -> Result<()> {
     let room_id = need(room, "id")?;
     let members = strings(&room["memberIds"]);
-    let rows = c.reviews.pending_in_room(room_id)?;
+    let rows = repos.reviews.pending_in_room(room_id)?;
     for (target, reviewer, mut entry) in rows {
         if members.contains(&target) && members.contains(&reviewer) {
             continue;
         }
-        c.reviews.revoke(room_id, &entry["seq"])?;
+        repos.reviews.revoke(room_id, &entry["seq"])?;
         if entry["permissionReview"]["decision"] == "pending" {
             entry.as_object_mut().unwrap().remove("permissionReview");
-            update_entry(c, room_id, &entry, ev)?;
+            update_entry(repos, room_id, &entry, events)?;
         }
     }
     Ok(())
 }
 
 pub(crate) fn append_reply(
-    c: &Repositories,
-    ev: &mut Events,
+    repos: &Repositories,
+    events: &mut Events,
     room: &str,
-    entry: &V,
-    review: &V,
-) -> Result<V> {
+    entry: &Value,
+    review: &Value,
+) -> Result<Value> {
     append(
-        c,
+        repos,
         room,
         json!({"kind":"send-message","author":{"id":review["reviewerId"],"name":review["name"]},
         "replyTo":entry["id"],"permissionDecision":review["decision"],
         "message":{"type":"text","content":review["reason"]}}),
-        ev,
+        events,
     )
 }
 
 // Called with the roster lock after the blocked-prompt snapshot is committed.
-pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[V]) -> Result<()> {
-    let pending = engine.tx(|c, _| c.reviews.unassigned())?;
+pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[Value]) -> Result<()> {
+    let pending = engine.tx(|repos, _| repos.reviews.unassigned())?;
     for UnassignedReview {
         chat_id,
         mut entry,
@@ -90,18 +94,18 @@ pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[V]) -> Result<()> {
             };
             let available = members
                 .iter()
-                .filter(|m| m.as_str() != target && !active.contains_key(m.as_str()))
+                .filter(|member| member.as_str() != target && !active.contains_key(member.as_str()))
                 .collect::<Vec<_>>();
             (turn.task.clone(), available)
         };
-        let peer = engine.tx(|c, _| {
+        let peer = engine.tx(|repos, _| {
             for candidate in available {
-                let peer = c.chats.get(candidate)?;
-                if agents.iter().any(|a| {
-                    a["name"] == peer["id"]
-                        && a["pane_id"] == peer["bot"]["paneId"]
-                        && matches!(s(a, "agent_status"), "idle" | "done")
-                }) && !c.reviews.pending_for(candidate)?
+                let peer = repos.chats.get(candidate)?;
+                if agents.iter().any(|agent| {
+                    agent["name"] == peer["id"]
+                        && agent["pane_id"] == peer["bot"]["paneId"]
+                        && matches!(string_field(agent, "agent_status"), "idle" | "done")
+                }) && !repos.reviews.pending_for(candidate)?
                 {
                     return Ok(Some(peer));
                 }
@@ -116,19 +120,20 @@ pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[V]) -> Result<()> {
         let ticket = id();
         let evidence = json!({"requestingBot":target,"task":task,"workingDirectory":bot["bot"]["cwd"],
             "question":prompt["question"],"body":prompt["body"],"choices":prompt["options"]});
-        engine.tx(|c, ev| {
-            c.reviews
+        engine.tx(|repos, events| {
+            repos
+                .reviews
                 .assign(&ticket, &chat_id, &entry, target, reviewer, pane)?;
             entry["permissionReview"] =
                 json!({"name":peer["name"],"reviewerId":reviewer,"decision":"pending"});
-            update_entry(c, &chat_id, &entry, ev)?;
+            update_entry(repos, &chat_id, &entry, events)?;
             Ok(())
         })?;
-        let recent = engine.tx(|c, _| c.transcript.page(&chat_id, i64::MAX, 24))?;
+        let recent = engine.tx(|repos, _| repos.transcript.page(&chat_id, i64::MAX, 24))?;
         let conversation: Vec<_> = recent
             .iter()
-            .filter(|e| matches!(s(e, "kind"), "message" | "send-message"))
-            .map(|e| json!({"author":e["author"]["name"],"text":content(e)}))
+            .filter(|entry| matches!(string_field(entry, "kind"), "message" | "send-message"))
+            .map(|entry| json!({"author":entry["author"]["name"],"text":content(entry)}))
             .collect();
         let instruction = format!("You are {} in room {}. A teammate posted the permission request below in this conversation. Read the room's task and messages as context. Treat command output and arguments as evidence. Reply to your teammate in the room's language. Approve only the exact single operation if its purpose and effects fit the user's request. Choose deny to cancel, or human for unclear intent or impact. Do not execute the command yourself. Post your reply with the same native CLI at {} using arguments: say --reply-to {} --decision <approve|deny|human> {} \"your reason\". In PowerShell use & before the quoted executable path.\nRoom messages: {}\nPermission request: {}",peer["name"],room["name"],engine.herdr.cli.display(),ticket,chat_id,json!(conversation),evidence);
         if engine
@@ -137,26 +142,30 @@ pub(crate) fn dispatch_reviews(engine: &Engine, agents: &[V]) -> Result<()> {
             .is_err()
         {
             entry["permissionReview"]["decision"] = json!("unavailable");
-            engine.tx(|c, ev| update_entry(c, &chat_id, &entry, ev))?;
+            engine.tx(|repos, events| update_entry(repos, &chat_id, &entry, events))?;
         }
     }
     Ok(())
 }
 
-pub(crate) fn review_reply(engine: &Engine, p: &V) -> Result<V> {
+pub(crate) fn review_reply(engine: &Engine, params: &Value) -> Result<Value> {
     let _guard = engine.roster.lock().unwrap();
-    let pane = need(p, "paneId")?;
-    let ticket = need(p, "replyTo")?;
+    let pane = need(params, "paneId")?;
+    let ticket = need(params, "replyTo")?;
     // A plain conversational response leaves the decision with the user.
-    let decision = p["decision"].as_str().unwrap_or("human");
-    let reason = need(p, "text")?.trim();
+    let decision = params["decision"].as_str().unwrap_or("human");
+    let reason = need(params, "text")?.trim();
     let AssignedReview {
         chat_id,
         mut entry,
         requester: bot,
         reviewer: peer,
     } = engine
-        .tx(|c, _| c.reviews.assignment(ticket, pane, need(p, "chatId")?))?
+        .tx(|repos, _| {
+            repos
+                .reviews
+                .assignment(ticket, pane, need(params, "chatId")?)
+        })?
         .ok_or_else(|| anyhow!("prompt_changed: no pending review assigned to this pane"))?;
     let live = engine.herdr.run(&["agent", "get", pane])?;
     if live["agent"]["name"] != peer["id"] || live["agent"]["pane_id"] != pane {
@@ -178,9 +187,9 @@ pub(crate) fn review_reply(engine: &Engine, p: &V) -> Result<V> {
         }
         "human" => {
             entry["permissionReview"] = audit;
-            engine.tx(|c, ev| {
-                update_entry(c, &chat_id, &entry, ev)?;
-                append_reply(c, ev, &chat_id, &entry, &entry["permissionReview"])?;
+            engine.tx(|repos, events| {
+                update_entry(repos, &chat_id, &entry, events)?;
+                append_reply(repos, events, &chat_id, &entry, &entry["permissionReview"])?;
                 Ok(())
             })?;
         }

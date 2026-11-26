@@ -1,11 +1,11 @@
 use crate::modules::transcript::content;
 use crate::{
-    domain::{need, s, strings},
+    domain::{need, string_field, strings},
     modules::{chats::change, transcript::append},
     Engine,
 };
 use anyhow::{bail, Result};
-use serde_json::{json, Value as V};
+use serde_json::{json, Value};
 use std::{sync::Arc, thread};
 pub(crate) struct Job {
     pub seed: String,
@@ -34,8 +34,8 @@ pub(crate) fn enqueue(engine: &Arc<Engine>, chat_id: &str, job: Job) {
     thread::spawn(move || loop {
         let job = {
             let mut queues = engine.queues.lock().unwrap();
-            match queues.get_mut(&target).and_then(|q| q.pop_front()) {
-                Some(j) => j,
+            match queues.get_mut(&target).and_then(|queue| queue.pop_front()) {
+                Some(next_job) => next_job,
                 None => {
                     queues.remove(&target);
                     return;
@@ -50,34 +50,41 @@ pub(crate) fn enqueue(engine: &Arc<Engine>, chat_id: &str, job: Job) {
     });
 }
 fn room_activity(engine: &Engine, target: &str, running: bool) {
-    let _ = engine.tx(|c, events| {
-        let mut row = c.chats.get(target)?;
+    let _ = engine.tx(|repos, events| {
+        let mut row = repos.chats.get(target)?;
         if row["kind"] == "room" && row["isRunning"] != running {
             row["isRunning"] = running.into();
             row["currentActivity"] = if running {
                 json!({"verb":"working"})
             } else {
-                V::Null
+                Value::Null
             };
-            change(c, &row, events)?;
+            change(repos, &row, events)?;
         }
         Ok(())
     });
 }
 pub(super) fn notice(engine: &Engine, target: &str, text: &str) {
-    let _ = engine.tx(|c, ev| append(c, target, json!({"kind":"notice","content":text}), ev));
+    let _ = engine.tx(|repos, events| {
+        append(
+            repos,
+            target,
+            json!({"kind":"notice","content":text}),
+            events,
+        )
+    });
 }
 fn cycle(engine: &Engine, target: &str, job: Job) -> Result<()> {
-    let v = engine.tx(|c, _| c.chats.get(target))?;
-    let room = v["kind"] == "room";
+    let chat = engine.tx(|repos, _| repos.chats.get(target))?;
+    let room = chat["kind"] == "room";
     let mut members = if room {
-        strings(&v["memberIds"])
+        strings(&chat["memberIds"])
     } else {
         vec![target.to_owned()]
     };
-    members.retain(|m| job.exclude.as_ref() != Some(m));
+    members.retain(|member_id| job.exclude.as_ref() != Some(member_id));
     let seed = job.seed.to_lowercase();
-    members.sort_by_key(|m| seed.find(&format!("@{m}")).unwrap_or(usize::MAX));
+    members.sort_by_key(|member_id| seed.find(&format!("@{member_id}")).unwrap_or(usize::MAX));
     let mut turns = 0;
     for _ in 0..if room { 3 } else { 1 } {
         let mut any_spoke = false;
@@ -88,14 +95,14 @@ fn cycle(engine: &Engine, target: &str, job: Job) -> Result<()> {
             turns += 1;
             {
                 let _roster = engine.roster.lock().unwrap();
-                if engine.tx(|c, _| c.chats.get(bot)).is_err() {
+                if engine.tx(|repos, _| repos.chats.get(bot)).is_err() {
                     continue;
                 }
-                let target_row = engine.tx(|c, _| c.chats.get(target))?;
+                let target_row = engine.tx(|repos, _| repos.chats.get(target))?;
                 if room && !strings(&target_row["memberIds"]).contains(bot) {
                     continue;
                 }
-                if engine.tx(|c, _| c.reviews.pending_for(bot))? {
+                if engine.tx(|repos, _| repos.reviews.pending_for(bot))? {
                     notice(
                         engine,
                         target,
@@ -123,11 +130,13 @@ fn cycle(engine: &Engine, target: &str, job: Job) -> Result<()> {
             }
             let result = prompt(engine, bot, target, &job.seed);
             let turn = engine.active.lock().unwrap().remove(bot);
-            let spoken = turn.as_ref().is_some_and(|t| t.spoken > 0);
+            let spoken = turn
+                .as_ref()
+                .is_some_and(|active_turn| active_turn.spoken > 0);
             any_spoke |= spoken;
-            if let Err(e) = result {
-                notice(engine, target, &format!("{bot}: {e:#}"));
-            } else if !spoken && !turn.is_some_and(|t| t.passed) {
+            if let Err(error) = result {
+                notice(engine, target, &format!("{bot}: {error:#}"));
+            } else if !spoken && !turn.is_some_and(|active_turn| active_turn.passed) {
                 notice(
                     engine,
                     target,
@@ -142,11 +151,11 @@ fn cycle(engine: &Engine, target: &str, job: Job) -> Result<()> {
     Ok(())
 }
 fn prompt(engine: &Engine, bot: &str, target: &str, seed: &str) -> Result<()> {
-    let (profile, entries, room) = engine.tx(|c, _| {
+    let (profile, entries, room) = engine.tx(|repos, _| {
         Ok((
-            c.chats.get(bot)?,
-            c.transcript.page(target, i64::MAX, 24)?,
-            c.chats.get(target)?,
+            repos.chats.get(bot)?,
+            repos.transcript.page(target, i64::MAX, 24)?,
+            repos.chats.get(target)?,
         ))
     })?;
     let pane = need(&profile["bot"], "paneId")?;
@@ -154,24 +163,32 @@ fn prompt(engine: &Engine, bot: &str, target: &str, seed: &str) -> Result<()> {
     if live["agent"]["name"] != bot {
         bail!("bot_not_ready: pane has changed")
     }
-    if matches!(s(&live["agent"], "agent_status"), "working" | "blocked") {
+    if matches!(
+        string_field(&live["agent"], "agent_status"),
+        "working" | "blocked"
+    ) {
         bail!("bot_not_ready: {}", live["agent"]["agent_status"])
     }
     let history = entries
         .iter()
-        .filter(|e| matches!(s(e, "kind"), "message" | "send-message" | "prompt"))
-        .map(|e| {
-            let author = s(&e["author"], "name");
-            if e["kind"] == "prompt" {
+        .filter(|entry| {
+            matches!(
+                string_field(entry, "kind"),
+                "message" | "send-message" | "prompt"
+            )
+        })
+        .map(|entry| {
+            let author = string_field(&entry["author"], "name");
+            if entry["kind"] == "prompt" {
                 format!(
                     "{author} requested permission or input: {} [{}]",
-                    content(e),
-                    s(e, "status")
+                    content(entry),
+                    string_field(entry, "status")
                 )
-            } else if let Some(decision) = e["permissionDecision"].as_str() {
-                format!("{author} ({decision}): {}", content(e))
+            } else if let Some(decision) = entry["permissionDecision"].as_str() {
+                format!("{author} ({decision}): {}", content(entry))
             } else {
-                format!("{author}: {}", content(e))
+                format!("{author}: {}", content(entry))
             }
         })
         .collect::<Vec<_>>()
@@ -181,10 +198,10 @@ fn prompt(engine: &Engine, bot: &str, target: &str, seed: &str) -> Result<()> {
         Use the native CLI at {cli} from this pane. Run it with arguments: say {target} \"your reply\" (or pass {target} if finished). \
         Call the CLI to post; terminal output is private. In PowerShell invoke a quoted path with &. \
         To delegate, use message <bot-or-room-id> \"task\". Do not repeat earlier replies.\n\
-        Current request:\n{}\nRecent conversation:\n{}",s(&profile,"name"),s(&profile,"description"),room["memberIds"],seed,history);
+        Current request:\n{}\nRecent conversation:\n{}",string_field(&profile,"name"),string_field(&profile,"description"),room["memberIds"],seed,history);
     let timeout = std::env::var("HERDR_BOT_TURN_TIMEOUT_MS")
         .ok()
-        .and_then(|s| s.parse::<u64>().ok())
+        .and_then(|timeout| timeout.parse::<u64>().ok())
         .unwrap_or(180000)
         .clamp(1000, 3600000);
     let limit = timeout.to_string();
@@ -219,7 +236,7 @@ fn prompt(engine: &Engine, bot: &str, target: &str, seed: &str) -> Result<()> {
         if agent["name"] != bot || agent["pane_id"] != pane {
             bail!("bot_not_ready: pane has changed");
         }
-        match s(agent, "agent_status") {
+        match string_field(agent, "agent_status") {
             "done" | "idle" => return Ok(()),
             "working" | "blocked" => {}
             status => bail!("bot_not_ready: agent status is {status}"),

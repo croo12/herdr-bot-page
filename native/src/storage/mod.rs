@@ -19,8 +19,8 @@ pub(crate) struct Repositories<'db> {
 pub(crate) struct Database(Mutex<Connection>);
 impl Database {
     pub(crate) fn open(home: &Path) -> Result<Self> {
-        let c = Connection::open(home.join("chat.sqlite3"))?;
-        c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
+        let connection = Connection::open(home.join("chat.sqlite3"))?;
+        connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
     CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS entries(chat TEXT REFERENCES chats(id) ON DELETE CASCADE, seq INTEGER, data TEXT NOT NULL, PRIMARY KEY(chat,seq));
     CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY,data TEXT NOT NULL);
@@ -31,18 +31,18 @@ impl Database {
         reviewer TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE, pane TEXT NOT NULL,
         UNIQUE(chat,seq), FOREIGN KEY(chat,seq) REFERENCES entries(chat,seq) ON DELETE CASCADE
     );")?;
-        c.execute(
+        connection.execute(
         "UPDATE chats SET data=json_set(data,'$.isRunning',json('false'),'$.currentActivity',null)
         WHERE json_extract(data,'$.kind')='room' AND json_extract(data,'$.isRunning')=1",
         [],
     )?;
-        Ok(Self(Mutex::new(c)))
+        Ok(Self(Mutex::new(connection)))
     }
-    pub(crate) fn transaction<T>(
+    pub(crate) fn transaction<Output>(
         &self,
-        work: impl FnOnce(&Repositories<'_>, &mut Events) -> Result<T>,
+        work: impl FnOnce(&Repositories<'_>, &mut Events) -> Result<Output>,
         publish: impl FnOnce(Events),
-    ) -> Result<T> {
+    ) -> Result<Output> {
         let mut db = self.0.lock().unwrap();
         let tx = db.transaction()?;
         let repositories = Repositories {
