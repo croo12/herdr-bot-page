@@ -69,7 +69,7 @@ impl Controller<'_> {
             "directory.list" => paths::directory(string_field(&params, "path")),
             "settings.get" => settings::get_settings(self.store),
             "settings.update" => settings::update_settings(self.store, &params),
-            "bot.defaults" => settings::bot_defaults(self.store),
+            "bot.defaults" => bots::bot_defaults(self.store),
             "chat.list" | "chat.search" => {
                 chats::find_chats(self.store, string_field(&params, "query"))
             }
@@ -80,9 +80,11 @@ impl Controller<'_> {
             }
             "chat.markRead" => chats::edit_chat(self.store, ChatEdit::Read, &params),
             "chat.setUnread" => chats::edit_chat(self.store, ChatEdit::Unread, &params),
-            "chat.delete" => chats::delete_chats(self.store, self.sessions, &params),
+            "chat.delete" => crate::application::delete_chats(self.store, self.sessions, &params),
             "room.create" => rooms::create_room(self.store, &params),
-            "room.setMembers" => rooms::set_members(self.store, &self.sessions.roster, &params),
+            "room.setMembers" => {
+                crate::application::set_members(self.store, self.sessions, &params)
+            }
             "transcript.page" => transcript::transcript_page(self.store, &params),
             "transcript.thread" => transcript::transcript_thread(self.store, &params),
             "message.search" => {
@@ -122,8 +124,8 @@ impl Controller<'_> {
             ),
             "cli.pass" => self.agent_action(AgentAction::Pass, params),
             "cli.message" => self.agent_action(AgentAction::Delegate, params),
-            "cli.whoami" | "cli.profile" => self.agent_action(AgentAction::Profile, params),
-            "cli.profileUpdate" => self.agent_action(AgentAction::UpdateProfile, params),
+            "cli.whoami" | "cli.profile" => chats::profile_for_pane(self.store, &params),
+            "cli.profileUpdate" => chats::update_profile_for_pane(self.store, params),
             _ => bail!("unknown_method: {method}"),
         }
     }

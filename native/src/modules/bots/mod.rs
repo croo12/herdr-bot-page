@@ -1,5 +1,7 @@
 mod connection;
+mod defaults;
 mod service;
+pub(crate) use defaults::bot_defaults;
 mod validation;
 
 pub(crate) use connection::{connect_bot, connect_for_turn};

@@ -78,7 +78,7 @@ impl Engine {
             }
             while let Some(engine) = weak.upgrade() {
                 let _ = engine.enqueue_runnable_tasks();
-                let _ = crate::modules::prompts::refresh(&engine.store, &engine.sessions);
+                let _ = crate::application::refresh_prompts(&engine.store, &engine.sessions);
                 drop(engine);
                 thread::sleep(Duration::from_secs(3));
             }

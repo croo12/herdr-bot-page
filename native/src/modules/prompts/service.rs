@@ -1,12 +1,7 @@
 use super::screen::{parse_screen, select_menu_option};
 use crate::{
-    domain::{need, string_field},
+    domain::{need, permission_reply, string_field},
     infrastructure::{herdr::Herdr, AgentSessions},
-    modules::{
-        chats::change,
-        reviews,
-        transcript::{append, update_entry},
-    },
     storage::Store,
 };
 use anyhow::{anyhow, bail, Result};
@@ -29,15 +24,12 @@ fn read_prompt(herdr: &Herdr, pane: &str, provider: &str) -> Result<Value> {
         provider,
     ))
 }
-pub(crate) fn refresh(store: &Store, sessions: &AgentSessions) -> Result<()> {
-    let Ok(_guard) = sessions.roster.try_lock() else {
-        return Ok(());
-    };
-    let chats = store.tx(|repos, _| repos.chats.list())?;
-    if !chats.iter().any(|chat| chat["kind"] == "bot") {
-        return Ok(());
-    }
-    let agents = sessions.herdr.agents()?;
+pub(crate) fn refresh_status(
+    store: &Store,
+    sessions: &AgentSessions,
+    chats: &[Value],
+    agents: &[Value],
+) -> Result<()> {
     for chat in chats.iter().filter(|chat| chat["kind"] == "bot") {
         let id = need(chat, "id")?;
         let live = agents
@@ -77,11 +69,11 @@ pub(crate) fn refresh(store: &Store, sessions: &AgentSessions) -> Result<()> {
             if let Some((previous_chat, mut entry)) = pending {
                 same_prompt = !prompt.is_null() && (entry["prompt"]["signature"] == prompt["signature"] || entry["prompt"]["kind"] == "unknown");
                 if same_prompt { entry["prompt"] = prompt.clone(); } else { entry["status"] = "resolved".into(); }
-                update_entry(repos, &previous_chat, &entry, events)?;
+                repos.update_entry(&previous_chat, &entry, events)?;
             }
             if !same_prompt && !prompt.is_null() {
                 let entry = json!({"kind": "prompt", "prompt": prompt, "status": "pending", "author": {"id": id, "name": row["name"]}});
-                append(repos, &target, entry, events)?;
+                repos.append_entry(&target, entry, events)?;
                 row = repos.chats.get(id)?;
             }
             row["bot"]["status"] = status.into();
@@ -93,11 +85,8 @@ pub(crate) fn refresh(store: &Store, sessions: &AgentSessions) -> Result<()> {
                 "offline" => json!({"reason": "offline"}),
                 _ => Value::Null,
             };
-            change(repos, &row, events)
+            repos.chats.save_changed(&row, events)
         })?;
-    }
-    if chats.iter().any(|chat| chat["kind"] == "room") {
-        reviews::dispatch_reviews(store, sessions, &agents)?;
     }
     Ok(())
 }
@@ -199,9 +188,9 @@ pub(crate) fn answer_locked(
                 }
                 entry["answer"] = answer;
                 entry["status"] = "answered".into();
-                update_entry(repos, &target, &entry, events)?;
+                repos.update_entry(&target, &entry, events)?;
                 if let Some(review) = review {
-                    reviews::append_reply(repos, events, &target, &entry, review)?;
+                    repos.append_entry(&target, permission_reply(&entry, review), events)?;
                 } else {
                     let text = match entry["answer"]["kind"].as_str() {
                         Some("option") => string_field(&entry["answer"], "label"),
@@ -212,7 +201,7 @@ pub(crate) fn answer_locked(
                         "kind": "message", "role": "user", "author": {"id": "user", "name": user},
                         "content": text, "replyTo": entry["id"], "isStreaming": false
                     });
-                    append(repos, &target, reply, events)?;
+                    repos.append_entry(&target, reply, events)?;
                 }
                 answered_chat = Some(target);
             }

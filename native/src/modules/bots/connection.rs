@@ -1,7 +1,6 @@
 use crate::{
     domain::{need, string_field},
     infrastructure::{herdr::Herdr, AgentSessions},
-    modules::{chats::change, transcript::update_entry},
     storage::Store,
 };
 use anyhow::{bail, Context, Result};
@@ -74,7 +73,7 @@ pub(crate) fn connect_for_turn(store: &Store, herdr: &Herdr, bot_id: &str) -> Re
                 // owner's binding in the same commit so CLI replies have exactly one owner.
                 if let Some((room, mut entry)) = repos.prompts.pending(owner)? {
                     entry["status"] = "resolved".into();
-                    update_entry(repos, &room, &entry, events)?;
+                    repos.update_entry(&room, &entry, events)?;
                 }
                 row["bot"]["paneId"] = if owner == bot_id {
                     pane.into()
@@ -82,7 +81,7 @@ pub(crate) fn connect_for_turn(store: &Store, herdr: &Herdr, bot_id: &str) -> Re
                     Value::Null
                 };
                 row["bot"]["pendingPrompt"] = Value::Null;
-                change(repos, &row, events)?;
+                repos.chats.save_changed(&row, events)?;
             }
             Ok(())
         })?;

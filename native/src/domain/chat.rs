@@ -19,3 +19,20 @@ pub(crate) fn new_chat(id: &str, kind: &str, params: &Value) -> Value {
     );
     chat
 }
+
+pub(crate) fn record_latest_entry(chat: &mut Value, entry: &Value) {
+    chat["updatedAt"] = entry["timestampMs"].clone();
+    chat["lastActivityAt"] = entry["timestampMs"].clone();
+    chat["lastMessageAt"] = entry["timestampMs"].clone();
+    chat["lastMessagePreview"] = super::content(entry)
+        .chars()
+        .take(180)
+        .collect::<String>()
+        .into();
+    chat["lastMessageId"] = entry["id"].clone();
+    if entry["kind"] != "message" {
+        chat["lastIncomingSeq"] = entry["seq"].clone();
+        chat["hasUnread"] = true.into();
+        chat["unreadCount"] = (chat["unreadCount"].as_i64().unwrap_or(0) + 1).into();
+    }
+}

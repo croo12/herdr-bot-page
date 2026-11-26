@@ -30,6 +30,20 @@ impl<'db> Chats<'db> {
         )?;
         Ok(())
     }
+    pub(crate) fn save_changed(
+        &self,
+        chat: &Value,
+        events: &mut crate::domain::Events,
+    ) -> Result<()> {
+        self.save(chat)?;
+        events.push(("chat.changed", chat.clone()));
+        Ok(())
+    }
+
+    pub(crate) fn by_pane(&self, pane: &str) -> Result<Value> {
+        self.db.query_row("SELECT data FROM chats WHERE json_extract(data, '$.bot.paneId') = ? ORDER BY rowid LIMIT 1", [pane], |row| row.get(0))
+            .optional()?.ok_or_else(|| anyhow!("unknown_bot: pane {pane}"))
+    }
     pub(crate) fn for_request(&self, params: &Value) -> Result<Option<Value>> {
         if let Some(request_id) = params["requestId"].as_str() {
             return Ok(self

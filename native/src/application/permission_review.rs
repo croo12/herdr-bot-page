@@ -53,3 +53,19 @@ fn apply_review(
     }
     Ok(json!({"decision":decision}))
 }
+
+pub(crate) fn refresh_prompts(store: &Store, sessions: &AgentSessions) -> Result<()> {
+    let Ok(_guard) = sessions.roster.try_lock() else {
+        return Ok(());
+    };
+    let chats = store.tx(|repos, _| repos.chats.list())?;
+    if !chats.iter().any(|chat| chat["kind"] == "bot") {
+        return Ok(());
+    }
+    let agents = sessions.herdr.agents()?;
+    prompts::refresh_status(store, sessions, &chats, &agents)?;
+    if chats.iter().any(|chat| chat["kind"] == "room") {
+        reviews::dispatch_reviews(store, sessions, &agents)?;
+    }
+    Ok(())
+}

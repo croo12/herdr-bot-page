@@ -1,7 +1,8 @@
 use super::Engine;
 use crate::{
+    application,
     domain::ChatJob,
-    modules::{rooms, tasks, transcript, turns},
+    modules::{rooms, tasks},
 };
 use anyhow::Result;
 use std::{sync::Arc, thread};
@@ -58,13 +59,15 @@ impl Engine {
             };
             rooms::set_activity(&self.store, chat_id, true);
             let result = match item {
-                QueueItem::Chat(job) => turns::run_chat(&self.store, &self.sessions, chat_id, job),
+                QueueItem::Chat(job) => {
+                    application::run_chat(&self.store, &self.sessions, chat_id, job)
+                }
                 QueueItem::Task(entry_id) => {
-                    tasks::execute(&self.store, &self.sessions, chat_id, &entry_id)
+                    application::execute_task(&self.store, &self.sessions, chat_id, &entry_id)
                 }
             };
             if let Err(error) = result {
-                transcript::notice(&self.store, chat_id, &format!("{error:#}"));
+                self.store.notice(chat_id, &format!("{error:#}"));
             }
             rooms::set_activity(&self.store, chat_id, false);
         }

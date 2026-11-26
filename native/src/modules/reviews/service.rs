@@ -1,7 +1,6 @@
 use crate::{
-    domain::{id, need, string_field, strings, Events},
+    domain::{content, id, need, permission_reply, string_field, strings, Events},
     infrastructure::{herdr::Herdr, AgentSessions},
-    modules::transcript::{append, content, update_entry},
     storage::{AssignedReview, Repositories, Store, UnassignedReview},
 };
 use anyhow::{anyhow, bail, Result};
@@ -40,27 +39,10 @@ pub(crate) fn revoke_removed_members(
         repos.reviews.revoke(room_id, &entry["seq"])?;
         if entry["permissionReview"]["decision"] == "pending" {
             entry.as_object_mut().unwrap().remove("permissionReview");
-            update_entry(repos, room_id, &entry, events)?;
+            repos.update_entry(room_id, &entry, events)?;
         }
     }
     Ok(())
-}
-
-pub(crate) fn append_reply(
-    repos: &Repositories,
-    events: &mut Events,
-    room: &str,
-    entry: &Value,
-    review: &Value,
-) -> Result<Value> {
-    append(
-        repos,
-        room,
-        json!({"kind":"send-message","author":{"id":review["reviewerId"],"name":review["name"]},
-        "replyTo":entry["id"],"permissionDecision":review["decision"],
-        "message":{"type":"text","content":review["reason"]}}),
-        events,
-    )
 }
 
 // Called with the roster lock after the blocked-prompt snapshot is committed.
@@ -127,7 +109,7 @@ pub(crate) fn dispatch_reviews(
                 .assign(&ticket, &chat_id, &entry, target, reviewer, pane)?;
             entry["permissionReview"] =
                 json!({"name":peer["name"],"reviewerId":reviewer,"decision":"pending"});
-            update_entry(repos, &chat_id, &entry, events)?;
+            repos.update_entry(&chat_id, &entry, events)?;
             Ok(())
         })?;
         let recent = store.tx(|repos, _| repos.transcript.page(&chat_id, i64::MAX, 24))?;
@@ -143,7 +125,7 @@ pub(crate) fn dispatch_reviews(
             .is_err()
         {
             entry["permissionReview"]["decision"] = json!("unavailable");
-            store.tx(|repos, events| update_entry(repos, &chat_id, &entry, events))?;
+            store.tx(|repos, events| repos.update_entry(&chat_id, &entry, events))?;
         }
     }
     Ok(())
@@ -201,8 +183,12 @@ pub(crate) fn resolve_reply(
         "human" => {
             entry["permissionReview"] = audit;
             store.tx(|repos, events| {
-                update_entry(repos, &chat_id, &entry, events)?;
-                append_reply(repos, events, &chat_id, &entry, &entry["permissionReview"])?;
+                repos.update_entry(&chat_id, &entry, events)?;
+                repos.append_entry(
+                    &chat_id,
+                    permission_reply(&entry, &entry["permissionReview"]),
+                    events,
+                )?;
                 Ok(())
             })?;
             Ok(None)

@@ -1,21 +1,9 @@
 use crate::{
-    domain::{id, need, now, patch, string_field, strings, ChatJob, Events},
-    modules::{chats::change, transcript::content},
-    storage::{Repositories, Store},
+    domain::{content, need, patch, string_field, strings, ChatJob},
+    storage::Store,
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
-pub(crate) fn notice(store: &Store, target: &str, text: &str) {
-    let _ = store.tx(|repos, events| {
-        append(
-            repos,
-            target,
-            json!({"kind":"notice","content":text}),
-            events,
-        )
-    });
-}
-
 pub(crate) fn transcript_page(store: &Store, params: &Value) -> Result<Value> {
     let chat_id = string_field(params, "chatId");
     store.tx(|repos, _| {
@@ -50,7 +38,7 @@ pub(crate) fn react(store: &Store, params: &Value) -> Result<Value> {
             reactions.push(reaction);
         }
         entry["reactions"] = json!(reactions);
-        update_entry(repos, chat_id, &entry, events)?;
+        repos.update_entry(chat_id, &entry, events)?;
         Ok(json!({"entry":entry}))
     })
 }
@@ -107,7 +95,7 @@ pub(crate) fn send(
             "content": text, "isStreaming": false
         });
         patch(&mut entry, params, &["clientNonce", "replyTo", "richText"]);
-        Ok((append(repos, chat_id, entry, events)?, true))
+        Ok((repos.append_entry(chat_id, entry, events)?, true))
     })?;
     if new {
         enqueue_chat(
@@ -120,47 +108,4 @@ pub(crate) fn send(
         );
     }
     Ok(json!({"entryId":entry["id"]}))
-}
-pub(crate) fn append(
-    repos: &Repositories,
-    chat_id: &str,
-    mut entry: Value,
-    events: &mut Events,
-) -> Result<Value> {
-    let mut chat = repos.chats.get(chat_id)?;
-    let seq = repos.transcript.latest_seq(chat_id)? + 1;
-    let timestamp = now();
-    entry["seq"] = seq.into();
-    entry["id"] = id().into();
-    entry["timestampMs"] = timestamp.into();
-    repos.transcript.insert(chat_id, seq, &entry)?;
-    chat["updatedAt"] = timestamp.into();
-    chat["lastActivityAt"] = timestamp.into();
-    chat["lastMessageAt"] = timestamp.into();
-    chat["lastMessagePreview"] = content(&entry).chars().take(180).collect::<String>().into();
-    chat["lastMessageId"] = entry["id"].clone();
-    if entry["kind"] != "message" {
-        chat["lastIncomingSeq"] = seq.into();
-        chat["hasUnread"] = true.into();
-        chat["unreadCount"] = (chat["unreadCount"].as_i64().unwrap_or(0) + 1).into();
-    }
-    events.push((
-        "transcript.entryAppended",
-        json!({"chatId":chat_id,"entry":entry}),
-    ));
-    change(repos, &chat, events)?;
-    Ok(entry)
-}
-pub(crate) fn update_entry(
-    repos: &Repositories,
-    chat_id: &str,
-    entry: &Value,
-    events: &mut Events,
-) -> Result<()> {
-    repos.transcript.update(chat_id, entry)?;
-    events.push((
-        "transcript.entryUpdated",
-        json!({"chatId":chat_id,"entry":entry}),
-    ));
-    Ok(())
 }

@@ -1,13 +1,12 @@
 use crate::{
     domain::{id, need, now, strings, Events},
-    modules::transcript::{append, update_entry},
     storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 
 /// Every transition replaces the version so a delayed click cannot restart a newer attempt.
-pub(super) fn save(
+pub(crate) fn save_execution(
     repos: &Repositories,
     events: &mut Events,
     room: &str,
@@ -15,7 +14,7 @@ pub(super) fn save(
 ) -> Result<()> {
     entry["task"]["updatedAt"] = now().into();
     entry["task"]["execution"]["version"] = id().into();
-    update_entry(repos, room, entry, events)
+    repos.update_entry(room, entry, events)
 }
 
 pub(crate) fn control(store: &Store, params: &Value, pause: bool) -> Result<Value> {
@@ -57,7 +56,7 @@ pub(crate) fn control(store: &Store, params: &Value, pause: bool) -> Result<Valu
             }
             task["status"] = "in_progress".into();
         }
-        save(repos, events, room, &mut entry)?;
+        save_execution(repos, events, room, &mut entry)?;
         Ok(entry)
     })
 }
@@ -109,8 +108,7 @@ pub(crate) fn report(store: &Store, params: &Value) -> Result<Value> {
         if state == "completed" {
             task["status"] = "completed".into();
         }
-        append(
-            repos,
+        repos.append_entry(
             room,
             json!({
                 "kind":"send-message", "message":{"type":"text","content":summary},
@@ -118,7 +116,7 @@ pub(crate) fn report(store: &Store, params: &Value) -> Result<Value> {
             }),
             events,
         )?;
-        save(repos, events, room, &mut entry)?;
+        save_execution(repos, events, room, &mut entry)?;
         Ok(entry)
     })
 }

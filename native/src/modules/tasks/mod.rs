@@ -1,8 +1,5 @@
 mod execution;
 mod service;
-mod worker;
 
-pub(crate) use execution::{control, report};
-pub(crate) use worker::{execute, runnable};
-
-pub(crate) use service::{assign, list, release_removed_members, set_status, track};
+pub(crate) use execution::{control, report, save_execution};
+pub(crate) use service::{assign, list, release_removed_members, runnable, set_status, track};

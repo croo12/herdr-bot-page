@@ -11,7 +11,6 @@ use syn::{
 // Each pair is one reviewed dependency direction. Removing the last use also
 // requires removing that allowance, so a former cycle can't silently return.
 const DEPENDENCIES: &str = include_str!("architecture/dependencies.txt");
-const LEGACY_DEPENDENCIES: &str = include_str!("architecture/legacy-dependencies.txt");
 
 // Outer to inner. Feature folders belong to the modules layer.
 const LAYERS: &[&[&str]] = &[
@@ -233,12 +232,11 @@ fn parse_edges(policy: &str) -> BTreeSet<(String, String)> {
     allowed
 }
 
-fn dependency_errors(root: &Path, policy: &str, legacy_policy: &str) -> Vec<String> {
+fn dependency_errors(root: &Path, policy: &str) -> Vec<String> {
     let mut errors = Vec::new();
     let mut actual = Edges::new();
     inspect(root, root, &mut actual, &mut errors);
     let mut allowed = parse_edges(policy);
-    let mut legacy = parse_edges(legacy_policy);
     for ((owner, target), files) in actual {
         let pair = (owner.clone(), target.clone());
         let problem = if points_inward(&owner, &target) {
@@ -247,12 +245,6 @@ fn dependency_errors(root: &Path, policy: &str, legacy_policy: &str) -> Vec<Stri
             }
             "unreviewed"
         } else {
-            if owner.starts_with("modules::")
-                && target.starts_with("modules::")
-                && legacy.remove(&pair)
-            {
-                continue;
-            }
             "forbidden layer dependency"
         };
         errors.push(format!(
@@ -263,44 +255,36 @@ fn dependency_errors(root: &Path, policy: &str, legacy_policy: &str) -> Vec<Stri
     for (owner, target) in allowed {
         errors.push(format!("remove unused allowance {owner} -> {target}"));
     }
-    for (owner, target) in legacy {
-        errors.push(format!(
-            "remove obsolete layer exception {owner} -> {target}"
-        ));
-    }
     errors
 }
 
 #[test]
 fn engine_module_dependencies_match_reviewed_edges() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let errors = dependency_errors(&root, DEPENDENCIES, LEGACY_DEPENDENCIES);
+    let errors = dependency_errors(&root, DEPENDENCIES);
     assert!(errors.is_empty(), "{}", errors.join("\n"));
 }
 
 #[test]
-fn a_new_reverse_edge_reports_its_file_and_a_removed_edge_expires() {
+fn a_feature_cannot_import_another_feature_even_with_an_allowance() {
     let root = tempfile::tempdir().unwrap();
     let owner = root.path().join("modules/turns");
     fs::create_dir_all(&owner).unwrap();
     fs::write(
         owner.join("service.rs"),
-        "fn run() { crate::modules::tasks::execute(); }",
+        "use crate::modules::tasks as delegated;",
     )
     .unwrap();
-    let policy = "modules::tasks -> modules::turns";
-    let errors = dependency_errors(root.path(), "", policy);
-    assert_eq!(errors.len(), 2);
-    assert!(errors[0].contains("forbidden layer dependency modules::turns -> modules::tasks"));
-    assert!(errors[0].ends_with("service.rs"));
-    assert_eq!(
-        errors[1],
-        "remove obsolete layer exception modules::tasks -> modules::turns"
-    );
+    let policy = "modules::turns -> modules::tasks";
+    let errors = dependency_errors(root.path(), policy);
+    assert!(errors.iter().any(|error| error
+        .contains("forbidden layer dependency modules::turns -> modules::tasks")
+        && error.ends_with("service.rs")));
+    assert!(errors.contains(&format!("remove unused allowance {policy}")));
 }
 
 #[test]
-fn runtime_and_storage_reverse_edges_cannot_be_grandfathered() {
+fn runtime_and_storage_reverse_edges_are_forbidden() {
     let root = tempfile::tempdir().unwrap();
     let feature = root.path().join("modules/chats");
     let storage = root.path().join("storage");
@@ -308,9 +292,9 @@ fn runtime_and_storage_reverse_edges_cannot_be_grandfathered() {
     fs::create_dir(&storage).unwrap();
     fs::write(feature.join("mod.rs"), "use crate::Engine;").unwrap();
     fs::write(storage.join("mod.rs"), "use crate::modules::chats::Chats;").unwrap();
-    let exceptions = "modules::chats -> runtime\nstorage -> modules::chats";
-    let errors = dependency_errors(root.path(), "", exceptions);
-    for edge in exceptions.lines() {
+    let policy = "modules::chats -> runtime\nstorage -> modules::chats";
+    let errors = dependency_errors(root.path(), policy);
+    for edge in policy.lines() {
         assert!(errors
             .iter()
             .any(|error| error.starts_with(&format!("forbidden layer dependency {edge} in "))));
@@ -324,7 +308,7 @@ fn unknown_roots_fail_even_without_dependencies() {
     fs::create_dir_all(root.path().join("modules/tasks/scheduling")).unwrap();
     fs::write(root.path().join("helpers.rs"), "").unwrap();
     fs::write(root.path().join("lib.rs"), "mod workflows {} mod domain {}").unwrap();
-    let errors = dependency_errors(root.path(), "", "");
+    let errors = dependency_errors(root.path(), "");
     assert_eq!(errors.len(), 4, "{errors:?}");
     for name in ["managers", "helpers.rs", "workflows"] {
         assert!(errors.iter().any(|error| error.ends_with(name)));
@@ -343,7 +327,7 @@ fn a_reviewed_edge_cannot_override_the_layer_order() {
         "use crate::application::post_reply;",
     )
     .unwrap();
-    let errors = dependency_errors(root.path(), "domain -> application", "");
+    let errors = dependency_errors(root.path(), "domain -> application");
     assert!(errors
         .iter()
         .any(|error| error.contains("forbidden layer dependency domain -> application")));

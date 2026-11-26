@@ -1,13 +1,9 @@
 use super::validation::{bot_id, validate};
 use crate::{
-    domain::{id, need, patch, string_field, ChatJob},
+    domain::{id, need, new_chat, patch, string_field, ChatJob},
     infrastructure::{
         herdr::{self, Herdr},
         AgentSessions,
-    },
-    modules::{
-        chats::{change, new_chat},
-        settings,
     },
     storage::Store,
 };
@@ -53,8 +49,7 @@ pub(crate) fn relaunch_bot(
         &["cwd", "permissionMode", "model", "reasoningEffort"],
     );
     if bot["permissionMode"].is_null() {
-        bot["permissionMode"] =
-            store.tx(|repos, _| settings::defaults(repos))?["permissionMode"].clone();
+        bot["permissionMode"] = super::defaults::bot_defaults(store)?["permissionMode"].clone();
     }
     validate(
         &mut bot,
@@ -104,7 +99,7 @@ pub(crate) fn relaunch_bot(
     store.tx(|repos, events| {
         chat = repos.chats.get(bot_id)?;
         chat["bot"] = bot;
-        change(repos, &chat, events)?;
+        repos.chats.save_changed(&chat, events)?;
         Ok(json!({"chat":chat}))
     })
 }
@@ -119,7 +114,7 @@ pub(crate) fn create_bot(
     if let Some(chat) = store.tx(|repos, _| repos.chats.for_request(&params))? {
         return Ok(json!({"chat":chat}));
     }
-    let defaults = store.tx(|repos, _| settings::defaults(repos))?;
+    let defaults = super::defaults::bot_defaults(store)?;
 
     if quick && string_field(&params, "name").trim().is_empty() {
         params["name"] = params["provider"].clone();

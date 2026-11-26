@@ -66,7 +66,7 @@ Rust 엔진(`native/src`)은 다음 여섯 층위를 사용합니다. 표의 위
 
 - 렌더러는 `app → pages → features → shared` 방향으로 하위 레이어를 참조할 수 있습니다. 다른 page나 feature 슬라이스의 내부 파일은 외부에 공개하지 않고, 같은 레이어의 서로 다른 슬라이스는 서로 import하지 않습니다. 다른 레이어에서 슬라이스를 사용할 때는 `index.tsx`를 거칩니다. Tauri SDK 호출은 `shared/api/desktop/tauri-bridge.tsx`에 둡니다. 검사기는 alias와 상대 경로를 해석하고 순환 import도 검사합니다. [렌더러 규칙](scripts/architecture/renderer.mjs)
 - Rust 기능 모듈은 구현 하위 모듈을 비공개로 두고 필요한 항목을 `mod.rs`에서 재공개합니다. 엔진 검사는 소스에 명시한 import와 함수 본문의 경로로 모듈 간 직접 의존을 수집합니다. 매크로가 생성하는 코드와 인자로 전달한 타입의 메서드 호출은 이 그래프의 범위 밖입니다. Cargo 메타데이터로는 로컬 패키지 의존 방향인 `desktop → native`를 별도로 확인합니다.
-- 층위에 맞는 의존도 새로 도입할 때는 허용 목록에서 검토합니다. 기존 코드에서 기능 모듈끼리 호출하는 경로는 이전 대상 목록에 별도로 기록합니다. 마지막 참조를 제거하면 해당 예외도 지워야 검사가 통과합니다. [일반 의존 목록](native/tests/architecture/dependencies.txt) · [기존 예외 목록](native/tests/architecture/legacy-dependencies.txt)
+- Rust 기능 모듈 사이의 직접 참조는 금지합니다. 봇 연결과 대화 턴 실행처럼 여러 기능에 걸친 흐름은 `application`에서 조합합니다. 계층을 향한 새 의존은 허용 목록에서 검토하며, 마지막 참조를 제거하면 해당 항목도 삭제합니다. [의존 목록](native/tests/architecture/dependencies.txt)
 
 ## CLI와 데이터
 

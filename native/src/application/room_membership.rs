@@ -1,7 +1,8 @@
 use crate::{
-    domain::{need, strings},
+    domain::{need, strings, Events},
     infrastructure::AgentSessions,
-    storage::Store,
+    modules::{reviews, rooms, tasks},
+    storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
@@ -45,8 +46,7 @@ pub(crate) fn delete_chats(
                 if members.contains(&id) {
                     members.retain(|member| member != &id);
                     room["memberIds"] = json!(members);
-                    crate::modules::reviews::revoke_removed_members(repos, events, &room)?;
-                    crate::modules::tasks::release_removed_members(repos, events, &room)?;
+                    release_removed_members(repos, events, &room)?;
                     repos.chats.save(&room)?;
                 }
             }
@@ -57,4 +57,26 @@ pub(crate) fn delete_chats(
         deleted.push(id);
     }
     Ok(json!({"deletedIds":deleted}))
+}
+
+pub(crate) fn set_members(
+    store: &Store,
+    sessions: &AgentSessions,
+    params: &Value,
+) -> Result<Value> {
+    let _guard = sessions.roster.lock().unwrap();
+    store.tx(|repos, events| {
+        if let Some(existing) = repos.chats.for_request(params)? {
+            return Ok(json!({"chat":existing}));
+        }
+        let room = rooms::room_with_members(repos, params)?;
+        release_removed_members(repos, events, &room)?;
+        repos.chats.save_changed(&room, events)?;
+        Ok(room)
+    })
+}
+
+fn release_removed_members(repos: &Repositories, events: &mut Events, room: &Value) -> Result<()> {
+    reviews::revoke_removed_members(repos, events, room)?;
+    tasks::release_removed_members(repos, events, room)
 }

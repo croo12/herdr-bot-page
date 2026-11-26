@@ -1,4 +1,5 @@
 mod chats;
+mod entries;
 mod prompts;
 mod reviews;
 mod settings;

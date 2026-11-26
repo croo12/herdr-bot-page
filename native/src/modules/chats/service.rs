@@ -1,5 +1,5 @@
 use crate::{
-    domain::{need, now, patch, string_field, Events},
+    domain::{need, now, patch, string_field},
     storage::{Repositories, Store},
 };
 use anyhow::Result;
@@ -53,7 +53,7 @@ pub(crate) fn edit_chat(store: &Store, edit: ChatEdit, params: &Value) -> Result
             }
             ChatEdit::Read | ChatEdit::Unread => mark_read(repos, &mut row, edit, params)?,
         }
-        change(repos, &row, events)?;
+        repos.chats.save_changed(&row, events)?;
         if edit == ChatEdit::Read {
             Ok(json!({"lastReadSeq":row["lastReadSeq"]}))
         } else {
@@ -88,8 +88,14 @@ fn mark_read(repos: &Repositories, row: &mut Value, edit: ChatEdit, params: &Val
     row["unreadCount"] = unread_count.max(i64::from(unread)).into();
     Ok(())
 }
-pub(crate) fn change(repos: &Repositories, chat: &Value, events: &mut Events) -> Result<()> {
-    repos.chats.save(chat)?;
-    events.push(("chat.changed", chat.clone()));
-    Ok(())
+
+pub(crate) fn profile_for_pane(store: &Store, params: &Value) -> Result<Value> {
+    let pane = need(params, "paneId")?;
+    store.tx(|repos, _| repos.chats.by_pane(pane))
+}
+
+pub(crate) fn update_profile_for_pane(store: &Store, mut params: Value) -> Result<Value> {
+    let bot = profile_for_pane(store, &params)?;
+    params["chatId"] = need(&bot, "id")?.into();
+    edit_chat(store, ChatEdit::Profile, &params)
 }

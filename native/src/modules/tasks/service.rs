@@ -1,6 +1,5 @@
 use crate::{
     domain::{need, now},
-    modules::transcript::update_entry,
     storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
@@ -49,10 +48,10 @@ fn set_assignee(
         if !checkpoint.is_null() {
             task["execution"]["checkpoint"] = checkpoint;
         }
-        super::execution::save(repos, events, room_id, entry)
+        super::execution::save_execution(repos, events, room_id, entry)
     } else {
         task["updatedAt"] = now().into();
-        update_entry(repos, room_id, entry, events)
+        repos.update_entry(room_id, entry, events)
     }
 }
 
@@ -121,7 +120,7 @@ pub(crate) fn track(store: &Store, params: &Value) -> Result<Value> {
         validate_assignee(&room, assignee)?;
         entry["task"] =
             json!({"assigneeId":assignee, "criteria":criteria, "status":"open", "updatedAt":now()});
-        update_entry(repos, chat_id, &entry, events)?;
+        repos.update_entry(chat_id, &entry, events)?;
         Ok(entry)
     })
 }
@@ -150,7 +149,11 @@ pub(crate) fn set_status(store: &Store, params: &Value) -> Result<Value> {
         }
         entry["task"]["status"] = status.into();
         entry["task"]["updatedAt"] = now().into();
-        update_entry(repos, chat_id, &entry, events)?;
+        repos.update_entry(chat_id, &entry, events)?;
         Ok(entry)
     })
+}
+
+pub(crate) fn runnable(store: &Store) -> Result<Vec<(String, String)>> {
+    store.tx(|repos, _| repos.tasks.runnable())
 }

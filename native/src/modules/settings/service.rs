@@ -36,20 +36,3 @@ pub(crate) fn update_settings(store: &Store, params: &Value) -> Result<Value> {
         Ok(value)
     })
 }
-pub(crate) fn bot_defaults(store: &Store) -> Result<Value> {
-    store.tx(|repos, _| defaults(repos))
-}
-pub(crate) fn defaults(repos: &Repositories) -> Result<Value> {
-    let settings = load(repos)?;
-    let last = repos
-        .chats
-        .list()?
-        .into_iter()
-        .rev()
-        .find_map(|chat| chat["bot"]["cwd"].as_str().map(String::from));
-    Ok(
-        json!({"cwd":std::env::var("HERDR_BOT_DEFAULT_CWD").ok().or_else(||settings["defaultWorkingFolder"].as_str().map(String::from)).or(last).unwrap_or_default(),
-        "provider":settings["defaultProvider"].as_str().map(String::from).or_else(||std::env::var("HERDR_BOT_DEFAULT_KIND").ok()).unwrap_or("claude".into()),
-        "permissionMode":settings["defaultPermissionMode"].as_str().unwrap_or("ask"),"homeDir":dirs::home_dir()}),
-    )
-}

@@ -1,16 +1,11 @@
-use super::execution::save;
 use crate::{
     domain::{id, need, string_field, strings, Turn},
     infrastructure::{herdr::Herdr, AgentSessions},
-    modules::turns::run_or_resume_prompt,
+    modules::{bots, tasks::save_execution, turns::run_or_resume_prompt},
     storage::Store,
 };
 use anyhow::{bail, Result};
 use serde_json::Value;
-
-pub(crate) fn runnable(store: &Store) -> Result<Vec<(String, String)>> {
-    store.tx(|repos, _| repos.tasks.runnable())
-}
 
 struct Step {
     bot: String,
@@ -85,7 +80,7 @@ fn prepare(
             }
             live["agent"].clone()
         } else {
-            crate::modules::bots::connect_for_turn(store, &sessions.herdr, bot)?
+            bots::connect_for_turn(store, &sessions.herdr, bot)?
         };
         let pane = need(&live, "pane_id")?;
         match string_field(&live, "agent_status") {
@@ -107,7 +102,7 @@ fn prepare(
             Err(error) => {
                 current["task"]["execution"]["state"] = "blocked".into();
                 current["task"]["execution"]["detail"] = error.to_string().into();
-                save(repos, events, room, &mut current)?;
+                save_execution(repos, events, room, &mut current)?;
                 return Ok(None);
             }
         };
@@ -119,7 +114,7 @@ fn prepare(
             current["task"]["execution"]["state"] = "running".into();
             current["task"]["execution"]["paneId"] = pane.clone().into();
             current["task"]["execution"]["attemptId"] = attempt.clone().into();
-            save(repos, events, room, &mut current)?;
+            save_execution(repos, events, room, &mut current)?;
             (attempt, Some(prompt))
         };
         Ok(Some(Step {
@@ -144,7 +139,7 @@ fn prepare(
     Ok(step)
 }
 
-pub(crate) fn execute(
+pub(crate) fn execute_task(
     store: &Store,
     sessions: &AgentSessions,
     room: &str,
@@ -165,7 +160,7 @@ pub(crate) fn execute(
                 .map(|error| format!("{error:#}"))
                 .unwrap_or_else(|| "The bot ended its step without reporting the outcome.".into())
                 .into();
-            save(repos, events, room, &mut entry)?;
+            save_execution(repos, events, room, &mut entry)?;
         }
         Ok(())
     })
