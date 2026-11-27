@@ -1713,6 +1713,7 @@ dependencies = [
  "fs2",
  "regex",
  "rusqlite",
+ "serde",
  "serde_json",
  "tempfile",
  "uuid",

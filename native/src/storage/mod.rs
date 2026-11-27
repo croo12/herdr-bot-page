@@ -1,3 +1,4 @@
+mod bots;
 mod chats;
 mod entries;
 mod inbox;
@@ -9,6 +10,7 @@ mod transcript;
 
 use crate::domain::Events;
 use anyhow::Result;
+use bots::Bots;
 pub(crate) use chats::Chats;
 use inbox::Inbox;
 use prompts::Prompts;
@@ -56,6 +58,7 @@ impl Store {
 }
 
 pub(crate) struct Repositories<'db> {
+    pub bots: Bots<'db>,
     pub inbox: Inbox<'db>,
     pub chats: Chats<'db>,
     pub settings: Settings<'db>,
@@ -127,6 +130,7 @@ impl Database {
         let mut db = self.0.lock().unwrap();
         let tx = db.transaction()?;
         let repositories = Repositories {
+            bots: Bots::new(&tx),
             inbox: Inbox::new(&tx),
             chats: Chats::new(&tx),
             settings: Settings::new(&tx),

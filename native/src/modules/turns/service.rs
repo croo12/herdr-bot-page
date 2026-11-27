@@ -1,5 +1,5 @@
 use crate::{
-    domain::{content, string_field},
+    domain::{bot::BotId, content, string_field},
     infrastructure::{herdr::has_error_code, AgentSessions},
     storage::Store,
 };
@@ -17,7 +17,7 @@ pub(crate) fn run_chat_turn(
 ) -> Result<()> {
     let (profile, entries, room) = store.tx(|repos, _| {
         Ok((
-            repos.chats.get(bot)?,
+            repos.bots.get(&BotId::from(bot))?,
             repos.transcript.page(target, i64::MAX, 24)?,
             repos.chats.get(target)?,
         ))
@@ -56,11 +56,17 @@ pub(crate) fn run_chat_turn(
     let reply_instruction = message_id.filter(|_| room["kind"] == "room").map_or_else(String::new, |id| {
         format!("In this room, ask a teammate by mentioning @<bot-id>. To answer this message in its thread, use say --reply-to {id} {target} \"your reply\". A reply to another bot is delivered to its inbox.")
     });
-    let prompt=format!("You are {} (bot ID {bot}) in herdr-bot chat {target}. Role: {}. Members: {}.\n\
+    let prompt = format!(
+        "You are {name} (bot ID {bot_id}) in herdr-bot chat {target}. Role: {instruction}. Members: {members}.\n\
         Use the native CLI at {cli} from this pane. Run it with arguments: say {target} \"your reply\" (or pass {target} if finished). \
         Call the CLI to post; terminal output is private. In PowerShell invoke a quoted path with &. \
         Use inbox to check for messages addressed to you across chats. For a handoff to another conversation, use message <bot-or-room-id> \"task\". Do not repeat earlier replies.\n\
-        {reply_instruction}\nCurrent request:\n{}\nRecent conversation:\n{}",string_field(&profile,"name"),string_field(&profile,"description"),room["memberIds"],seed,history);
+        {reply_instruction}\nCurrent request:\n{seed}\nRecent conversation:\n{history}",
+        name = profile.name,
+        bot_id = profile.id.as_str(),
+        instruction = profile.instruction,
+        members = room["memberIds"],
+    );
     run_or_resume_prompt(sessions, bot, pane, Some(&prompt))?;
     // Esc can finish the provider turn before the answer transaction commits.
     let denial = {

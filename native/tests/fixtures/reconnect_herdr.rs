@@ -55,6 +55,11 @@ fn main() {
                 .split('.')
                 .next()
                 .unwrap();
+            if bot == "managed" {
+                assert!(args[3].starts_with(&format!(
+                    "You are Managed (bot ID managed) in herdr-bot chat {room}. Role: Check the UI for accessibility. Members:"
+                )));
+            }
             let cli = home
                 .join("bin")
                 .join(format!("herdr-bot{}", env::consts::EXE_SUFFIX));

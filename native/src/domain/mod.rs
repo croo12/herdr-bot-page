@@ -1,3 +1,4 @@
+pub(crate) mod bot;
 mod chat;
 mod transcript;
 mod turn;

@@ -30,7 +30,8 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
     engine
         .call(
             "bot.create",
-            json!({"id":"managed","name":"Managed","provider":"pi","cwd":home}),
+            json!({"id":"managed","name":"Managed","provider":"pi","cwd":home,
+                "title":"UI reviewer","description":"Check the UI for accessibility"}),
         )
         .unwrap();
     for (bot, pane) in [("moved", "w5:p2"), ("external", "w5:p3")] {
