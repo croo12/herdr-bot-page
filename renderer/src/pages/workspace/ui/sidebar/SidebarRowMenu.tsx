@@ -30,6 +30,12 @@ export function SidebarRowMenu({
   const { client } = useStoreContext();
   const dialogs = useDialogs();
   const toast = useToast();
+  const renameLabel =
+    chat.kind === "direct"
+      ? "sidebar.renameInput.ariaLabel"
+      : chat.kind === "bot"
+        ? "sidebar.contextMenu.renameBot"
+        : "sidebar.contextMenu.renameRoom";
 
   function toggleHidden() {
     void client.call("chat.setHidden", { chatId: chat.id, isHidden: !chat.isHiddenFromSidebar });
@@ -39,7 +45,9 @@ export function SidebarRowMenu({
   function openEditProfile() {
     state.close();
     if (chat.kind === "bot") dialogs.openBotInfo(chat.id);
-    else dialogs.openRoomInfo(chat.id);
+    else if (chat.kind === "direct") {
+      if (!chat.archived && chat.memberIds[0]) dialogs.openBotInfo(chat.memberIds[0]);
+    } else dialogs.openRoomInfo(chat.id);
   }
 
   function openDelete() {
@@ -59,12 +67,7 @@ export function SidebarRowMenu({
   }
 
   return (
-    <ContextMenu
-      state={state}
-      label={t(
-        chat.kind === "bot" ? "sidebar.contextMenu.renameBot" : "sidebar.contextMenu.renameRoom",
-      )}
-    >
+    <ContextMenu state={state} label={t(renameLabel)}>
       <MenuItem
         icon={isPinned ? <PinOff size={16} /> : <Pin size={16} />}
         onSelect={() => {
@@ -81,13 +84,13 @@ export function SidebarRowMenu({
           onStartRename();
         }}
       >
-        {t(
-          chat.kind === "bot" ? "sidebar.contextMenu.renameBot" : "sidebar.contextMenu.renameRoom",
-        )}
+        {t(renameLabel)}
       </MenuItem>
-      <MenuItem icon={<Pencil size={16} />} onSelect={openEditProfile}>
-        {t("sidebar.contextMenu.editProfile")}
-      </MenuItem>
+      {!chat.archived && (
+        <MenuItem icon={<Pencil size={16} />} onSelect={openEditProfile}>
+          {t("sidebar.contextMenu.editProfile")}
+        </MenuItem>
+      )}
       <MenuItem
         icon={chat.isHiddenFromSidebar ? <Eye size={16} /> : <EyeOff size={16} />}
         onSelect={toggleHidden}

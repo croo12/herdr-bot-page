@@ -18,10 +18,12 @@ impl Repositories<'_> {
         entry["timestampMs"] = timestamp.into();
         self.transcript.insert(chat_id, seq, &entry)?;
         record_latest_entry(&mut chat, &entry);
-        events.push((
-            "transcript.entryAppended",
-            json!({"chatId":chat_id,"entry":entry}),
-        ));
+        if crate::domain::visible_to(&chat, None) {
+            events.push((
+                "transcript.entryAppended",
+                json!({"chatId":chat_id,"entry":entry}),
+            ));
+        }
         self.chats.save_changed(&chat, events)?;
         Ok(entry)
     }
@@ -32,10 +34,12 @@ impl Repositories<'_> {
         events: &mut Events,
     ) -> Result<()> {
         self.transcript.update(chat_id, entry)?;
-        events.push((
-            "transcript.entryUpdated",
-            json!({"chatId":chat_id,"entry":entry}),
-        ));
+        if crate::domain::visible_to(&self.chats.get(chat_id)?, None) {
+            events.push((
+                "transcript.entryUpdated",
+                json!({"chatId":chat_id,"entry":entry}),
+            ));
+        }
         Ok(())
     }
 }

@@ -70,6 +70,29 @@ impl Controller<'_> {
             "settings.get" => settings::get_settings(self.store),
             "settings.update" => settings::update_settings(self.store, &params),
             "bot.defaults" => bots::bot_defaults(self.store),
+            "chat.openDirect" => self.store.tx(|repos, events| {
+                let peer = if let Some(pane) = params["paneId"].as_str().filter(|s| !s.is_empty()) {
+                    Some(repos.chats.by_pane(pane)?)
+                } else {
+                    None
+                };
+                repos.chats.open_direct(
+                    need(&params, "botId")?,
+                    peer.as_ref().and_then(|bot| bot["id"].as_str()),
+                    events,
+                )
+            }),
+            "cli.inbox" => self.store.tx(|repos, _| {
+                let bot = repos.chats.by_pane(need(&params, "paneId")?)?;
+                let id = need(&bot, "id")?;
+                if let Some(message) = params["ack"].as_str() {
+                    repos.inbox.resolve(id, message, false)?;
+                }
+                if let Some(message) = params["retry"].as_str() {
+                    repos.inbox.resolve(id, message, true)?;
+                }
+                Ok(json!(repos.inbox.list(id)?))
+            }),
             "chat.list" | "chat.search" => {
                 chats::find_chats(self.store, string_field(&params, "query"))
             }
@@ -124,6 +147,7 @@ impl Controller<'_> {
             ),
             "cli.pass" => self.agent_action(AgentAction::Pass, params),
             "cli.message" => self.agent_action(AgentAction::Delegate, params),
+            "cli.dm" => self.agent_action(AgentAction::Direct, params),
             "cli.whoami" | "cli.profile" => chats::profile_for_pane(self.store, &params),
             "cli.profileUpdate" => chats::update_profile_for_pane(self.store, params),
             _ => bail!("unknown_method: {method}"),

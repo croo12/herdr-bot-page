@@ -1,13 +1,35 @@
 use crate::{
     domain::{content, need, patch, string_field, strings, ChatJob},
-    storage::Store,
+    storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
+fn readable_chat(repos: &Repositories, params: &Value) -> Result<Value> {
+    let chat_id = need(params, "chatId")?;
+    let chat = repos.chats.get(chat_id)?;
+    let caller = if let Some(pane) = params["paneId"].as_str().filter(|pane| !pane.is_empty()) {
+        repos.chats.pane_owner(pane)?
+    } else {
+        None
+    };
+    let bot = caller.as_ref().and_then(|row| row["id"].as_str());
+    // The legacy bot destination resolves to the caller's conversation with that bot.
+    let direct = if chat["kind"] == "bot" {
+        repos
+            .chats
+            .direct(chat_id, bot.filter(|id| *id != chat_id))?
+    } else {
+        None
+    };
+    if !crate::domain::visible_to(direct.as_ref().unwrap_or(&chat), bot) {
+        bail!("invalid_args: not a participant")
+    }
+    Ok(direct.unwrap_or(chat))
+}
 pub(crate) fn transcript_page(store: &Store, params: &Value) -> Result<Value> {
-    let chat_id = string_field(params, "chatId");
     store.tx(|repos, _| {
-        repos.chats.get(chat_id)?;
+        let chat = readable_chat(repos, params)?;
+        let chat_id = need(&chat, "id")?;
         let limit = params["limit"].as_i64().unwrap_or(200).clamp(1, 1000);
         let mut rows = repos.transcript.page(
             chat_id,
@@ -24,11 +46,15 @@ pub(crate) fn transcript_page(store: &Store, params: &Value) -> Result<Value> {
     })
 }
 pub(crate) fn transcript_thread(store: &Store, params: &Value) -> Result<Value> {
-    store.tx(|repos, _| Ok(json!({"entries":repos.transcript.thread(string_field(params,"chatId"),need(params,"rootId")?)?})))
+    store.tx(|repos, _| {
+        let chat = readable_chat(repos, params)?;
+        Ok(json!({"entries":repos.transcript.thread(need(&chat,"id")?,need(params,"rootId")?)?}))
+    })
 }
 pub(crate) fn react(store: &Store, params: &Value) -> Result<Value> {
-    let chat_id = string_field(params, "chatId");
     store.tx(|repos, events| {
+        let chat = readable_chat(repos, params)?;
+        let chat_id = need(&chat, "id")?;
         let mut entry = repos.transcript.by_id(chat_id, need(params, "entryId")?)?;
         let mut reactions = entry["reactions"].as_array().cloned().unwrap_or_default();
         let reaction = json!({"by":"me","emoji":need(params,"emoji")?});
@@ -50,6 +76,7 @@ pub(crate) fn search_messages(store: &Store, query: &str) -> Result<Value> {
             return Ok(json!(hits));
         }
         repos.transcript.visit_messages(|chat, entry| {
+            if chat["kind"]=="direct" && chat["includesUser"]!=true { return true; }
             let text = content(&entry);
             if !text.to_lowercase().contains(&query) {
                 return true;
@@ -84,10 +111,21 @@ pub(crate) fn send(
     if text.trim().is_empty() {
         bail!("invalid_args: message is empty")
     }
-    let (entry, new) = store.tx(|repos, events| {
+    let entry = store.tx(|repos, events| {
+        let mut chat = repos.chats.get(chat_id)?;
+        if chat["kind"] == "bot" {
+            chat = repos.chats.open_direct(chat_id, None, events)?;
+        }
+        if chat["kind"] == "direct" && chat["includesUser"] != true {
+            bail!("invalid_args: user is not a participant")
+        }
+        let chat_id = need(&chat, "id")?;
+        if chat["archived"] == true {
+            bail!("invalid_args: archived conversation")
+        }
         if let Some(nonce) = params["clientNonce"].as_str() {
             if let Some(row) = repos.transcript.by_nonce(chat_id, nonce)? {
-                return Ok((row, false));
+                return Ok(row);
             }
         }
         let mut entry = json!({
@@ -95,17 +133,10 @@ pub(crate) fn send(
             "content": text, "isStreaming": false
         });
         patch(&mut entry, params, &["clientNonce", "replyTo", "richText"]);
-        Ok((repos.append_entry(chat_id, entry, events)?, true))
+        let entry = repos.append_entry(chat_id, entry, events)?;
+        repos.inbox.deliver(&chat, &entry, None, 0, false)?;
+        Ok(entry)
     })?;
-    if new {
-        enqueue_chat(
-            chat_id,
-            ChatJob {
-                seed: text,
-                depth: 0,
-                exclude: None,
-            },
-        );
-    }
+    store.schedule_inbox(enqueue_chat)?;
     Ok(json!({"entryId":entry["id"]}))
 }

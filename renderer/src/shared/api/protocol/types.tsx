@@ -4,7 +4,7 @@
 // Shared domain shapes
 // ---------------------------------------------------------------------------------------------------
 
-export type ChatKind = "bot" | "room";
+export type ChatKind = "bot" | "room" | "direct";
 export type PermissionMode = "ask" | "auto";
 /** A terminal "Open in herdr" can open a tab in. */
 export type Terminal = "kaku" | "wezterm" | "ghostty" | "iterm" | "terminal";
@@ -64,6 +64,8 @@ export interface BotFacts {
 export interface ChatSummary {
   readonly id: string;
   readonly kind: ChatKind;
+  readonly includesUser?: boolean;
+  readonly archived?: boolean;
   readonly name: string;
   readonly description: string;
   readonly title: string;
@@ -223,6 +225,7 @@ export interface CreateBotParams {
 
 export interface AppApiMethods {
   "chat.list": { params: void; result: ChatSummary[] };
+  "chat.openDirect": { params: { readonly botId: string }; result: ChatSummary };
   "chat.search": { params: { readonly query?: string }; result: ChatSummary[] };
   "chat.updateProfile": {
     params: {

@@ -50,7 +50,9 @@ export function HeaderSlot({ chatId }: HeaderSlotProps) {
       return;
     }
     if (chat!.kind === "bot") dialogs.openBotInfo(chat!.id);
-    else dialogs.openRoomInfo(chat!.id);
+    else if (chat!.kind === "direct") {
+      if (!chat!.archived && members[0]) dialogs.openBotInfo(members[0].id);
+    } else dialogs.openRoomInfo(chat!.id);
   }
 
   return (

@@ -57,7 +57,8 @@ export function QuickCreateBot({ showExplainer = false, onAdvanced, onDone }: Qu
         name: name.trim().length > 0 ? name.trim() : undefined,
         avatarColor: color,
       });
-      setActiveChatId(chat.id);
+      const direct = await client.call("chat.openDirect", { botId: chat.id });
+      setActiveChatId(direct.id);
       onDone?.();
     } catch (err) {
       setError(toAppApiError(err).message);

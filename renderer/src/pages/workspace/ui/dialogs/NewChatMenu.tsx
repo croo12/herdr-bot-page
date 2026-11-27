@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, SlidersHorizontal, Users, X } from "lucide-react";
 import { useActiveChat } from "../../model/useActiveChat.tsx";
+import { useOpenDirect } from "../../model/useOpenDirect.tsx";
 import { useChats } from "../../model/useChats.tsx";
 import { resolvePersonaColor } from "#shared/ui/avatar-colors.tsx";
 import { useDialogHost } from "#shared/ui/DialogHost.tsx";
@@ -28,7 +29,8 @@ import styles from "./NewChatMenu.module.css";
 export function NewChatMenu() {
   const [view, setView] = useState<"menu" | "quick-bot">("menu");
   const chats = useChats();
-  const { activeChatId, setActiveChatId } = useActiveChat();
+  const { activeChatId } = useActiveChat();
+  const openDirect = useOpenDirect();
   const dialogHost = useDialogHost();
   const { t } = useT();
 
@@ -46,9 +48,8 @@ export function NewChatMenu() {
     dialogHost.open(<NewDialog initialTab={initialTab} />, { titleKey: "dialogs.new.title" });
   }
 
-  function openBot(chatId: string) {
-    setActiveChatId(chatId);
-    closeNewMenu();
+  async function openBot(chatId: string) {
+    if (await openDirect(chatId)) closeNewMenu();
   }
 
   useShortcut("dialogs.newMenu.1", "mod+1", () =>

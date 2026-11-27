@@ -49,7 +49,7 @@ pub(crate) fn run_chat_turn(
     let prompt=format!("You are {} (bot ID {bot}) in herdr-bot chat {target}. Role: {}. Members: {}.\n\
         Use the native CLI at {cli} from this pane. Run it with arguments: say {target} \"your reply\" (or pass {target} if finished). \
         Call the CLI to post; terminal output is private. In PowerShell invoke a quoted path with &. \
-        To delegate, use message <bot-or-room-id> \"task\". Do not repeat earlier replies.\n\
+        Use inbox to check for messages addressed to you across chats. To delegate, use message <bot-or-room-id> \"task\". Do not repeat earlier replies.\n\
         Current request:\n{}\nRecent conversation:\n{}",string_field(&profile,"name"),string_field(&profile,"description"),room["memberIds"],seed,history);
     run_or_resume_prompt(sessions, bot, pane, Some(&prompt))?;
     // Esc can finish the provider turn before the answer transaction commits.

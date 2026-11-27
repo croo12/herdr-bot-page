@@ -8,6 +8,7 @@ export function WorkspaceComposer({ chatId }: { readonly chatId: string }) {
   const chat = useChat(chatId);
   const members = useChatMembers(chat);
   const contacts = useChats();
+  if (chat?.archived) return null;
   return (
     <MessageComposer
       chatId={chatId}

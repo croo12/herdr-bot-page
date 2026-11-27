@@ -20,7 +20,10 @@ export function DialogsSlot() {
   useShortcut("dialogs.info", "mod+i", () => {
     if (activeChat == null) return;
     if (activeChat.kind === "bot") dialogs.openBotInfo(activeChat.id);
-    else dialogs.openRoomInfo(activeChat.id);
+    else if (activeChat.kind === "direct") {
+      if (!activeChat.archived && activeChat.memberIds[0])
+        dialogs.openBotInfo(activeChat.memberIds[0]);
+    } else dialogs.openRoomInfo(activeChat.id);
   });
 
   return null;

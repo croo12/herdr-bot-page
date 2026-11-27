@@ -64,7 +64,7 @@ pub(crate) fn refresh_status(
             if pending.is_none() && !prompt.is_null() && row["bot"]["pendingPrompt"]["signature"] == prompt["signature"] {
                 return Ok(());
             }
-            let target = active_chat.as_deref().or_else(|| pending.as_ref().map(|(chat, _)| chat.as_str())).unwrap_or(id).to_owned();
+            let target = active_chat.clone().or_else(|| pending.as_ref().map(|(chat, _)| chat.clone()));
             let mut same_prompt = false;
             if let Some((previous_chat, mut entry)) = pending {
                 same_prompt = !prompt.is_null() && (entry["prompt"]["signature"] == prompt["signature"] || entry["prompt"]["kind"] == "unknown");
@@ -72,7 +72,13 @@ pub(crate) fn refresh_status(
                 repos.update_entry(&previous_chat, &entry, events)?;
             }
             if !same_prompt && !prompt.is_null() {
-                let entry = json!({"kind": "prompt", "prompt": prompt, "status": "pending", "author": {"id": id, "name": row["name"]}});
+                // A human must also be able to answer when the active turn is in a bot-only DM.
+                let origin=target;
+                let target=match origin.as_deref() {
+                    Some(chat) if crate::domain::visible_to(&repos.chats.get(chat)?,None)=>chat.to_owned(),
+                    _=>need(&repos.chats.open_direct(id,None,events)?,"id")?.to_owned(),
+                };
+                let entry = json!({"kind": "prompt", "prompt": prompt, "status": "pending", "originChatId":origin, "author": {"id": id, "name": row["name"]}});
                 repos.append_entry(&target, entry, events)?;
                 row = repos.chats.get(id)?;
             }
@@ -203,7 +209,7 @@ pub(crate) fn answer_locked(
                     });
                     repos.append_entry(&target, reply, events)?;
                 }
-                answered_chat = Some(target);
+                answered_chat = Some(entry["originChatId"].as_str().unwrap_or(&target).to_owned());
             }
         }
         Ok((json!({"chat": repos.chats.get(id)?}), answered_chat))
@@ -216,10 +222,9 @@ pub(crate) fn answer_locked(
                     .and_then(|review| review["reason"].as_str())
                     .unwrap_or("The user declined the request.")
             });
-            turn.record_permission_answer(
-                reason,
-                review.and_then(|review| review["reviewerId"].as_str()),
-            );
+            if let Some(reason) = reason {
+                turn.denial_reason = Some(reason.to_owned());
+            }
         }
     }
     Ok(response)

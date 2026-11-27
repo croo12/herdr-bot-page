@@ -18,7 +18,7 @@ pub(crate) fn find_chats(store: &Store, query: &str) -> Result<Value> {
         let query = query.to_lowercase();
         let chats = repos
             .chats
-            .list()?
+            .visible_list()?
             .into_iter()
             .filter(|chat| {
                 [
@@ -36,6 +36,10 @@ pub(crate) fn edit_chat(store: &Store, edit: ChatEdit, params: &Value) -> Result
     store.tx(|repos, events| {
         let chat_id = string_field(params, "chatId");
         let mut row = repos.chats.get(chat_id)?;
+        anyhow::ensure!(
+            crate::domain::visible_to(&row, None),
+            "invalid_args: not a participant"
+        );
         match edit {
             ChatEdit::Profile => {
                 if params.get("name").is_some() {

@@ -9,6 +9,10 @@
   border-bottom: 1px solid var(--hb-border-hairline);
 }
 
+.hb-standalone-profile {
+  overflow-y: auto;
+}
+
 .hb-panel-title {
   font-weight: 700;
   font-size: var(--hb-text-size-md);

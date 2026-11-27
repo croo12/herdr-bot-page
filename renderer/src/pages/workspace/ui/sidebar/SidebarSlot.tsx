@@ -1,5 +1,6 @@
 import { Plus, Search, Settings } from "lucide-react";
 import type { KeyboardEvent } from "react";
+import { Fragment } from "react";
 import { useActiveChat } from "../../model/useActiveChat.tsx";
 import { useChatsQuery } from "../../model/useChats.tsx";
 import { usePins } from "../../model/usePins.tsx";
@@ -33,6 +34,19 @@ export function SidebarSlot({ mode }: SidebarSlotProps) {
 
   const visible = visibleChats(chats, activeChatId);
   const { pinned, rest } = orderChats(visible, pins.pinnedChatIds);
+  const sections = [
+    { label: t("sidebar.pinnedSectionLabel"), rows: pinned, pinned: true },
+    {
+      label: t("dialogs.conversations"),
+      rows: rest.filter((chat) => chat.kind !== "bot"),
+      pinned: false,
+    },
+    {
+      label: t("dialogs.botDirectory"),
+      rows: rest.filter((chat) => chat.kind === "bot"),
+      pinned: false,
+    },
+  ];
   // Genuinely no chats at all (onboarding state) -- not "every chat happens to be hidden right now",
   // which should still show the (empty) list chrome rather than the "create your first bot" prompt.
   const isEmpty = chats.length === 0;
@@ -117,35 +131,27 @@ export function SidebarSlot({ mode }: SidebarSlotProps) {
             aria-label={t("shell.sidebar.ariaLabel")}
             onKeyDown={onListKeyDown}
           >
-            {!rail && pinned.length > 0 && (
-              <div className={styles["hb-sidebar-section-label"]}>
-                {t("sidebar.pinnedSectionLabel")}
-              </div>
-            )}
-            {pinned.map((chat) => (
-              <SidebarRow
-                key={chat.id}
-                chat={chat}
-                rail={rail}
-                locale={locale}
-                selected={chat.id === activeChatId}
-                isPinned
-                onSelect={() => setActiveChatId(chat.id)}
-                onTogglePin={() => pins.togglePin(chat.id)}
-              />
-            ))}
-            {rest.map((chat) => (
-              <SidebarRow
-                key={chat.id}
-                chat={chat}
-                rail={rail}
-                locale={locale}
-                selected={chat.id === activeChatId}
-                isPinned={false}
-                onSelect={() => setActiveChatId(chat.id)}
-                onTogglePin={() => pins.togglePin(chat.id)}
-              />
-            ))}
+            {sections
+              .filter((section) => section.rows.length > 0)
+              .map((section) => (
+                <Fragment key={section.label}>
+                  {!rail && (
+                    <div className={styles["hb-sidebar-section-label"]}>{section.label}</div>
+                  )}
+                  {section.rows.map((chat) => (
+                    <SidebarRow
+                      key={chat.id}
+                      chat={chat}
+                      rail={rail}
+                      locale={locale}
+                      selected={chat.id === activeChatId}
+                      isPinned={section.pinned}
+                      onSelect={() => setActiveChatId(chat.id)}
+                      onTogglePin={() => pins.togglePin(chat.id)}
+                    />
+                  ))}
+                </Fragment>
+              ))}
           </div>
         </>
       )}

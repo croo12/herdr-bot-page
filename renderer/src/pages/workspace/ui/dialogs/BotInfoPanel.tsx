@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronsRight, ExternalLink } from "lucide-react";
 import { useChat } from "../../model/useChat.tsx";
+import { useOpenDirect } from "../../model/useOpenDirect.tsx";
 import { useStoreContext } from "../../model/store/StoreProvider.tsx";
 import { resolvePersonaColor } from "#shared/ui/avatar-colors.tsx";
 import type { PersonaColor } from "#shared/ui/avatar-colors.tsx";
@@ -29,14 +30,16 @@ const REASONING_LEVELS: readonly ReasoningEffort[] = ["low", "medium", "high", "
 
 export interface BotInfoPanelProps {
   readonly botId: string;
+  readonly standalone?: boolean;
 }
 
 /** The bot info/settings panel: avatar + color editor, name/label/description, the
  * Notifications toggle, launch settings with a relaunch-to-apply confirmation, "Open in herdr", a retry
  * affordance for failed onboarding, and delete. Opened via `useDialogs().openBotInfo(id)` (never mount
  * this directly with `useInfoPanel()` from outside the main column -- see `dialogs-store.tsx`). */
-export function BotInfoPanel({ botId }: BotInfoPanelProps) {
+export function BotInfoPanel({ botId, standalone }: BotInfoPanelProps) {
   const chat = useChat(botId);
+  const openDirect = useOpenDirect();
   const { client } = useStoreContext();
   const panel = useInfoPanel();
   const dialogHost = useDialogHost();
@@ -117,20 +120,35 @@ export function BotInfoPanel({ botId }: BotInfoPanelProps) {
   }
 
   return (
-    <div>
+    <div className={standalone ? styles["hb-standalone-profile"] : undefined}>
       <div className={styles["hb-panel-header"]}>
-        <IconButton aria-label={t("common.back")} size="sm" onClick={panel.close}>
-          <ChevronLeft size={18} />
-        </IconButton>
+        {!standalone && (
+          <IconButton aria-label={t("common.back")} size="sm" onClick={panel.close}>
+            <ChevronLeft size={18} />
+          </IconButton>
+        )}
         <span className={styles["hb-panel-title"]}>{t("dialogs.botInfo.title")}</span>
-        <IconButton aria-label={t("dialogs.botInfo.closeDetails")} size="sm" onClick={panel.close}>
-          <ChevronsRight size={18} />
-        </IconButton>
+        {!standalone && (
+          <IconButton
+            aria-label={t("dialogs.botInfo.closeDetails")}
+            size="sm"
+            onClick={panel.close}
+          >
+            <ChevronsRight size={18} />
+          </IconButton>
+        )}
       </div>
 
       <BotOnboardingBanner chatId={botId} />
 
       <div className={styles["hb-panel-body"]}>
+        <Button
+          onClick={async () => {
+            if (await openDirect(botId)) panel.close();
+          }}
+        >
+          {t("dialogs.openDirect")}
+        </Button>
         <div className={styles["hb-panel-avatar"]}>
           <button
             ref={avatarButtonRef}
