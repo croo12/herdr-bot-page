@@ -32,6 +32,21 @@ pub(super) enum Action {
         summary: Vec<String>,
     },
     Whoami,
+    /// Show messages waiting for the bot attached to this pane.
+    Inbox {
+        /// Mark a waiting message handled without replying.
+        #[arg(long, conflicts_with = "retry")]
+        ack: Option<String>,
+        /// Request another turn after checking an unconfirmed attempt.
+        #[arg(long)]
+        retry: Option<String>,
+    },
+    /// Open a one-to-one chat with a bot (from this pane, or as the user).
+    Dm {
+        bot: String,
+        #[arg(num_args=0..)]
+        text: Vec<String>,
+    },
     Bot {
         #[command(subcommand)]
         command: Bot,

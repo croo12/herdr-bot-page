@@ -17,13 +17,23 @@ pub(crate) fn delete_chats(
     let mut deleted = vec![];
     for id in ids {
         let chat = store.tx(|repos, _| repos.chats.get(&id))?;
-        if sessions
-            .active
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|(bot, turn)| bot == &id || turn.chat == id)
-        {
+        anyhow::ensure!(
+            crate::domain::visible_to(&chat, None),
+            "invalid_args: not a participant"
+        );
+        let related_directs = store.tx(|repos, _| {
+            Ok(repos
+                .chats
+                .list()?
+                .into_iter()
+                .filter(|chat| {
+                    chat["kind"] == "direct" && strings(&chat["memberIds"]).contains(&id)
+                })
+                .collect::<Vec<_>>())
+        })?;
+        if sessions.active.lock().unwrap().iter().any(|(bot, turn)| {
+            bot == &id || turn.chat == id || related_directs.iter().any(|dm| dm["id"] == turn.chat)
+        }) {
             bail!("bot_not_ready: {id} has an active turn")
         }
         if chat["kind"] == "bot" {
@@ -44,6 +54,12 @@ pub(crate) fn delete_chats(
             for mut room in repos.chats.list()? {
                 let mut members = strings(&room["memberIds"]);
                 if members.contains(&id) {
+                    if room["kind"] == "direct" {
+                        // Keep the history when a participant is deleted. A new bot reusing
+                        // the name must never inherit that participant's old conversation.
+                        repos.chats.archive_direct(&room, events)?;
+                        continue;
+                    }
                     members.retain(|member| member != &id);
                     room["memberIds"] = json!(members);
                     release_removed_members(repos, events, &room)?;
@@ -51,7 +67,7 @@ pub(crate) fn delete_chats(
                 }
             }
             repos.chats.delete(&id)?;
-            events.push(("chat.listChanged", json!(repos.chats.list()?)));
+            events.push(("chat.listChanged", json!(repos.chats.visible_list()?)));
             Ok(())
         })?;
         deleted.push(id);
@@ -77,6 +93,7 @@ pub(crate) fn set_members(
 }
 
 fn release_removed_members(repos: &Repositories, events: &mut Events, room: &Value) -> Result<()> {
+    repos.inbox.keep_members(room)?;
     reviews::revoke_removed_members(repos, events, room)?;
     tasks::release_removed_members(repos, events, room)
 }

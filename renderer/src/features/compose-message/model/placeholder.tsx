@@ -12,5 +12,5 @@ import type { ChatKind } from "#shared/api/index.tsx";
 export function placeholderKey(
   kind: ChatKind,
 ): "composer.placeholder.bot" | "composer.placeholder.room" {
-  return kind === "bot" ? "composer.placeholder.bot" : "composer.placeholder.room";
+  return kind === "room" ? "composer.placeholder.room" : "composer.placeholder.bot";
 }

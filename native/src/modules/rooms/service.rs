@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 pub(crate) fn set_activity(store: &Store, target: &str, running: bool) {
     let _ = store.tx(|repos, events| {
         let mut row = repos.chats.get(target)?;
-        if row["kind"] == "room" && row["isRunning"] != running {
+        if row["kind"] != "bot" && row["isRunning"] != running {
             row["isRunning"] = running.into();
             row["currentActivity"] = if running {
                 json!({"verb":"working"})
@@ -31,7 +31,7 @@ pub(crate) fn create_room(store: &Store, params: &Value) -> Result<Value> {
         let room = new_chat(&format!("room-{}", id()), "room", params);
         repos.chats.save(&room)?;
         repos.chats.remember(params, &room)?;
-        events.push(("chat.listChanged", json!(repos.chats.list()?)));
+        events.push(("chat.listChanged", json!(repos.chats.visible_list()?)));
         Ok(json!({"chat":room}))
     })
 }

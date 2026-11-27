@@ -77,6 +77,9 @@ impl Engine {
                 let _ = engine.sessions.herdr.ensure();
             }
             while let Some(engine) = weak.upgrade() {
+                let _ = engine
+                    .store
+                    .schedule_inbox(&|chat, job| engine.enqueue_chat(chat, job));
                 let _ = engine.enqueue_runnable_tasks();
                 let _ = crate::application::refresh_prompts(&engine.store, &engine.sessions);
                 drop(engine);
@@ -108,7 +111,7 @@ impl Engine {
             let running: Vec<_> = self.queues.lock().unwrap().keys().cloned().collect();
             Ok(json!({
                 "home": self.home, "session": self.sessions.herdr.session, "bots": bots,
-                "rooms": chats.len() - bots, "runningChatIds": running
+                "rooms": chats.iter().filter(|chat|chat["kind"]=="room").count(), "runningChatIds": running
             }))
         })
     }

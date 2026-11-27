@@ -60,7 +60,16 @@ impl Engine {
             rooms::set_activity(&self.store, chat_id, true);
             let result = match item {
                 QueueItem::Chat(job) => {
-                    application::run_chat(&self.store, &self.sessions, chat_id, job)
+                    let delivery = job.delivery.clone();
+                    let result = application::run_chat(&self.store, &self.sessions, chat_id, job);
+                    if let Some(delivery) = delivery {
+                        let message = result.as_ref().err().map(|error| format!("{error:#}"));
+                        self.store
+                            .tx(|repos, _| repos.inbox.release(&delivery, message.as_deref()))
+                            .and_then(|report| if report { result } else { Ok(()) })
+                    } else {
+                        result
+                    }
                 }
                 QueueItem::Task(entry_id) => {
                     application::execute_task(&self.store, &self.sessions, chat_id, &entry_id)

@@ -1,4 +1,6 @@
 import { useActiveChat } from "../model/useActiveChat.tsx";
+import { useChat } from "../model/useChat.tsx";
+import { BotInfoPanel } from "./dialogs/BotInfoPanel.tsx";
 import { WorkspaceComposer } from "./WorkspaceComposer.tsx";
 import { HeaderSlot } from "./conversation/HeaderSlot.tsx";
 import { TranscriptSlot } from "./conversation/TranscriptSlot.tsx";
@@ -15,6 +17,7 @@ import styles from "./WorkspaceLayout.module.css";
 export function WorkspaceLayout() {
   const sidebar = useSidebarLayout();
   const { activeChatId } = useActiveChat();
+  const activeChat = useChat(activeChatId);
   const { t } = useT();
   const mainOverride = useMainColumnOverride();
 
@@ -58,6 +61,8 @@ export function WorkspaceLayout() {
                 <div className={styles["hb-shell-empty-title"]}>{t("shell.emptyState.title")}</div>
                 <div className={styles["hb-shell-empty-body"]}>{t("shell.emptyState.body")}</div>
               </div>
+            ) : activeChat?.kind === "bot" ? (
+              <BotInfoPanel key={activeChat.id} botId={activeChat.id} standalone />
             ) : (
               <>
                 <BotOnboardingBanner chatId={activeChatId} />

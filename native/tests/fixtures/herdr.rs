@@ -59,7 +59,7 @@ fn main() {
                 .join("bin")
                 .join(format!("herdr-bot{}", env::consts::EXE_SUFFIX));
             let mut invoke = Command::new(cli);
-            invoke.env("HERDR_PANE_ID", "w1:p1");
+            invoke.env("HERDR_PANE_ID", &args[2]);
             if let Some(report) = prompt.lines().find(|line| line.starts_with("task-report ")) {
                 assert!(prompt.contains("Completion criteria: Windows build passes"));
                 if prompt.contains("Previous checkpoint: Build fixed; verify on Windows") {
@@ -81,7 +81,7 @@ fn main() {
             {
                 assert!(home.join("reply-posted").exists() && !stage.exists());
                 invoke.args(["say", target, "queue order confirmed"]);
-            } else if prompt.contains("native-reply") && target.starts_with("room-") {
+            } else if (prompt.contains("native-reply") && target.starts_with("room-")) || args[2]=="w1:p2" {
                 invoke.args(["pass", target]);
             } else {
                 invoke.args(["say", target, "native-reply 안녕하세요"]);

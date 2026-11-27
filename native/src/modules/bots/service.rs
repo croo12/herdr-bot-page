@@ -167,19 +167,20 @@ pub(crate) fn create_bot(
     store.tx(|repos, events| {
         repos.chats.save(&chat)?;
         repos.chats.remember(&params, &chat)?;
-        events.push(("chat.listChanged", json!(repos.chats.list()?)));
+        events.push(("chat.listChanged", json!(repos.chats.visible_list()?)));
         Ok(())
     })?;
     if quick {
+        let dm = store.tx(|repos, events| repos.chats.open_direct(&bot_id, None, events))?;
         enqueue_chat(
-            &bot_id,
+            need(&dm, "id")?,
             ChatJob {
+                delivery: None,
                 seed: format!(
                     "Introduce yourself in {} in one sentence.",
                     string_field(&params, "locale")
                 ),
                 depth: 0,
-                exclude: None,
             },
         );
     }

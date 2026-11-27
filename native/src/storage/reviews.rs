@@ -59,7 +59,7 @@ impl<'db> Reviews<'db> {
     }
     pub(crate) fn unassigned(&self) -> Result<Vec<UnassignedReview>> {
         let mut statement = self.db.prepare("SELECT e.chat,e.data,b.data,room.data FROM entries e JOIN chats room ON room.id=e.chat
-                JOIN chats b ON b.id=json_extract(e.data,'$.author.id')
+                JOIN bots b ON b.id=json_extract(e.data,'$.author.id')
                 WHERE json_extract(room.data,'$.kind')='room'
                 AND json_extract(e.data,'$.status')='pending' AND json_extract(e.data,'$.prompt.kind')='permission'
                 AND json_extract(e.data,'$.permissionReview') IS NULL")?;
@@ -104,7 +104,7 @@ impl<'db> Reviews<'db> {
         chat: &str,
     ) -> Result<Option<AssignedReview>> {
         Ok(self.db.query_row("SELECT r.chat,e.data,b.data,a.data FROM permission_reviews r
-                JOIN entries e ON e.chat=r.chat AND e.seq=r.seq JOIN chats b ON b.id=r.target JOIN chats a ON a.id=r.reviewer JOIN chats room ON room.id=e.chat
+                JOIN entries e ON e.chat=r.chat AND e.seq=r.seq JOIN bots b ON b.id=r.target JOIN bots a ON a.id=r.reviewer JOIN chats room ON room.id=e.chat
                 WHERE r.ticket=? AND r.pane=? AND json_extract(a.data,'$.bot.paneId')=r.pane
                 AND r.chat=? AND json_extract(room.data,'$.kind')='room' AND r.reviewer!=r.target
                 AND r.reviewer IN (SELECT value FROM json_each(room.data,'$.memberIds'))

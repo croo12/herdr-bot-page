@@ -123,6 +123,23 @@ export function createFakeAppApi(): AppApiTransport {
   }
 
   const methods: Record<string, (params: any) => unknown> = {
+    "chat.openDirect": ({ botId }: { botId: string }) => {
+      const bot = requireChat(botId);
+      const existing = [...chats.values()].find(
+        (chat) => chat.kind === "direct" && !chat.archived && chat.memberIds.includes(botId),
+      );
+      if (existing) return existing;
+      const dm = blankChat({
+        id: crypto.randomUUID(),
+        kind: "direct",
+        name: bot.name,
+        memberIds: [botId],
+        includesUser: true,
+      });
+      chats.set(dm.id, dm);
+      emit("chat.listChanged", [...chats.values()]);
+      return dm;
+    },
     "task.list": ({ chatId }) => roomEntries(chatId).filter((entry) => entry.task),
     "task.run": () => {
       throw new AppApiError("bot_not_ready", "Task execution requires the desktop app.");

@@ -48,8 +48,24 @@ fn run() -> Result<()> {
         Action::Message(message_args) => message("cli.message", message_args)?,
         Action::Pass { chat } => call("cli.pass", json!({"chatId":chat,"paneId":pane}))?,
         Action::Whoami => call("cli.whoami", json!({"paneId":pane}))?,
+        Action::Inbox { ack, retry } => {
+            call("cli.inbox", json!({"paneId":pane,"ack":ack,"retry":retry}))?
+        }
+        Action::Dm { bot, text } if text.is_empty() => {
+            call("chat.openDirect", json!({"paneId":pane,"botId":bot}))?
+        }
+        Action::Dm { bot, text } if pane.is_empty() => {
+            call("message.send", json!({"chatId":bot,"text":text.join(" ")}))?
+        }
+        Action::Dm { bot, text } => call(
+            "cli.dm",
+            json!({"paneId":pane,"chatId":bot,"text":text.join(" ")}),
+        )?,
         Action::Read { chat, limit } => {
-            let res = call("transcript.page", json!({"chatId":chat,"limit":limit}))?;
+            let res = call(
+                "transcript.page",
+                json!({"chatId":chat,"limit":limit,"paneId":pane}),
+            )?;
             for entry in res["entries"].as_array().into_iter().flatten() {
                 println!(
                     "{}: {}",

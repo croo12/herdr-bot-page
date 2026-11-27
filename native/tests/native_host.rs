@@ -61,6 +61,77 @@ fn compile_herdr_fixture(directory: &Path) -> PathBuf {
 }
 
 #[test]
+fn each_bot_discovers_its_own_direct_messages_after_a_host_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path();
+    let fake = compile_herdr_fixture(home);
+    std::fs::write(home.join("two-bots"), "").unwrap();
+    let host = start(home, &fake);
+    for (bot, pane) in [("tester", "w1:p1"), ("peer", "w1:p2")] {
+        cli(home, &["bot", "adopt", pane, bot]);
+    }
+    // Both bots are busy doing work outside this host. No turn can consume the deliveries.
+    std::fs::write(home.join("delayed-stage"), "working").unwrap();
+    let call = |method, params| ipc::request(home, method, params).unwrap();
+    let dm = call("chat.openDirect", json!({"botId":"tester"}));
+    let sent = call(
+        "message.send",
+        json!({"chatId":dm["id"],"text":"from the user","clientNonce":"one"}),
+    );
+    assert_eq!(
+        call(
+            "message.send",
+            json!({"chatId":"tester","text":"from the user","clientNonce":"one"})
+        ),
+        sent
+    );
+    let pair = call(
+        "cli.dm",
+        json!({"paneId":"w1:p2","chatId":"tester","text":"from the peer"}),
+    );
+    assert_ne!(pair["chatId"], dm["id"]);
+    assert_eq!(
+        call("chat.openDirect", json!({"botId":"peer","paneId":"w1:p1"}))["id"],
+        pair["chatId"]
+    );
+    assert!(ipc::request(home, "transcript.page", json!({"chatId":pair["chatId"]})).is_err());
+    assert!(call("chat.list", Value::Null)
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|chat| chat["id"] != pair["chatId"]));
+    call("chat.markRead", json!({"chatId":dm["id"],"throughSeq":1}));
+    assert_eq!(call("cli.inbox", json!({"paneId":"w1:p2"})), json!([]));
+    drop(host);
+    let _host = start(home, &fake);
+    let inbox = call("cli.inbox", json!({"paneId":"w1:p1"}));
+    let rows = inbox.as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["messageId"], sent["entryId"]);
+    assert_eq!(rows[1]["chatId"], pair["chatId"]);
+    assert_eq!(rows[1]["author"]["id"], "peer");
+    assert_eq!(rows[1]["text"], "from the peer");
+    assert!(ipc::request(home, "cli.inbox", json!({"paneId":"unregistered"})).is_err());
+    std::fs::remove_file(home.join("delayed-stage")).unwrap();
+    wait(|| {
+        call("cli.inbox", json!({"paneId":"w1:p1"}))
+            .as_array()
+            .unwrap()
+            .is_empty()
+    });
+    let history = call("transcript.page", json!({"chatId":dm["id"]}));
+    assert_eq!(
+        history["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| row["kind"] == "send-message")
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn stalled_prompt_keeps_the_original_turn_until_start_or_reply_is_confirmed() {
     let directory = tempfile::tempdir().unwrap();
     let fake = compile_herdr_fixture(directory.path());
@@ -207,9 +278,11 @@ fn cli_and_desktop_contract_share_turns_events_and_durable_history() {
     )
     .unwrap();
     wait(|| home.join("waiting-for-reply").exists());
+    let dm = ipc::request(&home, "chat.openDirect", json!({"botId":"tester"})).unwrap();
+    assert_ne!(dm["id"], "tester");
     assert_eq!(
         ipc::request(&home, "host.status", Value::Null).unwrap()["runningChatIds"],
-        json!(["tester"])
+        json!([dm["id"]])
     );
     ipc::request(
         &home,

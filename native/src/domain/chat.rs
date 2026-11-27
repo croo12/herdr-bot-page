@@ -1,5 +1,19 @@
 use crate::domain::{now, patch, string_field};
 use serde_json::{json, Value};
+pub(crate) fn visible_to(chat: &Value, bot: Option<&str>) -> bool {
+    if chat["kind"] != "direct" {
+        return true;
+    }
+    match bot {
+        Some(id) => {
+            chat["archived"] != true
+                && chat["memberIds"]
+                    .as_array()
+                    .is_some_and(|ids| ids.iter().any(|member| member == id))
+        }
+        None => chat["includesUser"] == true,
+    }
+}
 pub(crate) fn new_chat(id: &str, kind: &str, params: &Value) -> Value {
     let timestamp = now();
     let mut chat = json!({"id":id,"kind":kind,"name":string_field(params,"name"),"description":"","title":"","avatarShape":null,"avatarColor":null,

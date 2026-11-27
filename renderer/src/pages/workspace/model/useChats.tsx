@@ -5,7 +5,9 @@ import { chatsQuery } from "./store/queries.tsx";
 
 const emptyChats: readonly ChatSummary[] = [];
 const byActivity = (chats: ChatSummary[]) =>
-  [...chats].sort((left, right) => right.lastActivityAt - left.lastActivityAt);
+  chats
+    .filter((chat) => chat.kind !== "direct" || chat.includesUser)
+    .sort((left, right) => right.lastActivityAt - left.lastActivityAt);
 
 export function useChatsQuery() {
   const { client } = useStoreContext();
