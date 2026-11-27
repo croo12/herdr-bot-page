@@ -61,6 +61,53 @@ fn compile_herdr_fixture(directory: &Path) -> PathBuf {
 }
 
 #[test]
+fn managed_creation_requires_the_models_and_effort_supported_by_each_provider() {
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path();
+    let fake = compile_herdr_fixture(home);
+    let _host = start(home, &fake);
+    for method in ["bot.create", "bot.quickCreate"] {
+        for provider in ["claude", "codex", "grok", "gemini", "agy", "opencode"] {
+            let mut params = json!({"name":"Reviewer", "provider":provider, "cwd":home});
+            if matches!(provider, "claude" | "codex" | "grok") {
+                params["reasoningEffort"] = json!("high");
+            }
+            for model in [None, Some(Value::Null), Some(json!("")), Some(json!("  "))] {
+                if let Some(model) = model {
+                    params["model"] = model;
+                }
+                let error = ipc::request(home, method, params.clone()).unwrap_err();
+                assert!(
+                    error
+                        .to_string()
+                        .contains(&format!("check model for {provider}")),
+                    "{error}"
+                );
+            }
+        }
+        for (provider, model, effort, invalid) in [
+            ("claude", json!("selected"), Value::Null, "reasoningEffort"),
+            (
+                "gemini",
+                json!("selected"),
+                json!("high"),
+                "reasoningEffort",
+            ),
+            ("pi", json!("selected"), Value::Null, "model"),
+        ] {
+            let params = json!({"name":"Reviewer","provider":provider,"model":model,"reasoningEffort":effort,"cwd":home});
+            let error = ipc::request(home, method, params).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("check {invalid} for {provider}")),
+                "{error}"
+            );
+        }
+    }
+}
+
+#[test]
 fn quick_create_registers_an_existing_agent_and_greets_in_its_direct_chat() {
     let directory = tempfile::tempdir().unwrap();
     let home = directory.path();

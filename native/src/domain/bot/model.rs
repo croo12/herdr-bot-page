@@ -73,6 +73,20 @@ pub(crate) enum Provider {
     Other(String),
 }
 
+impl Provider {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Claude { .. } => "claude",
+            Self::Codex { .. } => "codex",
+            Self::Grok { .. } => "grok",
+            Self::Gemini { .. } => "gemini",
+            Self::Antigravity { .. } => "agy",
+            Self::OpenCode { .. } => "opencode",
+            Self::Other(name) => name,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ClaudeModelId(pub String);
 #[derive(Debug, PartialEq, Eq)]
@@ -96,6 +110,18 @@ pub(crate) enum ReasoningEffort {
     Max,
 }
 
+impl ReasoningEffort {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::XHigh => "xhigh",
+            Self::Max => "max",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ClaudePermissionMode {
     Default,
@@ -108,60 +134,9 @@ pub(crate) enum CodexPermissionMode {
     WorkspaceWriteOnRequest,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct LaunchSettings {
-    pub cwd: Option<PathBuf>,
-    pub provider: String,
-    pub model: Option<String>,
-    pub reasoning_effort: Option<ReasoningEffort>,
-    pub permission_mode: Option<PermissionMode>,
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum PermissionMode {
     Ask,
     Auto,
-}
-
-impl From<&LaunchSettings> for Provider {
-    fn from(settings: &LaunchSettings) -> Self {
-        let auto = matches!(settings.permission_mode, Some(PermissionMode::Auto));
-        let model = settings.model.clone();
-        match settings.provider.as_str() {
-            "claude" => Provider::Claude {
-                model: model.map(ClaudeModelId),
-                reasoning_effort: settings.reasoning_effort.clone(),
-                permission_mode: if auto {
-                    ClaudePermissionMode::BypassPermissions
-                } else {
-                    ClaudePermissionMode::Default
-                },
-            },
-            "codex" => Provider::Codex {
-                model: model.map(CodexModelId),
-                reasoning_effort: settings.reasoning_effort.clone(),
-                permission_mode: if auto {
-                    CodexPermissionMode::WorkspaceWriteOnRequest
-                } else {
-                    CodexPermissionMode::Default
-                },
-            },
-            "grok" => Provider::Grok {
-                model: model.map(GrokModelId),
-                reasoning_effort: settings.reasoning_effort.clone(),
-            },
-            "gemini" => Provider::Gemini {
-                model: model.map(GeminiModelId),
-            },
-            "agy" => Provider::Antigravity {
-                model: model.map(AntigravityModelId),
-            },
-            "opencode" => Provider::OpenCode {
-                model: model.map(OpenCodeModelId),
-            },
-            _ => Provider::Other(settings.provider.clone()),
-        }
-    }
 }

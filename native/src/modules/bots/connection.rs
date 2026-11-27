@@ -1,10 +1,15 @@
 use crate::{
-    domain::{need, string_field},
+    domain::{
+        bot::{PermissionMode, ProviderDraft},
+        need, string_field,
+    },
     infrastructure::{herdr::Herdr, AgentSessions},
     storage::Store,
 };
 use anyhow::{bail, Context, Result};
+use serde::Deserialize;
 use serde_json::Value;
+use std::path::Path;
 
 pub(crate) fn connect_bot(
     store: &Store,
@@ -46,8 +51,9 @@ pub(crate) fn connect_for_turn(store: &Store, herdr: &Herdr, bot_id: &str) -> Re
             agent.clone()
         }
         None if bot["adopted"] == false => {
+            let provider = ProviderDraft::deserialize(bot)?.existing(PermissionMode::Ask);
             let started = herdr
-                .launch(bot_id, bot)
+                .launch(bot_id, Path::new(need(bot, "cwd")?), &provider)
                 .with_context(|| format!("bot_not_ready: could not reconnect {bot_id}"))?;
             // Startup can stop at a provider dialog before Herdr finishes naming the agent.
             if started["name"] == bot_id {

@@ -1,4 +1,7 @@
-use crate::domain::need;
+use crate::domain::{
+    bot::{ClaudePermissionMode, CodexPermissionMode, Provider},
+    need,
+};
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 use std::{
@@ -11,6 +14,65 @@ use std::{
     time::Duration,
 };
 use wait_timeout::ChildExt;
+
+fn launch_options(provider: &Provider) -> Vec<String> {
+    let mut options = Vec::new();
+    let (model, effort_option) = match provider {
+        Provider::Claude {
+            model,
+            permission_mode,
+            reasoning_effort,
+        } => {
+            if *permission_mode == ClaudePermissionMode::BypassPermissions {
+                options.extend(["--permission-mode", "bypassPermissions"].map(String::from));
+            }
+            (
+                model.as_ref().map(|id| &id.0),
+                reasoning_effort
+                    .as_ref()
+                    .map(|effort| ("--effort", effort.as_str().to_owned())),
+            )
+        }
+        Provider::Codex {
+            model,
+            permission_mode,
+            reasoning_effort,
+        } => {
+            if *permission_mode == CodexPermissionMode::WorkspaceWriteOnRequest {
+                options.extend(["-s", "workspace-write", "-a", "on-request"].map(String::from));
+            }
+            (
+                model.as_ref().map(|id| &id.0),
+                reasoning_effort.as_ref().map(|effort| {
+                    (
+                        "--config",
+                        format!("model_reasoning_effort=\"{}\"", effort.as_str()),
+                    )
+                }),
+            )
+        }
+        Provider::Grok {
+            model,
+            reasoning_effort,
+        } => (
+            model.as_ref().map(|id| &id.0),
+            reasoning_effort
+                .as_ref()
+                .map(|effort| ("--reasoning-effort", effort.as_str().to_owned())),
+        ),
+        Provider::Gemini { model } => (model.as_ref().map(|id| &id.0), None),
+        Provider::Antigravity { model } => (model.as_ref().map(|id| &id.0), None),
+        Provider::OpenCode { model } => (model.as_ref().map(|id| &id.0), None),
+        Provider::Other(_) => (None, None),
+    };
+    if let Some(model) = model {
+        options.extend(["--model".into(), model.clone()]);
+    }
+    if let Some((flag, value)) = effort_option {
+        options.extend([flag.into(), value]);
+    }
+    options
+}
 
 #[derive(Debug)]
 struct HerdrFailure {
@@ -193,9 +255,13 @@ impl Herdr {
             .cloned()
             .context("herdr_error: agent list has no agents array")
     }
-    pub fn launch(&self, id: &str, bot: &Value) -> Result<Value> {
-        let cwd = need(bot, "cwd")?;
-        let kind = need(bot, "provider")?;
+    pub fn launch(&self, id: &str, directory: &Path, provider: &Provider) -> Result<Value> {
+        let cwd = directory
+            .to_str()
+            .filter(|cwd| !cwd.trim().is_empty())
+            .context("invalid_args: missing cwd")?;
+        let kind = provider.name();
+        let opts = launch_options(provider);
         let label = format!("herdr-bot: {cwd}");
         let workspaces = self.run(&["workspace", "list"])?;
         let existing = workspaces["workspaces"]
@@ -227,27 +293,6 @@ impl Herdr {
             ])?
         };
         let pane = need(&location["root_pane"], "pane_id")?;
-        let mut opts = Vec::<String>::new();
-        if kind == "claude" && bot["permissionMode"] == "auto" {
-            opts.extend(["--permission-mode".into(), "bypassPermissions".into()]);
-        }
-        if kind == "codex" && bot["permissionMode"] == "auto" {
-            opts.extend(["-s", "workspace-write", "-a", "on-request"].map(String::from));
-        }
-        if let Some(model) = bot["model"].as_str() {
-            opts.extend(["--model".into(), model.into()]);
-        }
-        if let Some(effort) = bot["reasoningEffort"].as_str() {
-            match kind {
-                "claude" => opts.extend(["--effort".into(), effort.into()]),
-                "grok" => opts.extend(["--reasoning-effort".into(), effort.into()]),
-                "codex" => opts.extend([
-                    "--config".into(),
-                    format!("model_reasoning_effort=\"{effort}\""),
-                ]),
-                _ => {}
-            }
-        }
         let mut args = vec![
             "agent",
             "start",

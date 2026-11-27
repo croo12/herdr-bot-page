@@ -1,8 +1,13 @@
 use std::{env, fs, path::PathBuf, process::Command};
 
 fn agent(name: &str, pane: &str) -> String {
+    let provider = match name {
+        "managed" => "codex",
+        "external" => "claude",
+        _ => "pi",
+    };
     format!(
-        r#"{{"name":"{name}","pane_id":"{pane}","agent":"pi","agent_status":"idle","cwd":"."}}"#
+        r#"{{"name":"{name}","pane_id":"{pane}","agent":"{provider}","agent_status":"idle","cwd":"."}}"#
     )
 }
 
@@ -31,10 +36,20 @@ fn main() {
             format!(r#""agents":[{}]"#, rows.join(","))
         }
         ("workspace", "list") => r#""workspaces":[]"#.into(),
-        ("workspace", "create") => format!(r#""root_pane":{{"pane_id":"{managed}"}}"#),
+        ("workspace", "create") => {
+            let pane = if PathBuf::from(&args[3]) == home.join("relaunch") { "w9:p1" } else { managed };
+            format!(r#""root_pane":{{"pane_id":"{pane}"}}"#)
+        }
+        ("agent", "start") if args[6] == "w9:p1" => {
+            assert_eq!(args[4], "claude");
+            assert!(!args.iter().any(|arg| arg == "--model" || arg == "--effort"));
+            format!(r#""agent":{}"#, agent("external", "w9:p1"))
+        }
         ("agent", "start") => {
             assert_eq!(args[2], "managed");
             assert_eq!(args[6], managed);
+            assert_eq!(args[4], "codex");
+            assert_eq!(&args[9..], ["--", "-s", "workspace-write", "-a", "on-request", "--model", "test-model", "--config", "model_reasoning_effort=\"high\""]);
             fs::File::create_new(home.join(managed.replace(':', "-"))).unwrap();
             format!(r#""agent":{}"#, agent("managed", managed))
         }

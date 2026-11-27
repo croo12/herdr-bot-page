@@ -1,4 +1,4 @@
-use crate::domain::bot::{AvatarColor, Bot, BotId, LaunchSettings};
+use crate::domain::bot::{AvatarColor, Bot, BotId, PermissionMode, ProviderDraft};
 use anyhow::{anyhow, Context, Result};
 use rusqlite::{Connection, OptionalExtension};
 use serde::Deserialize;
@@ -46,12 +46,19 @@ struct StoredBot {
     title: Option<String>,
     description: Option<String>,
     avatar_color: Option<AvatarColor>,
-    bot: LaunchSettings,
+    bot: StoredBotFacts,
+}
+
+#[derive(Deserialize)]
+struct StoredBotFacts {
+    cwd: Option<std::path::PathBuf>,
+    #[serde(flatten)]
+    provider: ProviderDraft,
 }
 
 impl From<StoredBot> for Bot {
     fn from(stored: StoredBot) -> Self {
-        let provider = (&stored.bot).into();
+        let provider = stored.bot.provider.existing(PermissionMode::Ask);
         Self {
             id: stored.id,
             name: stored.name,

@@ -30,7 +30,8 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
     engine
         .call(
             "bot.create",
-            json!({"id":"managed","name":"Managed","provider":"pi","cwd":home,
+            json!({"id":"managed","name":"Managed","provider":"codex","cwd":home,
+                "model":"test-model","reasoningEffort":"high","permissionMode":"auto",
                 "title":"UI reviewer","description":"Check the UI for accessibility"}),
         )
         .unwrap();
@@ -87,4 +88,15 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
             pane
         );
     }
+    // The adopted Claude agent never reported a model. Relaunch must keep its CLI default.
+    let directory = home.join("relaunch");
+    std::fs::create_dir(&directory).unwrap();
+    let relaunched = engine
+        .call(
+            "bot.updateLaunchSettings",
+            json!({"botId":"external","cwd":directory}),
+        )
+        .unwrap();
+    assert_eq!(relaunched["chat"]["bot"]["paneId"], "w9:p1");
+    assert_eq!(relaunched["chat"]["bot"]["model"], Value::Null);
 }

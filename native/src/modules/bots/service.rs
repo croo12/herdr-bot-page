@@ -1,7 +1,10 @@
-use super::validation::validate;
+use super::working_directory::resolve_working_directory;
 use crate::{
     domain::{
-        bot::{Bot, BotDefaults, BotDraft, BotPreferences, LaunchSettings},
+        bot::{
+            Bot, BotDefaults, BotDraft, BotOrigin, BotPreferences, PermissionMode, ProviderDraft,
+            SelectionFor,
+        },
         id, need, new_chat, patch, string_field, ChatJob,
     },
     infrastructure::{
@@ -13,7 +16,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn load_defaults(store: &Store) -> Result<BotDefaults> {
     store.tx(|repos, _| {
@@ -83,18 +86,18 @@ pub(crate) fn relaunch_bot(
     if bot["permissionMode"].is_null() {
         bot["permissionMode"] = json!(load_defaults(store)?.permission_mode);
     }
-    let mut settings = LaunchSettings::deserialize(&bot)
-        .context("invalid_launch_options: invalid launch settings")?;
-    validate(
-        &mut settings,
+    let provider = ProviderDraft::deserialize(&bot)
+        .context("invalid_launch_options: invalid provider settings")?
+        .select(SelectionFor::Relaunch, PermissionMode::Ask)?;
+    let directory = resolve_working_directory(
+        bot["cwd"].as_str().map(Path::new),
         params["allowHomeCwd"] == true || bot_cwd_unchanged(&chat, params),
-        false,
     )?;
-    bot["cwd"] = json!(settings.cwd);
+    bot["cwd"] = json!(directory);
     sessions.herdr.ensure()?;
     // Bring up the replacement first. A failed launch leaves the old pane available.
     let temporary = format!("hb-{}", &id()[..8]);
-    let agent = sessions.herdr.launch(&temporary, &bot)?;
+    let agent = sessions.herdr.launch(&temporary, &directory, &provider)?;
     let new_pane = need(&agent, "pane_id")?;
     let old = sessions
         .herdr
@@ -153,13 +156,16 @@ pub(crate) fn create_bot(
         sessions.herdr.ensure()?;
         sessions.herdr.agents()
     };
-    let read_draft = |input: &Value| -> Result<_> {
+    let defaults = load_defaults(store)?;
+    if params["permissionMode"].is_null() {
+        params["permissionMode"] = json!(defaults.permission_mode);
+    }
+    let create = |input: &Value, origin| {
         let draft = BotDraft::deserialize(input).context("invalid_args: invalid bot settings")?;
-        let settings = draft.launch_settings(&load_defaults(store)?);
-        Ok((draft, settings))
+        Bot::new(draft, &defaults, quick, origin)
     };
     let agents;
-    let (draft, settings, adopted) = if let Some(pane) = params["adoptPaneId"].as_str() {
+    let (bot, adopted) = if let Some(pane) = params["adoptPaneId"].as_str() {
         if store.tx(|repos, _| Ok(repos.chats.pane_owner(pane)?.is_some()))? {
             bail!("bot_exists: pane already adopted")
         }
@@ -169,17 +175,18 @@ pub(crate) fn create_bot(
             .find(|agent| agent["pane_id"] == pane)
             .ok_or_else(|| anyhow::anyhow!("unknown_bot: pane {pane}"))?;
         params["provider"] = need(agent, "agent")?.into();
-        let (draft, mut settings) = read_draft(&params)?;
-        settings.cwd = agent["cwd"].as_str().map(PathBuf::from);
-        (draft, settings, Some(agent))
+        params["cwd"] = json!(agent["cwd"].as_str());
+        (create(&params, BotOrigin::Adopted)?, Some(agent))
     } else {
         need(&params, "provider")?;
-        let (draft, mut settings) = read_draft(&params)?;
-        validate(&mut settings, params["allowHomeCwd"] == true, true)?;
+        let mut bot = create(&params, BotOrigin::New)?;
+        bot.working_directory = Some(resolve_working_directory(
+            bot.working_directory.as_deref(),
+            params["allowHomeCwd"] == true,
+        )?);
         agents = list_agents()?;
-        (draft, settings, None)
+        (bot, None)
     };
-    let bot = Bot::new(draft, &settings, quick)?;
     let bot_id = bot.id.as_str();
     if store.tx(|repos, _| Ok(repos.chats.find(bot_id)?.is_some()))? {
         bail!("bot_exists: {bot_id}")
@@ -190,20 +197,18 @@ pub(crate) fn create_bot(
     {
         bail!("bot_exists: agent {bot_id} already exists")
     }
-    let mut facts = serde_json::to_value(&settings)?;
     let agent = if let Some(agent) = adopted {
         sessions
             .herdr
             .run(&["agent", "rename", need(agent, "pane_id")?, bot_id])?;
         agent.clone()
     } else {
-        sessions.herdr.launch(bot_id, &facts)?
+        let directory = bot
+            .working_directory
+            .as_deref()
+            .context("missing_cwd: choose a working folder")?;
+        sessions.herdr.launch(bot_id, directory, &bot.provider)?
     };
-    facts["adopted"] = adopted.is_some().into();
-    facts["paneId"] = agent["pane_id"].clone();
-    facts["status"] = agent["agent_status"].clone();
-    facts["pendingPrompt"] = Value::Null;
-    facts["onboarding"] = Value::Null;
     let mut chat = new_chat(
         bot_id,
         "bot",
@@ -212,7 +217,12 @@ pub(crate) fn create_bot(
             "avatarColor":bot.avatar_color, "avatarShape":params["avatarShape"]
         }),
     );
-    chat["bot"] = facts;
+    chat["bot"] = json!({
+        "provider":bot.provider.name(), "model":params["model"], "reasoningEffort":params["reasoningEffort"],
+        "permissionMode":params["permissionMode"], "cwd":bot.working_directory,
+        "adopted":adopted.is_some(), "paneId":agent["pane_id"], "status":agent["agent_status"],
+        "pendingPrompt":null, "onboarding":null
+    });
     store.tx(|repos, events| {
         repos.chats.save(&chat)?;
         repos.chats.remember(&params, &chat)?;
