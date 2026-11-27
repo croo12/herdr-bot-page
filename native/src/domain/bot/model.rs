@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub(crate) struct Bot {
     pub provider: Provider,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum AvatarColor {
     Black,
@@ -86,7 +86,7 @@ pub(crate) struct AntigravityModelId(pub String);
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct OpenCodeModelId(pub String);
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum ReasoningEffort {
     Low,
@@ -106,4 +106,62 @@ pub(crate) enum ClaudePermissionMode {
 pub(crate) enum CodexPermissionMode {
     Default,
     WorkspaceWriteOnRequest,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LaunchSettings {
+    pub cwd: Option<PathBuf>,
+    pub provider: String,
+    pub model: Option<String>,
+    pub reasoning_effort: Option<ReasoningEffort>,
+    pub permission_mode: Option<PermissionMode>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum PermissionMode {
+    Ask,
+    Auto,
+}
+
+impl From<&LaunchSettings> for Provider {
+    fn from(settings: &LaunchSettings) -> Self {
+        let auto = matches!(settings.permission_mode, Some(PermissionMode::Auto));
+        let model = settings.model.clone();
+        match settings.provider.as_str() {
+            "claude" => Provider::Claude {
+                model: model.map(ClaudeModelId),
+                reasoning_effort: settings.reasoning_effort.clone(),
+                permission_mode: if auto {
+                    ClaudePermissionMode::BypassPermissions
+                } else {
+                    ClaudePermissionMode::Default
+                },
+            },
+            "codex" => Provider::Codex {
+                model: model.map(CodexModelId),
+                reasoning_effort: settings.reasoning_effort.clone(),
+                permission_mode: if auto {
+                    CodexPermissionMode::WorkspaceWriteOnRequest
+                } else {
+                    CodexPermissionMode::Default
+                },
+            },
+            "grok" => Provider::Grok {
+                model: model.map(GrokModelId),
+                reasoning_effort: settings.reasoning_effort.clone(),
+            },
+            "gemini" => Provider::Gemini {
+                model: model.map(GeminiModelId),
+            },
+            "agy" => Provider::Antigravity {
+                model: model.map(AntigravityModelId),
+            },
+            "opencode" => Provider::OpenCode {
+                model: model.map(OpenCodeModelId),
+            },
+            _ => Provider::Other(settings.provider.clone()),
+        }
+    }
 }

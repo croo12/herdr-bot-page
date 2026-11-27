@@ -61,6 +61,55 @@ fn compile_herdr_fixture(directory: &Path) -> PathBuf {
 }
 
 #[test]
+fn quick_create_registers_an_existing_agent_and_greets_in_its_direct_chat() {
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path();
+    let fake = compile_herdr_fixture(home);
+    let _host = start(home, &fake);
+    ipc::request(
+        home,
+        "settings.update",
+        json!({"defaultProvider":"codex","defaultPermissionMode":"ask"}),
+    )
+    .unwrap();
+    let defaults = ipc::request(home, "bot.defaults", Value::Null).unwrap();
+    assert_eq!(defaults["provider"], "codex");
+    assert_eq!(defaults["permissionMode"], "ask");
+    for method in ["bot.create", "bot.quickCreate"] {
+        for provider in [None, Some(Value::Null), Some(json!("")), Some(json!("  "))] {
+            let mut request = json!({"name":"Missing provider", "cwd":home});
+            if let Some(value) = provider {
+                request["provider"] = value;
+            }
+            let error = ipc::request(home, method, request).unwrap_err();
+            assert!(error.to_string().contains("missing provider"), "{error}");
+        }
+    }
+    let params = json!({"id":"tester","adoptPaneId":"w1:p1","requestId":"quick","locale":"en",
+        "title":"Reviewer","description":"Review changes","avatarColor":"violet"});
+    let call = || ipc::request(home, "bot.quickCreate", params.clone()).unwrap();
+    let profile = call()["chat"].clone();
+    assert_eq!(profile["id"], "tester");
+    assert_eq!(profile["name"], "pi");
+    assert_eq!(profile["bot"]["provider"], "pi");
+    assert_eq!(profile["bot"]["cwd"], ".");
+    assert_eq!(profile["bot"]["adopted"], true);
+    assert_eq!(profile["title"], "Reviewer");
+    assert_eq!(profile["description"], "Review changes");
+    assert_eq!(profile["avatarColor"], "violet");
+    assert_eq!(call()["chat"]["id"], profile["id"]);
+    let direct = ipc::request(home, "chat.openDirect", json!({"botId":"tester"})).unwrap();
+    wait(|| {
+        let page = ipc::request(home, "transcript.page", json!({"chatId":direct["id"]})).unwrap();
+        page["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["author"]["id"] == "tester")
+    });
+}
+
+#[test]
 fn each_bot_discovers_its_own_direct_messages_after_a_host_restart() {
     let directory = tempfile::tempdir().unwrap();
     let home = directory.path();

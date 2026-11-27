@@ -218,23 +218,21 @@ export interface HostStatusSummary {
 // Method table: every call the UI can make. `params: void` methods are called with `undefined`.
 // ---------------------------------------------------------------------------------------------------
 
-export interface CreateBotParams {
+export type CreateBotParams = {
   readonly name: string;
   readonly id?: string;
   readonly description?: string;
-  /** Required unless adopting (`adoptPaneId`), as are `model`/`reasoningEffort` whenever the provider
-   * supports choosing them -- see `requireNewBotLaunch`. */
-  readonly provider?: string;
   readonly cwd?: string;
   readonly permissionMode?: PermissionMode;
   readonly model?: string | null;
   readonly reasoningEffort?: ReasoningEffort | null;
   readonly avatarShape?: string | null;
   readonly avatarColor?: string | null;
-  /** Set to adopt an existing herdr pane (by its pane id) as this bot instead of spawning a new one. */
-  readonly adoptPaneId?: string;
   readonly allowHomeCwd?: boolean;
-}
+} & (
+  | { readonly provider: string; readonly adoptPaneId?: undefined }
+  | { readonly adoptPaneId: string; readonly provider?: string }
+);
 
 export interface AppApiMethods {
   "chat.list": { params: void; result: ChatSummary[] };

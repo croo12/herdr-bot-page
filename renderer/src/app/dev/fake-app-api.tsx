@@ -333,6 +333,12 @@ export function createFakeAppApi(): AppApiTransport {
     },
 
     "bot.create": (params) => {
+      if (params.adoptPaneId != null) {
+        throw new AppApiError("unknown_bot", `No adoptable agent for pane ${params.adoptPaneId}`);
+      }
+      if (typeof params.provider !== "string" || params.provider.trim() === "") {
+        throw new AppApiError("invalid_args", "missing provider");
+      }
       const id = params.id ?? String(params.name).toLowerCase().replace(/\s+/g, "-");
       const chat = blankChat({
         id,
@@ -342,11 +348,11 @@ export function createFakeAppApi(): AppApiTransport {
         avatarShape: params.avatarShape ?? null,
         avatarColor: params.avatarColor ?? null,
         bot: {
-          provider: params.provider ?? "claude",
+          provider: params.provider,
           status: "idle",
           paneId: null,
           cwd: params.cwd ?? null,
-          adopted: params.adoptPaneId != null,
+          adopted: false,
           permissionMode: params.permissionMode ?? "ask",
           model: params.model ?? null,
           reasoningEffort: params.reasoningEffort ?? null,

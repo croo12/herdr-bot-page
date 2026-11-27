@@ -1,11 +1,7 @@
-use crate::domain::bot::{
-    AntigravityModelId, AvatarColor, Bot, BotId, ClaudeModelId, ClaudePermissionMode, CodexModelId,
-    CodexPermissionMode, GeminiModelId, GrokModelId, OpenCodeModelId, Provider, ReasoningEffort,
-};
+use crate::domain::bot::{AvatarColor, Bot, BotId, LaunchSettings};
 use anyhow::{anyhow, Context, Result};
 use rusqlite::{Connection, OptionalExtension};
 use serde::Deserialize;
-use std::path::PathBuf;
 
 pub(crate) struct Bots<'db> {
     db: &'db Connection,
@@ -14,6 +10,19 @@ pub(crate) struct Bots<'db> {
 impl<'db> Bots<'db> {
     pub(crate) fn new(db: &'db Connection) -> Self {
         Self { db }
+    }
+
+    pub(crate) fn last_working_directory(&self) -> Result<Option<std::path::PathBuf>> {
+        let directory: Option<String> = self
+            .db
+            .query_row(
+                "SELECT json_extract(data, '$.bot.cwd') FROM bots
+             WHERE json_type(data, '$.bot.cwd') = 'text' ORDER BY rowid DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(directory.map(Into::into))
     }
 
     pub(crate) fn get(&self, id: &BotId) -> Result<Bot> {
@@ -37,77 +46,19 @@ struct StoredBot {
     title: Option<String>,
     description: Option<String>,
     avatar_color: Option<AvatarColor>,
-    bot: StoredBotSettings,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct StoredBotSettings {
-    cwd: Option<PathBuf>,
-    provider: String,
-    model: Option<String>,
-    reasoning_effort: Option<ReasoningEffort>,
-    permission_mode: Option<StoredPermissionMode>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum StoredPermissionMode {
-    Ask,
-    Auto,
+    bot: LaunchSettings,
 }
 
 impl From<StoredBot> for Bot {
     fn from(stored: StoredBot) -> Self {
-        let StoredBotSettings {
-            cwd,
-            provider,
-            model,
-            reasoning_effort,
-            permission_mode,
-        } = stored.bot;
-        let auto = matches!(permission_mode, Some(StoredPermissionMode::Auto));
-        let provider = match provider.as_str() {
-            "claude" => Provider::Claude {
-                model: model.map(ClaudeModelId),
-                reasoning_effort,
-                permission_mode: if auto {
-                    ClaudePermissionMode::BypassPermissions
-                } else {
-                    ClaudePermissionMode::Default
-                },
-            },
-            "codex" => Provider::Codex {
-                model: model.map(CodexModelId),
-                reasoning_effort,
-                permission_mode: if auto {
-                    CodexPermissionMode::WorkspaceWriteOnRequest
-                } else {
-                    CodexPermissionMode::Default
-                },
-            },
-            "grok" => Provider::Grok {
-                model: model.map(GrokModelId),
-                reasoning_effort,
-            },
-            "gemini" => Provider::Gemini {
-                model: model.map(GeminiModelId),
-            },
-            "agy" => Provider::Antigravity {
-                model: model.map(AntigravityModelId),
-            },
-            "opencode" => Provider::OpenCode {
-                model: model.map(OpenCodeModelId),
-            },
-            _ => Provider::Other(provider),
-        };
+        let provider = (&stored.bot).into();
         Self {
             id: stored.id,
             name: stored.name,
             label: stored.title.unwrap_or_default(),
             instruction: stored.description.unwrap_or_default(),
             avatar_color: stored.avatar_color,
-            working_directory: cwd,
+            working_directory: stored.bot.cwd,
             provider,
         }
     }
@@ -116,9 +67,13 @@ impl From<StoredBot> for Bot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::new_chat;
+    use crate::domain::{
+        bot::{CodexModelId, CodexPermissionMode, Provider, ReasoningEffort},
+        new_chat,
+    };
     use crate::storage::Store;
     use serde_json::{json, Value};
+    use std::path::PathBuf;
 
     #[test]
     fn reads_the_existing_profile_without_changing_runtime_state() -> Result<()> {

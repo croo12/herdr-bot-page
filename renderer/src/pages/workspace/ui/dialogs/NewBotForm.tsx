@@ -60,13 +60,14 @@ export function NewBotForm() {
       const { chat } = await client.call("bot.create", {
         name: state.name.trim(),
         description: state.persona.trim().length > 0 ? state.persona.trim() : undefined,
-        provider: adopting ? undefined : state.provider,
+        ...(adopting && state.adoptPaneId != null
+          ? { adoptPaneId: state.adoptPaneId }
+          : { provider: state.provider }),
         cwd: adopting ? undefined : state.cwd,
         permissionMode: adopting || state.permissionMode == null ? undefined : state.permissionMode,
         model: adopting || state.model == null ? undefined : state.model,
         reasoningEffort:
           adopting || state.reasoningEffort == null ? undefined : state.reasoningEffort,
-        adoptPaneId: state.adoptPaneId ?? undefined,
         allowHomeCwd,
       });
       setActiveChatId(chat.id);
