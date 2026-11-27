@@ -1,5 +1,5 @@
 use crate::{
-    domain::{id, need, string_field, strings, Turn},
+    domain::{id, need, string_field, strings, Turn, TurnContext},
     infrastructure::{herdr::Herdr, AgentSessions},
     modules::{bots, tasks::save_execution, turns::run_or_resume_prompt},
     storage::Store,
@@ -32,13 +32,14 @@ Your report is posted as a reply to the original message.",
         need(entry,"content")?, need(task,"criteria")?, string_field(&task["execution"],"checkpoint")))
 }
 
-// The room queue serializes execution with normal conversation. The roster lock reserves
+// The assignee handles its own tasks and inbox one turn at a time. The roster lock reserves
 // this bot across rooms and permission reviews. Never hold a database transaction during I/O.
 fn prepare(
     store: &Store,
     sessions: &AgentSessions,
     room: &str,
     entry_id: &str,
+    assignee: &str,
 ) -> Result<Option<Step>> {
     let _roster = sessions.roster.lock().unwrap();
     let entry = store.tx(|repos, _| repos.transcript.by_id(room, entry_id))?;
@@ -50,7 +51,7 @@ fn prepare(
         _ => return Ok(None),
     };
     let bot = need(task, "assigneeId")?;
-    if sessions.active.lock().unwrap().contains_key(bot) {
+    if bot != assignee || sessions.active.lock().unwrap().contains_key(bot) {
         return Ok(None);
     }
     let (member, pending) = store.tx(|repos, _| {
@@ -130,11 +131,18 @@ fn prepare(
             need(&entry, "content")?,
             need(task, "criteria")?
         );
-        sessions
-            .active
-            .lock()
-            .unwrap()
-            .insert(bot.into(), Turn::new(room, &review_context, 0));
+        sessions.active.lock().unwrap().insert(
+            bot.into(),
+            Turn::new(
+                room,
+                &review_context,
+                0,
+                TurnContext {
+                    message_id: Some(entry_id.into()),
+                    delegation: None,
+                },
+            ),
+        );
     }
     Ok(step)
 }
@@ -144,8 +152,9 @@ pub(crate) fn execute_task(
     sessions: &AgentSessions,
     room: &str,
     entry_id: &str,
+    assignee: &str,
 ) -> Result<()> {
-    let Some(step) = prepare(store, sessions, room, entry_id)? else {
+    let Some(step) = prepare(store, sessions, room, entry_id, assignee)? else {
         return Ok(());
     };
     let result = run_or_resume_prompt(sessions, &step.bot, &step.pane, step.prompt.as_deref());

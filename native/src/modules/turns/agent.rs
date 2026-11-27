@@ -1,5 +1,5 @@
 use crate::{
-    domain::{need, strings, ChatJob, Events},
+    domain::{need, strings, DelegationRef},
     infrastructure::AgentSessions,
     storage::{Repositories, Store},
 };
@@ -13,15 +13,7 @@ pub(crate) enum AgentAction {
     Direct,
 }
 
-fn post_message(
-    repos: &Repositories,
-    events: &mut Events,
-    chat: &Value,
-    bot: &Value,
-    params: &Value,
-    depth: u8,
-    delegate: bool,
-) -> Result<Value> {
+fn message_entry(repos: &Repositories, chat: &Value, bot: &Value, params: &Value) -> Result<Value> {
     let chat_id = need(chat, "id")?;
     let bot_id = need(bot, "id")?;
     let text = need(params, "text")?;
@@ -41,16 +33,12 @@ fn post_message(
         );
         entry["replyTo"] = parent.into();
     }
-    let entry = repos.append_entry(chat_id, entry, events)?;
-    repos
-        .inbox
-        .deliver(chat, &entry, Some(bot_id), depth, delegate)?;
     Ok(entry)
 }
 pub(crate) fn agent_action(
     store: &Store,
     sessions: &AgentSessions,
-    enqueue_chat: &dyn Fn(&str, ChatJob),
+    wake_bot: &dyn Fn(&str),
     action: AgentAction,
     params: Value,
 ) -> Result<Value> {
@@ -60,13 +48,17 @@ pub(crate) fn agent_action(
     let requested = need(&params, "chatId")?;
     let mut active = sessions.active.lock().unwrap();
     if action == AgentAction::Direct && !active.contains_key(bot_id) {
-        let result = store.tx(|repos, events| {
+        let (result, recipients) = store.tx(|repos, events| {
             let dm = repos.chats.open_direct(requested, Some(bot_id), events)?;
-            let entry = post_message(repos, events, &dm, &bot, &params, 0, false)?;
-            Ok(json!({"chatId":dm["id"],"entryId":entry["id"]}))
+            let entry = message_entry(repos, &dm, &bot, &params)?;
+            let entry = repos.append_entry(need(&dm, "id")?, entry, events)?;
+            let recipients = repos.inbox.deliver(&dm, &entry, Some(bot_id), 0, false)?;
+            Ok((json!({"chatId":dm["id"],"entryId":entry["id"]}), recipients))
         })?;
         drop(active);
-        store.schedule_inbox(enqueue_chat)?;
+        for recipient in recipients {
+            wake_bot(&recipient);
+        }
         return Ok(result);
     }
     let turn = active
@@ -112,26 +104,92 @@ pub(crate) fn agent_action(
     }
     if action == AgentAction::Pass {
         if let Some(delivery) = &turn.delivery {
-            store.tx(|repos, _| repos.inbox.finish(delivery))?;
+            store.tx(|repos, events| {
+                repos.finish_delivery(delivery, turn.context.delegation.as_ref(), events)
+            })?;
         }
         turn.passed = true;
         return Ok(json!({"passed":true}));
     }
-    let posted_entry = store.tx(|repos, events| {
+    let (posted_entry, recipients) = store.tx(|repos, events| {
         let chat = repos.chats.get(target)?;
-        let entry = post_message(repos, events, &chat, &bot, &params, turn.depth + 1, cross)?;
+        let mut entry = message_entry(repos, &chat, &bot, &params)?;
+        let parent = turn.context.delegation.as_ref();
+        let (posted, recipients) = if cross {
+            let origin = parent.map_or(turn.chat.as_str(), |link| &link.chat_id);
+            let root = parent
+                .map(|link| link.root_id.as_str())
+                .or(turn.context.message_id.as_deref());
+            let mut tracking = entry.clone();
+            tracking["replyTo"] = json!(root);
+            let destination = repos.chats.get(requested)?;
+            tracking["delegation"] =
+                json!({"targetChatId":target,"targetName":destination["name"],"state":"queued"});
+            if let Some(link) = parent {
+                tracking["delegation"]["parentId"] = json!(link.entry_id);
+            }
+            let tracking = repos.append_entry(origin, tracking, events)?;
+            let tracker_id = need(&tracking, "id")?;
+            let link = DelegationRef {
+                chat_id: origin.into(),
+                entry_id: tracker_id.into(),
+                root_id: root.unwrap_or(tracker_id).into(),
+            };
+            let posted = if origin == target {
+                tracking
+            } else {
+                entry["delegatedFrom"] =
+                    json!({"chatId":link.chat_id,"entryId":link.entry_id,"rootId":link.root_id});
+                repos.append_entry(target, entry, events)?
+            };
+            let recipients =
+                repos
+                    .inbox
+                    .deliver(&chat, &posted, Some(bot_id), turn.depth + 1, true)?;
+            if recipients.is_empty() {
+                repos.set_delegation_state(
+                    &link,
+                    "failed",
+                    None,
+                    Some("No recipient for this delegation."),
+                    events,
+                )?;
+            }
+            (posted, recipients)
+        } else {
+            if let Some(link) = parent.filter(|link| link.chat_id == target) {
+                entry["delegationId"] = json!(link.entry_id);
+                if entry["replyTo"].is_null() {
+                    entry["replyTo"] = json!(link.root_id);
+                }
+            }
+            let posted = repos.append_entry(target, entry, events)?;
+            let recipients =
+                repos
+                    .inbox
+                    .deliver(&chat, &posted, Some(bot_id), turn.depth + 1, false)?;
+            if let Some(link) = parent.filter(|link| link.chat_id != target) {
+                if repos.transcript.contains(&link.chat_id, &link.entry_id)? {
+                    repos.append_entry(&link.chat_id, json!({
+                        "kind":"send-message","author":posted["author"],"message":posted["message"],
+                        "replyTo":link.root_id,"delegationId":link.entry_id
+                    }), events)?;
+                }
+            }
+            (posted, recipients)
+        };
         if let Some(delivery) = &turn.delivery {
-            repos.inbox.finish(delivery)?;
+            repos.finish_delivery(delivery, parent, events)?;
         }
-        Ok(entry)
+        Ok((posted, recipients))
     })?;
     turn.spoken += 1;
     if cross {
         turn.delegated = true;
-        let from = turn.chat.clone();
-        drop(active);
-        store.notice(&from, &format!("{bot_id} sent a message to {target}."));
     }
-    store.schedule_inbox(enqueue_chat)?;
+    drop(active);
+    for recipient in recipients {
+        wake_bot(&recipient);
+    }
     Ok(json!({"chatId":target,"entryId":posted_entry["id"]}))
 }

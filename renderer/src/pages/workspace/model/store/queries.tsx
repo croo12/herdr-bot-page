@@ -10,6 +10,9 @@ export const engineKey = ["engine"] as const;
 export const chatsKey = [...engineKey, "chats"] as const;
 export const settingsKey = [...engineKey, "settings"] as const;
 export const transcriptKey = (chatId: string) => [...engineKey, "transcript", chatId] as const;
+export const chatThreadsKey = (chatId: string) => [...engineKey, "thread", chatId] as const;
+export const threadKey = (chatId: string, rootId: string) =>
+  [...chatThreadsKey(chatId), rootId] as const;
 export type TranscriptPages = InfiniteData<TranscriptPage, number | null>;
 
 export function createWorkspaceQueryClient() {

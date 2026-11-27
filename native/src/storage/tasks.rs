@@ -11,14 +11,14 @@ impl<'db> Tasks<'db> {
         Self { db }
     }
 
-    pub(crate) fn runnable(&self) -> Result<Vec<(String, String)>> {
+    pub(crate) fn runnable(&self) -> Result<Vec<(String, String, String)>> {
         let mut statement = self.db.prepare(
-            "SELECT chat,json_extract(data,'$.id') FROM entries
+            "SELECT chat,json_extract(data,'$.id'),json_extract(data,'$.task.assigneeId') FROM entries
              WHERE json_type(data,'$.task')='object'
-             AND json_extract(data,'$.task.execution.state') IN ('queued','running')
+             AND json_type(data,'$.task.assigneeId')='text' AND json_extract(data,'$.task.execution.state') IN ('queued','running')
              ORDER BY json_extract(data,'$.task.updatedAt'),seq",
         )?;
-        let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 

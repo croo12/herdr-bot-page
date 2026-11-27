@@ -1,6 +1,6 @@
 mod queue;
 
-use queue::QueueItem;
+use queue::BotWork;
 
 use crate::{
     controller::{ipc, Controller, Source},
@@ -12,7 +12,7 @@ use fs2::FileExt;
 use serde_json::{json, Value};
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeSet, HashMap, VecDeque},
     env,
     fs::{self, File},
     path::{Path, PathBuf},
@@ -25,7 +25,8 @@ pub struct Engine {
     request_log: RequestLog,
     sessions: AgentSessions,
     _lock: File,
-    queues: Mutex<HashMap<String, VecDeque<QueueItem>>>,
+    bot_queues: Mutex<HashMap<String, VecDeque<BotWork>>>,
+    active_chats: Mutex<HashMap<String, usize>>,
     pub home: PathBuf,
     pub user: String,
 }
@@ -66,7 +67,8 @@ impl Engine {
             home,
             user,
             _lock: lock,
-            queues: Mutex::default(),
+            bot_queues: Mutex::default(),
+            active_chats: Mutex::default(),
         });
         ipc::listen(&engine.home, &engine, |host, method, params| {
             host.call_from(Source::Ipc, method, params)
@@ -77,10 +79,7 @@ impl Engine {
                 let _ = engine.sessions.herdr.ensure();
             }
             while let Some(engine) = weak.upgrade() {
-                let _ = engine
-                    .store
-                    .schedule_inbox(&|chat, job| engine.enqueue_chat(chat, job));
-                let _ = engine.enqueue_runnable_tasks();
+                let _ = engine.recover_work();
                 let _ = crate::application::refresh_prompts(&engine.store, &engine.sessions);
                 drop(engine);
                 thread::sleep(Duration::from_secs(3));
@@ -98,7 +97,16 @@ impl Engine {
             sessions: &self.sessions,
             user: &self.user,
             request_log: &self.request_log,
-            enqueue_chat: &|chat_id, job| self.enqueue_chat(chat_id, job),
+            wake_bot: &|bot| self.wake_bot(bot),
+            enqueue_greeting: &|bot, chat, job| {
+                self.enqueue(
+                    bot,
+                    BotWork::Greeting {
+                        chat: chat.into(),
+                        job,
+                    },
+                )
+            },
             host_status: &|| self.host_status(),
         }
         .call_from(source, method, params)
@@ -108,7 +116,13 @@ impl Engine {
         self.store.tx(|repos, _| {
             let chats = repos.chats.list()?;
             let bots = chats.iter().filter(|chat| chat["kind"] == "bot").count();
-            let running: Vec<_> = self.queues.lock().unwrap().keys().cloned().collect();
+            // The status API includes scheduled chats even before a newly woken bot claims its message.
+            let mut running: BTreeSet<_> = repos.inbox.scheduled_chats()?.into_iter().collect();
+            for chat in &chats {
+                if chat["kind"] != "bot" && chat["isRunning"] == true {
+                    running.insert(crate::domain::need(chat, "id")?.to_owned());
+                }
+            }
             Ok(json!({
                 "home": self.home, "session": self.sessions.herdr.session, "bots": bots,
                 "rooms": chats.iter().filter(|chat|chat["kind"]=="room").count(), "runningChatIds": running

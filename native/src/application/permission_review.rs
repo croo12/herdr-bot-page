@@ -1,5 +1,5 @@
 use crate::{
-    domain::{need, ChatJob},
+    domain::need,
     infrastructure::AgentSessions,
     modules::{prompts, reviews, turns},
     storage::Store,
@@ -11,7 +11,7 @@ pub(crate) fn post_reply(
     store: &Store,
     sessions: &AgentSessions,
     user: &str,
-    enqueue_chat: &dyn Fn(&str, ChatJob),
+    wake_bot: &dyn Fn(&str),
     params: Value,
 ) -> Result<Value> {
     let has_decision = !params["decision"].is_null();
@@ -25,13 +25,7 @@ pub(crate) fn post_reply(
             return apply_review(store, sessions, user, &params);
         }
     }
-    turns::agent_action(
-        store,
-        sessions,
-        enqueue_chat,
-        turns::AgentAction::Say,
-        params,
-    )
+    turns::agent_action(store, sessions, wake_bot, turns::AgentAction::Say, params)
 }
 
 fn apply_review(

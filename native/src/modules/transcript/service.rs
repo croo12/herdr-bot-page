@@ -1,5 +1,5 @@
 use crate::{
-    domain::{content, need, patch, string_field, strings, ChatJob},
+    domain::{content, need, patch, string_field, strings},
     storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
@@ -94,7 +94,7 @@ pub(crate) fn search_messages(store: &Store, query: &str) -> Result<Value> {
 pub(crate) fn send(
     store: &Store,
     user: &str,
-    enqueue_chat: &dyn Fn(&str, ChatJob),
+    wake_bot: &dyn Fn(&str),
     params: &Value,
 ) -> Result<Value> {
     let chat_id = need(params, "chatId")?;
@@ -111,7 +111,7 @@ pub(crate) fn send(
     if text.trim().is_empty() {
         bail!("invalid_args: message is empty")
     }
-    let entry = store.tx(|repos, events| {
+    let (entry, recipients) = store.tx(|repos, events| {
         let mut chat = repos.chats.get(chat_id)?;
         if chat["kind"] == "bot" {
             chat = repos.chats.open_direct(chat_id, None, events)?;
@@ -125,7 +125,7 @@ pub(crate) fn send(
         }
         if let Some(nonce) = params["clientNonce"].as_str() {
             if let Some(row) = repos.transcript.by_nonce(chat_id, nonce)? {
-                return Ok(row);
+                return Ok((row, Vec::new()));
             }
         }
         let mut entry = json!({
@@ -134,9 +134,11 @@ pub(crate) fn send(
         });
         patch(&mut entry, params, &["clientNonce", "replyTo", "richText"]);
         let entry = repos.append_entry(chat_id, entry, events)?;
-        repos.inbox.deliver(&chat, &entry, None, 0, false)?;
-        Ok(entry)
+        let recipients = repos.inbox.deliver(&chat, &entry, None, 0, false)?;
+        Ok((entry, recipients))
     })?;
-    store.schedule_inbox(enqueue_chat)?;
+    for bot in recipients {
+        wake_bot(&bot);
+    }
     Ok(json!({"entryId":entry["id"]}))
 }

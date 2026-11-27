@@ -12,6 +12,7 @@ import {
   chatsKey,
   createWorkspaceQueryClient,
   transcriptQuery,
+  threadKey,
 } from "../src/pages/workspace/model/store/queries.tsx";
 import {
   resyncEngineQueries,
@@ -81,6 +82,37 @@ function workspace(call: AppApiTransport["call"]) {
     },
   };
 }
+
+test("a thread retains a delegation update and result received during its initial read", async () => {
+  const snapshot = deferred<TranscriptPage>();
+  const { cache, emit, dispose } = workspace(async () => snapshot.promise);
+  const key = threadKey("room", "root");
+  const loading = cache.fetchQuery({ queryKey: key, queryFn: () => snapshot.promise });
+  const tracker = { id: "tracking", kind: "send-message", seq: 2, timestampMs: 0, replyTo: "root" };
+  const update = {
+    ...tracker,
+    delegation: {
+      targetChatId: "bot",
+      targetName: "Bot",
+      state: "waiting" as const,
+      promptId: "permission",
+    },
+  };
+  const reply = { id: "result", kind: "send-message", seq: 3, timestampMs: 0, replyTo: "tracking" };
+  emit({ seq: 1, type: "transcript.entryUpdated", payload: { chatId: "room", entry: update } });
+  emit({ seq: 2, type: "transcript.entryAppended", payload: { chatId: "room", entry: reply } });
+  emit({ seq: 3, type: "transcript.entryAppended", payload: { chatId: "other", entry: reply } });
+  emit({
+    seq: 4,
+    type: "transcript.entryAppended",
+    payload: { chatId: "room", entry: { ...reply, id: "unrelated", replyTo: "another-root" } },
+  });
+  snapshot.resolve({ entries: [tracker] });
+  await loading;
+  assert.deepEqual(cache.getQueryData<TranscriptPage>(key)?.entries, [update, reply]);
+  dispose();
+  cache.clear();
+});
 
 test("clients share the chat snapshot and replay live updates delivered during the initial read", async () => {
   const snapshot = deferred<ChatSummary[]>();

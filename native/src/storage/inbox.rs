@@ -1,19 +1,9 @@
-use crate::domain::{content, need, now, strings, ChatJob, Delivery};
+use crate::domain::{content, need, now, strings, ChatJob, Delivery, TurnContext};
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 
 pub(crate) struct Inbox<'db>(&'db Connection);
-
-impl super::Store {
-    pub(crate) fn schedule_inbox(&self, enqueue: &dyn Fn(&str, ChatJob)) -> Result<()> {
-        for job in self.tx(|repos, _| repos.inbox.reserve())? {
-            let chat = job.delivery.as_ref().unwrap().chat.clone();
-            enqueue(&chat, job);
-        }
-        Ok(())
-    }
-}
 
 impl<'db> Inbox<'db> {
     pub fn new(db: &'db Connection) -> Self {
@@ -27,7 +17,8 @@ impl<'db> Inbox<'db> {
         sender: Option<&str>,
         depth: u8,
         delegate: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<String>> {
+        let mut recipients = Vec::new();
         let members = strings(&chat["memberIds"]);
         let text = content(entry);
         let rich: Option<Value> = entry["richText"]
@@ -62,14 +53,27 @@ impl<'db> Inbox<'db> {
                 .collect();
             true
         };
+        let room = chat["kind"] == "room";
+        let broadcast = all || (!addressed && (sender.is_none() || delegate));
+        let reply_author = match (room, sender, delegate, entry["replyTo"].as_str()) {
+            (true, Some(_), false, Some(parent_id)) => {
+                let parent = super::Transcript::new(self.0).by_id(need(chat, "id")?, parent_id)?;
+                if parent["kind"] == "send-message" {
+                    parent["author"]["id"].as_str().map(str::to_owned)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
         for bot in members {
             if sender == Some(bot.as_str()) {
                 continue;
             }
-            if chat["kind"] == "room"
-                && !all
-                && ((addressed && !mentions.contains(&bot.as_str()))
-                    || (!addressed && sender.is_some() && !delegate))
+            if room
+                && !broadcast
+                && reply_author.as_deref() != Some(bot.as_str())
+                && !mentions.contains(&bot.as_str())
             {
                 continue;
             }
@@ -77,8 +81,9 @@ impl<'db> Inbox<'db> {
                 "INSERT INTO inbox(bot,chat,seq,depth) VALUES(?,?,?,?)",
                 params![bot, need(chat, "id")?, entry["seq"], depth],
             )?;
+            recipients.push(bot);
         }
-        Ok(())
+        Ok(recipients)
     }
 
     pub fn list(&self, bot: &str) -> Result<Vec<Value>> {
@@ -92,31 +97,56 @@ impl<'db> Inbox<'db> {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
-    // The host holds the database transaction while reserving jobs and is the only scheduler.
-    // A fresh host clears abandoned reservations before it starts the scheduler.
-    pub fn reserve(&self) -> Result<Vec<ChatJob>> {
-        let mut query = self.0.prepare("SELECT i.bot,i.chat,i.seq,i.depth,e.data FROM inbox i JOIN entries e ON e.chat=i.chat AND e.seq=i.seq WHERE i.state='pending' AND i.available<=? AND i.depth<=2 ORDER BY i.rowid")?;
-        let rows = query.query_map([now()], |row| {
-            let entry: Value = row.get(4)?;
-            Ok(ChatJob {
-                delivery: Some(Delivery {
-                    bot: row.get(0)?,
-                    chat: row.get(1)?,
-                    seq: row.get(2)?,
-                }),
-                seed: content(&entry).into(),
-                depth: row.get(3)?,
-            })
-        })?;
-        let jobs = rows.collect::<rusqlite::Result<Vec<_>>>()?;
-        for job in &jobs {
-            let delivery = job.delivery.as_ref().unwrap();
-            self.0.execute(
-                "UPDATE inbox SET state='queued' WHERE bot=? AND chat=? AND seq=?",
-                params![delivery.bot, delivery.chat, delivery.seq],
-            )?;
-        }
-        Ok(jobs)
+    pub fn ready_bots(&self) -> Result<Vec<String>> {
+        let mut query = self.0.prepare(
+            "SELECT DISTINCT bot FROM inbox WHERE state='pending' AND available<=? AND depth<=2",
+        )?;
+        let rows = query.query_map([now()], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub fn scheduled_chats(&self) -> Result<Vec<String>> {
+        let mut query = self.0.prepare(
+            "SELECT DISTINCT chat FROM inbox WHERE state IN ('queued','working')
+             OR (state='pending' AND available<=? AND depth<=2)",
+        )?;
+        let rows = query.query_map([now()], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    // Claim the oldest eligible message across this bot's subscriptions in the caller's transaction.
+    pub fn reserve_next(&self, bot: &str) -> Result<Option<(String, ChatJob)>> {
+        let row = self.0.query_row(
+            "SELECT i.chat,i.seq,i.depth,e.data FROM inbox i JOIN entries e ON e.chat=i.chat AND e.seq=i.seq
+             WHERE i.rowid=(SELECT rowid FROM inbox WHERE bot=? AND state='pending' AND depth<=2 ORDER BY rowid LIMIT 1)
+               AND i.available<=?",
+            params![bot, now()],
+            |row| {
+                let chat: String = row.get(0)?;
+                let seq: i64 = row.get(1)?;
+                let depth: u8 = row.get(2)?;
+                let entry: Value = row.get(3)?;
+                Ok((chat, seq, depth, entry))
+            },
+        ).optional()?;
+        let Some((chat, seq, depth, entry)) = row else {
+            return Ok(None);
+        };
+        self.0.execute(
+            "UPDATE inbox SET state='queued' WHERE bot=? AND chat=? AND seq=?",
+            params![bot, chat, seq],
+        )?;
+        let job = ChatJob {
+            delivery: Some(Delivery {
+                bot: bot.into(),
+                chat: chat.clone(),
+                seq,
+            }),
+            context: TurnContext::from_entry(&chat, &entry),
+            seed: content(&entry).into(),
+            depth,
+        };
+        Ok(Some((chat, job)))
     }
 
     pub fn start(&self, delivery: &Delivery) -> Result<bool> {
@@ -125,21 +155,37 @@ impl<'db> Inbox<'db> {
             params![delivery.bot, delivery.chat, delivery.seq],
         )? == 1)
     }
-    pub fn resolve(&self, bot: &str, message: &str, retry: bool) -> Result<()> {
+    pub fn resolve(&self, bot: &str, message: &str, retry: bool) -> Result<Delivery> {
         let condition=" WHERE bot=? AND (chat,seq) IN (SELECT chat,seq FROM entries WHERE json_extract(data,'$.id')=?) AND state IN ('pending','unconfirmed')";
         let operation = if retry {
-            "UPDATE inbox SET state='pending',available=0,depth=min(depth,2)"
+            "UPDATE inbox SET state='pending',available=0,last_error=NULL,depth=min(depth,2)"
         } else {
             "DELETE FROM inbox"
         };
-        anyhow::ensure!(
-            self.0
-                .execute(&format!("{operation}{condition}"), [bot, message])?
-                == 1,
-            "invalid_args: no matching inactive delivery"
-        );
-        Ok(())
+        self.0
+            .query_row(
+                &format!("{operation}{condition} RETURNING chat,seq"),
+                [bot, message],
+                |row| {
+                    Ok(Delivery {
+                        bot: bot.into(),
+                        chat: row.get(0)?,
+                        seq: row.get(1)?,
+                    })
+                },
+            )
+            .optional()?
+            .ok_or_else(|| anyhow::anyhow!("invalid_args: no matching inactive delivery"))
     }
+    pub fn remaining(&self, delivery: &Delivery) -> Result<(usize, bool, Option<String>)> {
+        Ok(self.0.query_row(
+            "SELECT count(*),count(*) FILTER (WHERE state='working')>0,
+             max(CASE WHEN state='unconfirmed' THEN coalesce(last_error,'Delivery was not confirmed') ELSE last_error END)
+             FROM inbox WHERE chat=? AND seq=?",
+            params![delivery.chat,delivery.seq], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))
+        )?)
+    }
+
     pub fn finish(&self, delivery: &Delivery) -> Result<()> {
         self.0.execute(
             "DELETE FROM inbox WHERE bot=? AND chat=? AND seq=?",

@@ -119,6 +119,19 @@ export interface MessageTask {
 }
 
 export interface TranscriptEntry {
+  readonly delegation?: {
+    readonly targetChatId: string;
+    readonly targetName: string;
+    readonly state: "queued" | "running" | "waiting" | "completed" | "failed" | "interrupted";
+    readonly promptChatId?: string | null;
+    readonly promptId?: string | null;
+    readonly detail?: string | null;
+  };
+  readonly delegatedFrom?: {
+    readonly chatId: string;
+    readonly entryId: string;
+    readonly rootId: string;
+  };
   readonly task?: MessageTask;
   readonly permissionDecision?: "approve" | "deny" | "human";
   readonly permissionReview?: {

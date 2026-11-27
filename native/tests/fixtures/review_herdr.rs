@@ -27,6 +27,14 @@ fn main() {
             println!(r#"{{"result":{{"agent":{worker}}}}}"#);
         }
         ("agent","prompt") if args[2]=="p1" => {
+            if home.join("delegation-failure").exists() {
+                eprintln!(r#"{{"error":{{"code":"agent_unavailable","message":"test worker is unavailable"}}}}"#);
+                std::process::exit(1);
+            }
+            if home.join("delegation-room").exists() {
+                let chat = args[3].split_once("arguments: say ").unwrap().1.split_whitespace().next().unwrap();
+                fs::write(home.join("delegation-target"), chat).unwrap();
+            }
             fs::write(&blocked,"--lib").unwrap();
             println!(r#"{{"result":{{"agent":{}}}}}"#,worker.replace("idle","blocked"));
         }
@@ -35,10 +43,28 @@ fn main() {
                 if !blocked.exists() { break; }
                 std::thread::sleep(Duration::from_millis(25));
             }
+            if home.join("delegation-room").exists() {
+                let cli = home.join("bin").join(format!("herdr-bot{}", env::consts::EXE_SUFFIX));
+                assert!(std::process::Command::new(cli).env("HERDR_PANE_ID","p1")
+                    .args(["say",&fs::read_to_string(home.join("delegation-target")).unwrap(),"Verified the delegated build"]).output().unwrap().status.success());
+            }
             println!(r#"{{"result":{{"agent":{}}}}}"#,worker.replace("blocked","done"));
         }
         ("agent","prompt") if args[2]=="p2" => {
             assert_eq!(peer_status,"idle");
+            if home.join("delegation-room").exists() {
+                let chat = args[3].split_once("arguments: say ").unwrap().1.split_whitespace().next().unwrap();
+                let cli = home.join("bin").join(format!("herdr-bot{}", env::consts::EXE_SUFFIX));
+                let mut command = std::process::Command::new(cli);
+                command.env("HERDR_PANE_ID","p2");
+                let marker = if home.join("delegation-failure").exists() { "delegated-again" } else { "delegated-once" };
+                if fs::read_to_string(home.join("delegation-room")).unwrap() == chat && fs::File::create_new(home.join(marker)).is_ok() {
+                    command.args(["message","worker","Check the delegated build"]);
+                } else {
+                    command.args(["pass",chat]);
+                }
+                assert!(command.output().unwrap().status.success());
+            }
             if let Some((_,args)) = args[3].split_once("arguments: say --reply-to ") {
                 fs::write(home.join("ticket"),args.split_whitespace().next().unwrap()).unwrap();
             }

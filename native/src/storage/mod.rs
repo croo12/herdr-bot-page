@@ -73,6 +73,9 @@ impl Database {
     CREATE TABLE IF NOT EXISTS bots(id TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS bot_requests(key TEXT PRIMARY KEY, bot TEXT NOT NULL REFERENCES bots(id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS entries(chat TEXT REFERENCES chats(id) ON DELETE CASCADE, seq INTEGER, data TEXT NOT NULL, PRIMARY KEY(chat,seq));
+    CREATE INDEX IF NOT EXISTS entry_replies ON entries(chat,json_extract(data,'$.replyTo'));
+    CREATE INDEX IF NOT EXISTS delegation_prompts ON entries(json_extract(data,'$.delegationId'))
+        WHERE json_extract(data,'$.kind')='prompt' AND json_extract(data,'$.status')='pending';
     CREATE UNIQUE INDEX IF NOT EXISTS direct_pair ON chats(json_extract(data,'$.directPair')) WHERE json_extract(data,'$.directPair') IS NOT NULL;
     CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY,data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS inbox(
@@ -103,6 +106,17 @@ impl Database {
         WHERE json_extract(data,'$.isRunning')=1",
         [],
     )?;
+        // Queued inbox deliveries survive a restart. Started deliveries need explicit confirmation.
+        connection.execute(
+            "UPDATE entries SET data=json_set(data,'$.delegation.state','interrupted','$.delegation.promptId',NULL,'$.delegation.promptChatId',NULL)
+             WHERE json_extract(data,'$.delegation.state') IN ('queued','running','waiting')
+               AND NOT EXISTS (
+                   SELECT 1 FROM inbox JOIN entries AS message ON message.chat=inbox.chat AND message.seq=inbox.seq
+                   WHERE inbox.state='pending' AND inbox.chat=json_extract(entries.data,'$.delegation.targetChatId')
+                     AND (json_extract(message.data,'$.delegatedFrom.entryId')=json_extract(entries.data,'$.id')
+                          OR (message.chat=entries.chat AND message.seq=entries.seq))
+               )", [],
+        )?;
         Ok(Self(Mutex::new(connection)))
     }
     fn transaction<Output>(
@@ -222,6 +236,72 @@ mod tests {
             assert!(repos.inbox.list("b")?.is_empty());
             Ok(())
         }, |_|{})
+    }
+
+    #[test]
+    fn room_bot_replies_deliver_once_to_current_authors_and_mentions() -> Result<()> {
+        let home = tempfile::tempdir()?;
+        let db = Database::open(home.path())?;
+        db.transaction(|repos, events| {
+            for bot in ["alice","bob","carol"] {
+                repos.chats.save(&crate::domain::new_chat(bot,"bot",&json!({"name":bot})))?;
+            }
+            let mut room = crate::domain::new_chat("room","room",&json!({"memberIds":["alice","bob","carol"]}));
+            repos.chats.save(&room)?;
+            let question = repos.append_entry("room",json!({"kind":"send-message","author":{"id":"alice"}}),events)?;
+            let mut post = |room: &Value, parent: &Value, text: &str| -> Result<usize> {
+                let reply = repos.append_entry("room",json!({"kind":"send-message","author":{"id":"bob"},"replyTo":parent,"message":{"type":"text","content":text}}),events)?;
+                Ok(repos.inbox.deliver(room,&reply,Some("bob"),2,false)?.len())
+            };
+            assert_eq!(post(&room,&question["id"],"@alice the build passed")?,1);
+            assert_eq!(post(&room,&question["id"],"@carol please review")?,2);
+            assert_eq!(post(&room,&Value::Null,"General update")?,0);
+            let own_reply = repos.inbox.list("alice")?[0]["messageId"].clone();
+            assert_eq!(post(&room,&own_reply,"Correction")?,0);
+            room["memberIds"] = json!(["bob","carol"]);
+            assert_eq!(post(&room,&question["id"],"Follow-up")?,0);
+            assert_eq!(repos.inbox.list("alice")?.len(),2);
+            assert_eq!(repos.inbox.list("carol")?.len(),1);
+            assert!(repos.inbox.list("bob")?.is_empty());
+            Ok(())
+        }, |_| {})
+    }
+
+    #[test]
+    fn a_delegation_keeps_its_pending_prompt_until_both_subscribers_finish() -> Result<()> {
+        use crate::domain::{new_chat, DelegationRef};
+        let home = tempfile::tempdir()?;
+        Database::open(home.path())?.transaction(|repos, events| {
+            for bot in ["alice", "bob"] {
+                repos.chats.save(&new_chat(bot,"bot",&json!({"name":bot})))?;
+            }
+            let room = new_chat("room","room",&json!({"memberIds":["alice","bob"]}));
+            repos.chats.save(&room)?;
+            let request = repos.append_entry("room", json!({"kind":"send-message","delegation":{"state":"queued"}}), events)?;
+            let tracking_id = request["id"].as_str().unwrap();
+            let link = DelegationRef {chat_id:"room".into(),entry_id:tracking_id.into(),root_id:tracking_id.into()};
+            repos.inbox.deliver(&room,&request,None,0,false)?;
+            let start = |bot| -> Result<_> {
+                let (_,job) = repos.inbox.reserve_next(bot)?.unwrap();
+                let delivery = job.delivery.unwrap();
+                assert!(repos.inbox.start(&delivery)?);
+                Ok(delivery)
+            };
+            let alice = start("alice")?;
+            let bob = start("bob")?;
+            let mut prompt = repos.append_entry("room", json!({"kind":"prompt","author":{"id":"bob"},"delegationId":tracking_id,"status":"pending"}), events)?;
+            repos.finish_delivery(&alice,Some(&link),events)?;
+            let tracking = || -> Result<Value> {Ok(repos.transcript.by_id("room",tracking_id)?["delegation"].clone())};
+            assert_eq!(tracking()?["state"],"waiting");
+            assert_eq!(tracking()?["promptId"],prompt["id"]);
+            prompt["status"]="answered".into();
+            repos.update_entry("room",&prompt,events)?;
+            repos.sync_delivery_state(&bob,Some(&link),events)?;
+            assert_eq!(tracking()?["state"],"running");
+            repos.finish_delivery(&bob,Some(&link),events)?;
+            assert_eq!(tracking()?["state"],"completed");
+            Ok(())
+        }, |_| {})
     }
 
     #[test]

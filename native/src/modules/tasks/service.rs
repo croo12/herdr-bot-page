@@ -154,6 +154,6 @@ pub(crate) fn set_status(store: &Store, params: &Value) -> Result<Value> {
     })
 }
 
-pub(crate) fn runnable(store: &Store) -> Result<Vec<(String, String)>> {
+pub(crate) fn runnable(store: &Store) -> Result<Vec<(String, String, String)>> {
     store.tx(|repos, _| repos.tasks.runnable())
 }

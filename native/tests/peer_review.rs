@@ -167,4 +167,102 @@ fn only_assigned_peer_can_decide_the_current_request() {
                 .any(|bot| bot["id"] == "worker" && bot["bot"]["status"] == "idle")
         });
     }
+    verify_delegation_thread(&engine, home);
+}
+
+fn verify_delegation_thread(engine: &std::sync::Arc<Engine>, home: &Path) {
+    let room = engine
+        .call(
+            "room.create",
+            json!({"name":"Delegation","memberIds":["peer"]}),
+        )
+        .unwrap()["chat"]["id"]
+        .clone();
+    fs::write(home.join("delegation-room"), room.as_str().unwrap()).unwrap();
+    let message = engine
+        .call(
+            "message.send",
+            json!({"chatId":room,"text":"Delegate build verification"}),
+        )
+        .unwrap();
+    let thread = || {
+        engine
+            .call(
+                "transcript.thread",
+                json!({"chatId":room,"rootId":message["entryId"]}),
+            )
+            .unwrap()["entries"]
+            .clone()
+    };
+    wait(|| thread()[1]["delegation"]["state"] == "waiting");
+    let tracker = thread()[1].clone();
+    let prompt_id = &tracker["delegation"]["promptId"];
+    let target = &tracker["delegation"]["targetChatId"];
+    let prompt_chat = &tracker["delegation"]["promptChatId"];
+    assert_ne!(target, prompt_chat);
+    assert!(engine
+        .call("transcript.page", json!({"chatId":target}))
+        .is_err());
+    let inbox_chat = engine
+        .call("transcript.page", json!({"chatId":target,"paneId":"p1"}))
+        .unwrap();
+    assert!(inbox_chat["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["delegatedFrom"]["entryId"] == tracker["id"]));
+    let worker = engine
+        .call("transcript.page", json!({"chatId":prompt_chat}))
+        .unwrap();
+    let entries = worker["entries"].as_array().unwrap();
+    let prompt = entries
+        .iter()
+        .find(|entry| entry["id"] == *prompt_id)
+        .unwrap();
+    assert_eq!(prompt["kind"], "prompt");
+    engine.call("prompt.answer",json!({"botId":"worker","signature":prompt["prompt"]["signature"],"action":"option","key":prompt["prompt"]["options"][0]["key"]})).unwrap();
+    wait(|| thread()[1]["delegation"]["state"] == "completed");
+    let finished = thread();
+    assert_eq!(finished.as_array().unwrap().len(), 3, "{finished}");
+    assert!(finished[1]["delegation"]["promptId"].is_null());
+    assert_eq!(finished[2]["author"]["id"], "worker");
+    assert_eq!(finished[2]["delegationId"], tracker["id"]);
+    assert_eq!(
+        finished[2]["message"]["content"],
+        "Verified the delegated build"
+    );
+    wait(|| engine.call("host.status", json!({})).unwrap()["runningChatIds"] == json!([]));
+    fs::write(home.join("delegation-failure"), "").unwrap();
+    let retry = engine
+        .call("message.send", json!({"chatId":room,"text":"Check again"}))
+        .unwrap();
+    let retry_thread = || {
+        engine
+            .call(
+                "transcript.thread",
+                json!({"chatId":room,"rootId":retry["entryId"]}),
+            )
+            .unwrap()["entries"]
+            .clone()
+    };
+    wait(|| retry_thread()[1]["delegation"]["state"] == "failed");
+    assert!(retry_thread()[1]["delegation"]["detail"]
+        .as_str()
+        .unwrap()
+        .contains("agent_unavailable"));
+    let inbox = engine.call("cli.inbox", json!({"paneId":"p1"})).unwrap();
+    let delivery = inbox
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["chatId"] == *target && item["state"] == "unconfirmed")
+        .unwrap();
+    engine
+        .call(
+            "cli.inbox",
+            json!({"paneId":"p1","ack":delivery["messageId"]}),
+        )
+        .unwrap();
+    assert_eq!(retry_thread()[1]["delegation"]["state"], "completed");
+    assert_eq!(thread(), finished);
 }

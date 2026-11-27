@@ -10,7 +10,7 @@ pub(crate) fn run_chat(
     store: &Store,
     sessions: &AgentSessions,
     target: &str,
-    job: ChatJob,
+    job: &ChatJob,
 ) -> Result<()> {
     let (bot, pane) = {
         let _roster = sessions.roster.lock().unwrap();
@@ -41,17 +41,35 @@ pub(crate) fn run_chat(
                 return Ok(());
             }
         }
-        let mut turn = Turn::new(target, &job.seed, job.depth);
-        turn.delivery = job.delivery;
+        if let Some(link) = &job.context.delegation {
+            store.tx(|repos, events| {
+                repos.set_delegation_state(link, "running", None, None, events)
+            })?;
+        }
+        let mut turn = Turn::new(target, &job.seed, job.depth, job.context.clone());
+        turn.delivery = job.delivery.clone();
         sessions.active.lock().unwrap().insert(bot.clone(), turn);
         (bot, pane)
     };
-    let result = turns::run_chat_turn(store, sessions, &bot, &pane, target, &job.seed);
+    let result = turns::run_chat_turn(
+        store,
+        sessions,
+        &bot,
+        &pane,
+        target,
+        &job.seed,
+        job.context.message_id.as_deref(),
+    );
     let _roster = sessions.roster.lock().unwrap();
     let turn = sessions.active.lock().unwrap().remove(&bot);
     result?;
     if let Some(turn) = turn {
         if !turn.passed && turn.spoken == 0 {
+            if job.context.delegation.is_some() {
+                anyhow::bail!(
+                    "{bot} finished without posting a reply or accepting the delegation."
+                );
+            }
             store.notice(target, &format!("{bot} finished without posting a reply."));
         }
     }

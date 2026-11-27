@@ -4,6 +4,7 @@ import { useStoreContext } from "../../model/store/StoreProvider.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { IconButton, Menu, MenuItem } from "#shared/ui/index.tsx";
 import { setReplyTarget } from "#features/compose-message";
+import { ThreadDialog } from "./ThreadDialog.tsx";
 import { ReactionPicker } from "./ReactionPicker.tsx";
 import styles from "./HoverActions.module.css";
 
@@ -22,6 +23,7 @@ export interface HoverActionsProps {
    * `document.body` and would otherwise fall outside any `:hover`-based reveal the moment the pointer
    * moves onto the popover itself. */
   readonly hovered: boolean;
+  readonly threadRootId: string;
   readonly onTrack?: () => void;
 }
 
@@ -35,10 +37,12 @@ export function HoverActions({
   previewText,
   isMine,
   hovered,
+  threadRootId,
   onTrack,
 }: HoverActionsProps) {
   const { client } = useStoreContext();
   const { t } = useT();
+  const [threadOpen, setThreadOpen] = useState(false);
   const [openPopover, setOpenPopover] = useState<{
     kind: "react" | "more";
     anchor: HTMLButtonElement;
@@ -88,6 +92,9 @@ export function HoverActions({
         </IconButton>
       </span>
 
+      {threadOpen && (
+        <ThreadDialog chatId={chatId} rootId={threadRootId} onClose={() => setThreadOpen(false)} />
+      )}
       {openPopover?.kind === "react" && (
         <ReactionPicker
           open
@@ -117,10 +124,10 @@ export function HoverActions({
             icon={<MessageSquarePlus size={14} />}
             onSelect={() => {
               setOpenPopover(null);
-              void client.call("transcript.thread", { chatId, rootId: entryId });
+              setThreadOpen(true);
             }}
           >
-            {t("conversation.startThread")}
+            {t("conversation.openThread")}
           </MenuItem>
           <MenuItem
             onSelect={() => {

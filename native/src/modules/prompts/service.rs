@@ -48,12 +48,14 @@ pub(crate) fn refresh_status(
         } else {
             Value::Null
         };
-        let active_chat = sessions
+        let active_turn = sessions
             .active
             .lock()
             .unwrap()
             .get(id)
-            .map(|turn| turn.chat.clone());
+            .map(|turn| (turn.chat.clone(), turn.context.delegation.clone()));
+        let active_chat = active_turn.as_ref().map(|(chat, _)| chat.as_str());
+        let delegation = active_turn.as_ref().and_then(|(_, link)| link.as_ref());
         store.tx(|repos, events| {
             let mut row = repos.chats.get(id)?;
             if row["bot"]["status"] == status && row["bot"]["pendingPrompt"] == prompt {
@@ -64,12 +66,19 @@ pub(crate) fn refresh_status(
             if pending.is_none() && !prompt.is_null() && row["bot"]["pendingPrompt"]["signature"] == prompt["signature"] {
                 return Ok(());
             }
-            let target = active_chat.clone().or_else(|| pending.as_ref().map(|(chat, _)| chat.clone()));
+            let target = active_chat.map(str::to_owned).or_else(|| pending.as_ref().map(|(chat, _)| chat.clone()));
             let mut same_prompt = false;
             if let Some((previous_chat, mut entry)) = pending {
                 same_prompt = !prompt.is_null() && (entry["prompt"]["signature"] == prompt["signature"] || entry["prompt"]["kind"] == "unknown");
                 if same_prompt { entry["prompt"] = prompt.clone(); } else { entry["status"] = "resolved".into(); }
                 repos.update_entry(&previous_chat, &entry, events)?;
+                if let Some(link) = delegation {
+                    if same_prompt {
+                        repos.set_delegation_state(link, "waiting", Some((&previous_chat, need(&entry,"id")?)), None, events)?;
+                    } else {
+                        repos.set_delegation_state(link, "running", None, None, events)?;
+                    }
+                }
             }
             if !same_prompt && !prompt.is_null() {
                 // A human must also be able to answer when the active turn is in a bot-only DM.
@@ -78,8 +87,12 @@ pub(crate) fn refresh_status(
                     Some(chat) if crate::domain::visible_to(&repos.chats.get(chat)?,None)=>chat.to_owned(),
                     _=>need(&repos.chats.open_direct(id,None,events)?,"id")?.to_owned(),
                 };
-                let entry = json!({"kind": "prompt", "prompt": prompt, "status": "pending", "originChatId":origin, "author": {"id": id, "name": row["name"]}});
-                repos.append_entry(&target, entry, events)?;
+                let mut entry = json!({"kind": "prompt", "prompt": prompt, "status": "pending", "originChatId":origin, "author": {"id": id, "name": row["name"]}});
+                if let Some(link) = delegation { entry["delegationId"] = json!(link.entry_id); }
+                let entry = repos.append_entry(&target, entry, events)?;
+                if let Some(link) = delegation {
+                    repos.set_delegation_state(link, "waiting", Some((&target, need(&entry,"id")?)), None, events)?;
+                }
                 row = repos.chats.get(id)?;
             }
             row["bot"]["status"] = status.into();
@@ -181,6 +194,12 @@ pub(crate) fn answer_locked(
         && (answer["kind"] == "cancelled"
             || (answer["kind"] == "option"
                 && (matches!(label.as_str(), "no" | "no (esc)") || label.starts_with("no, "))));
+    let delegation = sessions
+        .active
+        .lock()
+        .unwrap()
+        .get(id)
+        .and_then(|turn| turn.context.delegation.clone());
     let (response, answered_chat) = store.tx(|repos, events| {
         let mut answered_chat = None;
         if !answer.is_null() && prompt["multiSelect"] != true {
@@ -208,6 +227,9 @@ pub(crate) fn answer_locked(
                         "content": text, "replyTo": entry["id"], "isStreaming": false
                     });
                     repos.append_entry(&target, reply, events)?;
+                }
+                if let Some(link) = &delegation {
+                    repos.set_delegation_state(link, "running", None, None, events)?;
                 }
                 answered_chat = Some(entry["originChatId"].as_str().unwrap_or(&target).to_owned());
             }

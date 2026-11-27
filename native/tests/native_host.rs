@@ -132,6 +132,107 @@ fn each_bot_discovers_its_own_direct_messages_after_a_host_restart() {
 }
 
 #[test]
+fn bot_subscribers_run_independently_in_one_room_and_serialize_across_their_chats() {
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path();
+    let fake = compile_herdr_fixture(home);
+    std::fs::write(home.join("two-bots"), "").unwrap();
+    std::fs::write(home.join("bot-workers"), "").unwrap();
+    let _host = start(home, &fake);
+    for (bot, pane) in [("tester", "w1:p1"), ("peer", "w1:p2")] {
+        cli(home, &["bot", "adopt", pane, bot]);
+    }
+    let call = |method, params| ipc::request(home, method, params).unwrap();
+    let room = call(
+        "room.create",
+        json!({"name":"Build","memberIds":["tester","peer"]}),
+    )["chat"]["id"]
+        .clone();
+    let dm = call("chat.openDirect", json!({"botId":"tester"}))["id"].clone();
+    let replies = |chat: &Value| {
+        call("transcript.page", json!({"chatId":chat}))["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|entry| entry["kind"] == "send-message")
+            .map(|entry| entry["message"]["content"].clone())
+            .collect::<Vec<_>>()
+    };
+    call(
+        "message.send",
+        json!({"chatId":room,"text":"@tester build"}),
+    );
+    wait(|| home.join("build-started").exists());
+    let follow_up = call("message.send", json!({"chatId":dm,"text":"Follow up"}));
+    call("message.send", json!({"chatId":room,"text":"@peer review"}));
+    wait(|| replies(&room) == vec![json!("Review complete")]);
+    wait(|| call("cli.inbox", json!({"paneId":"w1:p2"})) == json!([]));
+    let chats = call("chat.list", Value::Null);
+    let activity = |id: &Value| {
+        chats
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|chat| &chat["id"] == id)
+            .unwrap()["isRunning"]
+            .clone()
+    };
+    assert_eq!(activity(&room), true);
+    assert_eq!(activity(&dm), false);
+    let inbox = call("cli.inbox", json!({"paneId":"w1:p1"}));
+    assert!(inbox
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|row| row["messageId"] == follow_up["entryId"] && row["state"] == "pending"));
+    assert!(replies(&dm).is_empty());
+    std::fs::write(home.join("release-build"), "").unwrap();
+    wait(|| replies(&dm) == vec![json!("Follow-up complete")]);
+    wait(|| call("host.status", Value::Null)["runningChatIds"] == json!([]));
+    assert_eq!(
+        replies(&room),
+        vec![json!("Review complete"), json!("Build complete")]
+    );
+}
+
+#[test]
+fn room_reply_wakes_the_requesting_bot_and_stays_in_the_original_thread() {
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path();
+    let fake = compile_herdr_fixture(home);
+    std::fs::write(home.join("two-bots"), "").unwrap();
+    std::fs::write(home.join("room-replies"), "").unwrap();
+    let _host = start(home, &fake);
+    for (bot, pane) in [("tester", "w1:p1"), ("peer", "w1:p2")] {
+        cli(home, &["bot", "adopt", pane, bot]);
+    }
+    let call = |method, params| ipc::request(home, method, params).unwrap();
+    let room = call(
+        "room.create",
+        json!({"name":"Packaging","memberIds":["tester","peer"]}),
+    )["chat"]["id"]
+        .clone();
+    let root = call(
+        "message.send",
+        json!({"chatId":room,"text":"@tester check packaging"}),
+    )["entryId"]
+        .clone();
+    let thread =
+        || call("transcript.thread", json!({"chatId":room,"rootId":root}))["entries"].clone();
+    wait(|| thread()[3]["message"]["content"] == "I will check signing");
+    let entries = thread();
+    let entries = entries.as_array().unwrap();
+    assert_eq!(entries.len(), 4);
+    for (pair, author) in entries.windows(2).zip(["tester", "peer", "tester"]) {
+        assert_eq!(pair[1]["replyTo"], pair[0]["id"]);
+        assert_eq!(pair[1]["author"]["id"], author);
+    }
+    let pending = call("cli.inbox", json!({"paneId":"w1:p2"}));
+    assert_eq!(pending.as_array().unwrap().len(), 1);
+    assert_eq!(pending[0]["messageId"], entries[3]["id"]);
+}
+
+#[test]
 fn stalled_prompt_keeps_the_original_turn_until_start_or_reply_is_confirmed() {
     let directory = tempfile::tempdir().unwrap();
     let fake = compile_herdr_fixture(directory.path());

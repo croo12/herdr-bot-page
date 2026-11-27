@@ -1,5 +1,5 @@
 use super::{Repositories, Store};
-use crate::domain::{id, now, record_latest_entry, Events};
+use crate::domain::{id, now, record_latest_entry, DelegationRef, Delivery, Events, TurnContext};
 use anyhow::Result;
 use serde_json::{json, Value};
 
@@ -27,6 +27,86 @@ impl Repositories<'_> {
         self.chats.save_changed(&chat, events)?;
         Ok(entry)
     }
+    pub(crate) fn finish_delivery(
+        &self,
+        delivery: &Delivery,
+        link: Option<&DelegationRef>,
+        events: &mut Events,
+    ) -> Result<()> {
+        self.inbox.finish(delivery)?;
+        self.sync_delivery_state(delivery, link, events)
+    }
+
+    pub(crate) fn resolve_delivery(
+        &self,
+        bot: &str,
+        message: &str,
+        retry: bool,
+        events: &mut Events,
+    ) -> Result<()> {
+        let delivery = self.inbox.resolve(bot, message, retry)?;
+        let entry = self.transcript.by_id(&delivery.chat, message)?;
+        let context = TurnContext::from_entry(&delivery.chat, &entry);
+        self.sync_delivery_state(&delivery, context.delegation.as_ref(), events)
+    }
+
+    pub(crate) fn sync_delivery_state(
+        &self,
+        delivery: &Delivery,
+        link: Option<&DelegationRef>,
+        events: &mut Events,
+    ) -> Result<()> {
+        if let Some(link) = link {
+            let (remaining, working, error) = self.inbox.remaining(delivery)?;
+            let state = if working {
+                "running"
+            } else if error.is_some() {
+                "failed"
+            } else if remaining == 0 {
+                "completed"
+            } else {
+                "queued"
+            };
+            self.set_delegation_state(link, state, None, error.as_deref(), events)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn set_delegation_state(
+        &self,
+        link: &DelegationRef,
+        state: &str,
+        prompt: Option<(&str, &str)>,
+        detail: Option<&str>,
+        events: &mut Events,
+    ) -> Result<()> {
+        // The source conversation can be deleted while its worker finishes in another chat.
+        if !self.transcript.contains(&link.chat_id, &link.entry_id)? {
+            return Ok(());
+        }
+        let mut entry = self.transcript.by_id(&link.chat_id, &link.entry_id)?;
+        let tracking = &mut entry["delegation"];
+        // The bot can acknowledge its delivery while a prompt refresh is still in flight.
+        if tracking["state"] == "completed" && matches!(state, "running" | "waiting") {
+            return Ok(());
+        }
+        // Another recipient of the same room delegation can still be waiting for an answer.
+        let pending = if prompt.is_none() && state != "completed" {
+            self.prompts.pending_for_delegation(&link.entry_id)?
+        } else {
+            None
+        };
+        let prompt = prompt.or_else(|| {
+            pending
+                .as_ref()
+                .map(|(chat, id)| (chat.as_str(), id.as_str()))
+        });
+        tracking["state"] = if prompt.is_some() { "waiting" } else { state }.into();
+        tracking["promptId"] = json!(prompt.map(|(_, id)| id));
+        tracking["promptChatId"] = json!(prompt.map(|(chat, _)| chat));
+        tracking["detail"] = json!(detail);
+        self.update_entry(&link.chat_id, &entry, events)
+    }
+
     pub(crate) fn update_entry(
         &self,
         chat_id: &str,

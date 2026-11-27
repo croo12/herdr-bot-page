@@ -21,7 +21,8 @@ pub(crate) struct Controller<'a> {
     pub sessions: &'a AgentSessions,
     pub user: &'a str,
     pub request_log: &'a RequestLog,
-    pub enqueue_chat: &'a dyn Fn(&str, ChatJob),
+    pub wake_bot: &'a dyn Fn(&str),
+    pub enqueue_greeting: &'a dyn Fn(&str, &str, ChatJob),
     pub host_status: &'a dyn Fn() -> Result<Value>,
 }
 impl Controller<'_> {
@@ -46,7 +47,7 @@ impl Controller<'_> {
     }
 
     fn agent_action(&self, action: AgentAction, params: Value) -> Result<Value> {
-        turns::agent_action(self.store, self.sessions, self.enqueue_chat, action, params)
+        turns::agent_action(self.store, self.sessions, self.wake_bot, action, params)
     }
 
     fn dispatch(&self, source: Source, method: &str, params: Value) -> Result<Value> {
@@ -85,14 +86,14 @@ impl Controller<'_> {
                     events,
                 )
             }),
-            "cli.inbox" => self.store.tx(|repos, _| {
+            "cli.inbox" => self.store.tx(|repos, events| {
                 let bot = repos.chats.by_pane(need(&params, "paneId")?)?;
                 let id = need(&bot, "id")?;
                 if let Some(message) = params["ack"].as_str() {
-                    repos.inbox.resolve(id, message, false)?;
+                    repos.resolve_delivery(id, message, false, events)?;
                 }
                 if let Some(message) = params["retry"].as_str() {
-                    repos.inbox.resolve(id, message, true)?;
+                    repos.resolve_delivery(id, message, true, events)?;
                 }
                 Ok(json!(repos.inbox.list(id)?))
             }),
@@ -125,12 +126,12 @@ impl Controller<'_> {
                 tasks::control(self.store, &params, method == "task.pause")
             }
             "cli.taskReport" => tasks::report(self.store, &params),
-            "message.send" => transcript::send(self.store, self.user, self.enqueue_chat, &params),
+            "message.send" => transcript::send(self.store, self.user, self.wake_bot, &params),
             "bot.listModels" => bots::list_models(need(&params, "provider")?),
             "bot.create" | "bot.quickCreate" => bots::create_bot(
                 self.store,
                 self.sessions,
-                self.enqueue_chat,
+                self.enqueue_greeting,
                 params,
                 method == "bot.quickCreate",
             ),
@@ -145,7 +146,7 @@ impl Controller<'_> {
                 self.store,
                 self.sessions,
                 self.user,
-                self.enqueue_chat,
+                self.wake_bot,
                 params,
             ),
             "cli.pass" => self.agent_action(AgentAction::Pass, params),

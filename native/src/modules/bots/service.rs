@@ -106,7 +106,7 @@ pub(crate) fn relaunch_bot(
 pub(crate) fn create_bot(
     store: &Store,
     sessions: &AgentSessions,
-    enqueue_chat: &dyn Fn(&str, ChatJob),
+    enqueue_greeting: &dyn Fn(&str, &str, ChatJob),
     mut params: Value,
     quick: bool,
 ) -> Result<Value> {
@@ -172,10 +172,12 @@ pub(crate) fn create_bot(
     })?;
     if quick {
         let dm = store.tx(|repos, events| repos.chats.open_direct(&bot_id, None, events))?;
-        enqueue_chat(
+        enqueue_greeting(
+            &bot_id,
             need(&dm, "id")?,
             ChatJob {
                 delivery: None,
+                context: Default::default(),
                 seed: format!(
                     "Introduce yourself in {} in one sentence.",
                     string_field(&params, "locale")

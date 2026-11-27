@@ -1,5 +1,14 @@
 /** Chat header, presence strip, transcript, and message-action catalog fragment. */
 export const en = {
+  "conversation.openThread": "View thread",
+  "conversation.delegation.queued": "Delegation queued",
+  "conversation.delegation.running": "Working on delegated task",
+  "conversation.delegation.waiting": "Waiting for approval or input",
+  "conversation.delegation.completed": "Delegated turn finished",
+  "conversation.delegation.failed": "Delegation failed",
+  "conversation.delegation.interrupted": "Interrupted by host restart",
+  "conversation.delegation.openRequest": "Open request",
+  "conversation.delegation.openOrigin": "Open original delegation",
   "conversation.status.needsApproval": "{name} needs approval",
   "conversation.status.working": "{name} working",
   // A DM's own header subtitle is just "working" (no name -- it's the chat's own bot) and never shown
@@ -16,7 +25,6 @@ export const en = {
   "conversation.moreEmoji": "More emoji",
   "conversation.reactedAriaLabel": "You reacted with {emoji}. Toggle your {emoji} reaction",
   "conversation.moreActions": "More message actions",
-  "conversation.startThread": "Start a thread",
   "conversation.trackTask": "Track as task",
   "conversation.task": "Task",
   "conversation.taskRun": "Run with assigned bot",
@@ -70,6 +78,15 @@ export const en = {
 } as const;
 
 export const ko = {
+  "conversation.openThread": "스레드 보기",
+  "conversation.delegation.queued": "위임 대기",
+  "conversation.delegation.running": "위임 작업 중",
+  "conversation.delegation.waiting": "승인 또는 입력 대기",
+  "conversation.delegation.completed": "위임 턴 종료",
+  "conversation.delegation.failed": "위임 실패",
+  "conversation.delegation.interrupted": "엔진 재시작으로 중단",
+  "conversation.delegation.openRequest": "요청 열기",
+  "conversation.delegation.openOrigin": "위임한 대화 보기",
   "conversation.status.needsApproval": "{name} 승인 대기",
   "conversation.status.working": "{name} 작업 중",
   "conversation.status.selfWorking": "작업 중",
@@ -84,7 +101,6 @@ export const ko = {
   "conversation.moreEmoji": "이모지 더 보기",
   "conversation.reactedAriaLabel": "{emoji} 반응을 남겼어요. {emoji} 반응 전환하기",
   "conversation.moreActions": "메시지 옵션 더 보기",
-  "conversation.startThread": "스레드 시작",
   "conversation.trackTask": "작업으로 등록",
   "conversation.task": "작업",
   "conversation.taskRun": "담당 봇으로 실행",

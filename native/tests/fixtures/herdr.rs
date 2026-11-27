@@ -22,6 +22,9 @@ fn main() {
         }
         (Some("agent"), Some("list")) => println!(r#"{{"result":{{"agents":[{agent}]}}}}"#),
         (Some("agent"), Some("get")) | (Some("agent"), Some("start")) => {
+            let agent = if args[2] == "w1:p2" && home.join("two-bots").exists() {
+                agent.replace("tester", "peer").replace("w1:p1", "w1:p2")
+            } else { agent };
             println!(r#"{{"result":{{"agent":{agent}}}}}"#)
         }
         (Some("agent"), Some("prompt")) => {
@@ -60,7 +63,37 @@ fn main() {
                 .join(format!("herdr-bot{}", env::consts::EXE_SUFFIX));
             let mut invoke = Command::new(cli);
             invoke.env("HERDR_PANE_ID", &args[2]);
-            if let Some(report) = prompt.lines().find(|line| line.starts_with("task-report ")) {
+            if home.join("bot-workers").exists() {
+                let request = prompt.split_once("Current request:\n").unwrap().1.lines().next().unwrap();
+                let reply = match (args[2].as_str(), request) {
+                    ("w1:p1", "@tester build") => {
+                        fs::File::create_new(home.join("build-started")).unwrap();
+                        for _ in 0..800 {
+                            if home.join("release-build").exists() { break; }
+                            std::thread::sleep(Duration::from_millis(25));
+                        }
+                        assert!(home.join("release-build").exists());
+                        "Build complete"
+                    }
+                    ("w1:p2", "@peer review") => "Review complete",
+                    ("w1:p1", "Follow up") => {
+                        assert!(home.join("release-build").exists());
+                        "Follow-up complete"
+                    }
+                    _ => panic!("Unexpected delivery to {}: {request}", args[2]),
+                };
+                invoke.args(["say", target, reply]);
+            } else if home.join("room-replies").exists() {
+                let request = prompt.split_once("Current request:\n").unwrap().1.lines().next().unwrap();
+                let response = match (args[2].as_str(), request) {
+                    ("w1:p1", "@tester check packaging") => "@peer find the failing step",
+                    ("w1:p2", "@peer find the failing step") => "Signing failed",
+                    ("w1:p1", "Signing failed") => "I will check signing",
+                    _ => panic!("Unexpected delivery to {}: {request}", args[2]),
+                };
+                let parent = prompt.split_once("say --reply-to ").unwrap().1.split_whitespace().next().unwrap();
+                invoke.args(["say", "--reply-to", parent, target, response]);
+            } else if let Some(report) = prompt.lines().find(|line| line.starts_with("task-report ")) {
                 assert!(prompt.contains("Completion criteria: Windows build passes"));
                 if prompt.contains("Previous checkpoint: Build fixed; verify on Windows") {
                     // Leave the second turn live so the test can exercise pause and crash recovery.
@@ -92,6 +125,9 @@ fn main() {
                 "{}",
                 String::from_utf8_lossy(&out.stderr)
             );
+            let agent = if args[2] == "w1:p2" {
+                agent.replace("tester", "peer").replace("w1:p1", "w1:p2")
+            } else { agent };
             println!(r#"{{"result":{{"agent":{agent}}}}}"#)
         }
         (Some("agent"), Some("wait")) => {

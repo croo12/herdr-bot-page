@@ -74,11 +74,16 @@ impl<'db> Transcript<'db> {
     }
     pub(crate) fn thread(&self, chat_id: &str, root: &str) -> Result<Vec<Value>> {
         let mut query = self.db.prepare(
-            "SELECT data FROM entries WHERE chat=?
-             AND (json_extract(data,'$.id')=? OR json_extract(data,'$.replyTo')=?) ORDER BY seq",
+            "WITH RECURSIVE thread(id) AS (
+                VALUES (?2)
+                UNION
+                SELECT json_extract(child.data,'$.id') FROM thread JOIN entries child
+                  ON child.chat=?1 AND json_extract(child.data,'$.replyTo')=thread.id
+             )
+             SELECT data FROM entries WHERE chat=?1 AND json_extract(data,'$.id') IN (SELECT id FROM thread) ORDER BY seq",
         )?;
         let rows = query
-            .query_map(params![chat_id, root, root], |row| row.get::<_, Value>(0))?
+            .query_map(params![chat_id, root], |row| row.get::<_, Value>(0))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }

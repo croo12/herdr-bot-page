@@ -245,11 +245,12 @@ export function createFakeAppApi(): AppApiTransport {
     },
     "transcript.thread": (params: { chatId: string; rootId: string }) => {
       const entries = transcripts.get(params.chatId) ?? [];
-      const root = entries.find((entry) => entry.id === params.rootId);
-      const replies = entries.filter(
-        (entry) => (entry as { replyTo?: string }).replyTo === params.rootId,
-      );
-      return { entries: root == null ? replies : [root, ...replies] };
+      const ids = new Set([params.rootId]);
+      const thread = entries.filter((entry) => {
+        if (typeof entry.replyTo === "string" && ids.has(entry.replyTo)) ids.add(entry.id);
+        return ids.has(entry.id);
+      });
+      return { entries: thread };
     },
 
     "message.send": (params: {

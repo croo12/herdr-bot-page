@@ -11,6 +11,7 @@ import { resolvePersonaColor, personaColorVar } from "#shared/ui/avatar-colors.t
 import { formatClockTime } from "#shared/lib/time/format-time.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { Avatar } from "#shared/ui/index.tsx";
+import { DelegationStatus } from "./DelegationStatus.tsx";
 import type { ChatSummary, TranscriptEntry } from "#shared/api/index.tsx";
 import { splitAttachments } from "../../model/conversation/attachments.tsx";
 import { Attachments } from "./Attachments.tsx";
@@ -108,6 +109,7 @@ export function MessageBubble({
           <HoverActions
             chatId={chat.id}
             entryId={entry.id}
+            threadRootId={mine ? entry.id : (replyToId ?? entry.id)}
             authorName={author?.name ?? ""}
             previewText={text}
             isMine={mine}
@@ -125,6 +127,7 @@ export function MessageBubble({
             {formatClockTime(entry.timestampMs, locale)}
           </time>
         </Bubble>
+        {(entry.delegation || entry.delegatedFrom) && <DelegationStatus entry={entry} />}
         {(tracking || entry.task) && (
           <MessageTaskPanel
             chatId={chat.id}

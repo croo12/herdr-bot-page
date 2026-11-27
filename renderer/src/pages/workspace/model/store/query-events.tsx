@@ -1,7 +1,13 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { AppApiClient, ChatSummary, TranscriptEntry } from "#shared/api/index.tsx";
 import { applyTranscriptEntry } from "../transcript-merge.tsx";
-import { chatsKey, engineKey, transcriptKey, type TranscriptPages } from "./queries.tsx";
+import {
+  chatsKey,
+  engineKey,
+  transcriptKey,
+  chatThreadsKey,
+  type TranscriptPages,
+} from "./queries.tsx";
 
 export function resyncEngineQueries(cache: QueryClient) {
   // Also restart initial reads, which otherwise reuse their in-flight snapshot.
@@ -67,6 +73,20 @@ export function subscribeToEngineQueries(cache: QueryClient, client: AppApiClien
       }),
     ),
     client.subscribe(["transcript.entryAppended", "transcript.entryUpdated"], ({ payload }) => {
+      const { entry, chatId } = payload;
+      for (const query of cache.getQueryCache().findAll({ queryKey: chatThreadsKey(chatId) })) {
+        const root = query.queryKey.at(-1);
+        update<{ entries: readonly TranscriptEntry[] }>(query.queryKey, (data) => {
+          if (!data) return data;
+          const inThread =
+            entry.id === root ||
+            entry.replyTo === root ||
+            data.entries.some(
+              (existing) => existing.id === entry.id || existing.id === entry.replyTo,
+            );
+          return inThread ? { entries: applyTranscriptEntry(data.entries, entry) } : data;
+        });
+      }
       update<TranscriptPages>(
         transcriptKey(payload.chatId),
         (data) => data && patchTranscript(data, payload.entry),
