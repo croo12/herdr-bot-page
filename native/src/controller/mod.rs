@@ -71,7 +71,10 @@ impl Controller<'_> {
             "settings.update" => settings::update_settings(self.store, &params),
             "bot.defaults" => bots::bot_defaults(self.store),
             "chat.openDirect" => self.store.tx(|repos, events| {
-                let peer = if let Some(pane) = params["paneId"].as_str().filter(|s| !s.is_empty()) {
+                let peer = if let Some(pane) = params["paneId"]
+                    .as_str()
+                    .filter(|pane_id| !pane_id.is_empty())
+                {
                     Some(repos.chats.by_pane(pane)?)
                 } else {
                     None

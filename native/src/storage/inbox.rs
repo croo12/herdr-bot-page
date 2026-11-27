@@ -32,7 +32,7 @@ impl<'db> Inbox<'db> {
         let text = content(entry);
         let rich: Option<Value> = entry["richText"]
             .as_str()
-            .and_then(|s| serde_json::from_str(s).ok());
+            .and_then(|rich_text| serde_json::from_str(rich_text).ok());
         let chips: Vec<_> = rich
             .iter()
             .flat_map(|doc| doc["content"].as_array().into_iter().flatten())
@@ -41,7 +41,9 @@ impl<'db> Inbox<'db> {
             .map(|node| &node["attrs"])
             .collect();
         let mut mentions: Vec<_> = text
-            .split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '@' | '-' | '_')))
+            .split(|character: char| {
+                !(character.is_ascii_alphanumeric() || matches!(character, '@' | '-' | '_'))
+            })
             .filter_map(|word| word.strip_prefix('@'))
             .collect();
         let all = if chips.is_empty() {
@@ -94,33 +96,33 @@ impl<'db> Inbox<'db> {
     // A fresh host clears abandoned reservations before it starts the scheduler.
     pub fn reserve(&self) -> Result<Vec<ChatJob>> {
         let mut query = self.0.prepare("SELECT i.bot,i.chat,i.seq,i.depth,e.data FROM inbox i JOIN entries e ON e.chat=i.chat AND e.seq=i.seq WHERE i.state='pending' AND i.available<=? AND i.depth<=2 ORDER BY i.rowid")?;
-        let rows = query.query_map([now()], |r| {
-            let entry: Value = r.get(4)?;
+        let rows = query.query_map([now()], |row| {
+            let entry: Value = row.get(4)?;
             Ok(ChatJob {
                 delivery: Some(Delivery {
-                    bot: r.get(0)?,
-                    chat: r.get(1)?,
-                    seq: r.get(2)?,
+                    bot: row.get(0)?,
+                    chat: row.get(1)?,
+                    seq: row.get(2)?,
                 }),
                 seed: content(&entry).into(),
-                depth: r.get(3)?,
+                depth: row.get(3)?,
             })
         })?;
         let jobs = rows.collect::<rusqlite::Result<Vec<_>>>()?;
         for job in &jobs {
-            let d = job.delivery.as_ref().unwrap();
+            let delivery = job.delivery.as_ref().unwrap();
             self.0.execute(
                 "UPDATE inbox SET state='queued' WHERE bot=? AND chat=? AND seq=?",
-                params![d.bot, d.chat, d.seq],
+                params![delivery.bot, delivery.chat, delivery.seq],
             )?;
         }
         Ok(jobs)
     }
 
-    pub fn start(&self, d: &Delivery) -> Result<bool> {
+    pub fn start(&self, delivery: &Delivery) -> Result<bool> {
         Ok(self.0.execute(
             "UPDATE inbox SET state='working' WHERE bot=? AND chat=? AND seq=? AND state='queued'",
-            params![d.bot, d.chat, d.seq],
+            params![delivery.bot, delivery.chat, delivery.seq],
         )? == 1)
     }
     pub fn resolve(&self, bot: &str, message: &str, retry: bool) -> Result<()> {
@@ -138,23 +140,23 @@ impl<'db> Inbox<'db> {
         );
         Ok(())
     }
-    pub fn finish(&self, d: &Delivery) -> Result<()> {
+    pub fn finish(&self, delivery: &Delivery) -> Result<()> {
         self.0.execute(
             "DELETE FROM inbox WHERE bot=? AND chat=? AND seq=?",
-            params![d.bot, d.chat, d.seq],
+            params![delivery.bot, delivery.chat, delivery.seq],
         )?;
         Ok(())
     }
-    pub fn release(&self, d: &Delivery, error: Option<&str>) -> Result<bool> {
+    pub fn release(&self, delivery: &Delivery, error: Option<&str>) -> Result<bool> {
         let report = if let Some(message) = error {
             self.0.execute("UPDATE inbox SET last_error=? WHERE bot=? AND chat=? AND seq=? AND last_error IS NOT ?",
-                params![message,d.bot,d.chat,d.seq,message])? > 0
+                params![message,delivery.bot,delivery.chat,delivery.seq,message])? > 0
         } else {
             false
         };
         self.0.execute(
             "UPDATE inbox SET available=?,state=CASE state WHEN 'working' THEN 'unconfirmed' ELSE 'pending' END WHERE bot=? AND chat=? AND seq=? AND state IN ('queued','working')",
-            params![now() + if error.is_some(){30_000}else{3_000}, d.bot, d.chat, d.seq],
+            params![now() + if error.is_some(){30_000}else{3_000}, delivery.bot, delivery.chat, delivery.seq],
         )?;
         Ok(report)
     }

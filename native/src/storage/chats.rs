@@ -20,7 +20,7 @@ impl<'db> Chats<'db> {
             .query_row(
                 "SELECT data FROM chats WHERE json_extract(data,'$.directPair')=?",
                 [Self::direct_pair(bot, peer)],
-                |r| r.get(0),
+                |row| row.get(0),
             )
             .optional()?)
     }

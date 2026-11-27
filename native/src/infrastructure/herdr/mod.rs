@@ -42,13 +42,17 @@ pub(crate) fn has_error_code(error: &anyhow::Error, code: &str) -> bool {
 }
 
 pub fn command(file: impl AsRef<OsStr>) -> Command {
-    let mut cmd = Command::new(file);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
+        let mut cmd = Command::new(file);
         cmd.creation_flags(0x08000000);
+        cmd
     }
-    cmd
+    #[cfg(not(windows))]
+    {
+        Command::new(file)
+    }
 }
 fn capture(cmd: &mut Command, seconds: u64) -> Result<String> {
     let mut child = cmd

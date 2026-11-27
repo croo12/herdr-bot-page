@@ -195,7 +195,7 @@ mod tests {
                 db.0.lock().unwrap().query_row(
                     "SELECT count(*) FROM pragma_foreign_key_check",
                     [],
-                    |r| r.get::<_, i64>(0)
+                    |row| row.get::<_, i64>(0)
                 )?,
                 0
             );

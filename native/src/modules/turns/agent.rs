@@ -111,8 +111,8 @@ pub(crate) fn agent_action(
         bail!("bot_not_ready: turn has ended")
     }
     if action == AgentAction::Pass {
-        if let Some(d) = &turn.delivery {
-            store.tx(|repos, _| repos.inbox.finish(d))?;
+        if let Some(delivery) = &turn.delivery {
+            store.tx(|repos, _| repos.inbox.finish(delivery))?;
         }
         turn.passed = true;
         return Ok(json!({"passed":true}));

@@ -26,7 +26,9 @@ pub(crate) fn delete_chats(
                 .chats
                 .list()?
                 .into_iter()
-                .filter(|c| c["kind"] == "direct" && strings(&c["memberIds"]).contains(&id))
+                .filter(|chat| {
+                    chat["kind"] == "direct" && strings(&chat["memberIds"]).contains(&id)
+                })
                 .collect::<Vec<_>>())
         })?;
         if sessions.active.lock().unwrap().iter().any(|(bot, turn)| {

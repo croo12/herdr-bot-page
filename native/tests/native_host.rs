@@ -99,7 +99,7 @@ fn each_bot_discovers_its_own_direct_messages_after_a_host_restart() {
         .as_array()
         .unwrap()
         .iter()
-        .all(|c| c["id"] != pair["chatId"]));
+        .all(|chat| chat["id"] != pair["chatId"]));
     call("chat.markRead", json!({"chatId":dm["id"],"throughSeq":1}));
     assert_eq!(call("cli.inbox", json!({"paneId":"w1:p2"})), json!([]));
     drop(host);
