@@ -1,12 +1,13 @@
-use crate::modules::{bots, chats, prompts, rooms, settings, tasks, transcript, turns};
+mod create_bot;
 pub mod ipc;
+use crate::modules::{bots, chats, prompts, rooms, settings, tasks, transcript, turns};
 use crate::{
     domain::{need, string_field, ChatJob},
     infrastructure::{paths, request_log::RequestLog, AgentSessions},
     modules::{chats::ChatEdit, turns::AgentAction},
     storage::Store,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::time::Instant;
 
@@ -128,13 +129,22 @@ impl Controller<'_> {
             "cli.taskReport" => tasks::report(self.store, &params),
             "message.send" => transcript::send(self.store, self.user, self.wake_bot, &params),
             "bot.listModels" => bots::list_models(need(&params, "provider")?),
-            "bot.create" | "bot.quickCreate" => bots::create_bot(
-                self.store,
-                self.sessions,
-                self.enqueue_greeting,
-                params,
-                method == "bot.quickCreate",
-            ),
+            "bot.create" | "bot.quickCreate" => {
+                let mut request: create_bot::CreateBotRequest = serde_json::from_value(params)
+                    .context("invalid_args: invalid bot creation request")?;
+                if method == "bot.quickCreate" {
+                    let locale = request.locale.take().unwrap_or_default();
+                    bots::quick_create_bot(
+                        self.store,
+                        self.sessions,
+                        request.into_input()?,
+                        &locale,
+                        self.enqueue_greeting,
+                    )
+                } else {
+                    bots::create_bot(self.store, self.sessions, request.into_input()?)
+                }
+            }
             "bot.retrySetup" | "bot.updateLaunchSettings" => {
                 bots::relaunch_bot(self.store, self.sessions, &params)
             }

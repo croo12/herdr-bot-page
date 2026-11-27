@@ -27,7 +27,17 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
         |_| {},
     )
     .unwrap();
-    engine
+    for request in [
+        json!({"id":"external","name":"Tester","provider":"pi","cwd":home}),
+        json!({"id":"external","name":"Tester","adoptPaneId":"w5:p2"}),
+    ] {
+        let error = engine.call("bot.create", request).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "bot_exists: agent external already exists"
+        );
+    }
+    let managed = engine
         .call(
             "bot.create",
             json!({"id":"managed","name":"Managed","provider":"codex","cwd":home,
@@ -35,13 +45,16 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
                 "title":"UI reviewer","description":"Check the UI for accessibility"}),
         )
         .unwrap();
+    assert_eq!(managed["chat"]["bot"]["adopted"], false);
     for (bot, pane) in [("moved", "w5:p2"), ("external", "w5:p3")] {
-        engine
+        let adopted = engine
             .call(
                 "bot.create",
                 json!({"id":bot,"name":bot,"adoptPaneId":pane}),
             )
             .unwrap();
+        assert_eq!(adopted["chat"]["bot"]["paneId"], pane);
+        assert_eq!(adopted["chat"]["bot"]["adopted"], true);
     }
     let room = engine
         .call(

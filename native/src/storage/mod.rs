@@ -11,6 +11,7 @@ mod transcript;
 use crate::domain::Events;
 use anyhow::Result;
 use bots::Bots;
+pub(crate) use bots::{BotRegistrationOptions, BotSession};
 pub(crate) use chats::Chats;
 use inbox::Inbox;
 use prompts::Prompts;

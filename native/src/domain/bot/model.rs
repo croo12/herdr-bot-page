@@ -23,7 +23,6 @@ pub(crate) struct Bot {
     pub label: String,
     pub instruction: String,
     pub avatar_color: Option<AvatarColor>,
-    // An adopted agent may not have reported its working directory.
     pub working_directory: Option<PathBuf>,
     pub provider: Provider,
 }

@@ -104,12 +104,11 @@ impl<'db> Chats<'db> {
             .optional()?)
     }
     pub(crate) fn save(&self, chat: &Value) -> Result<()> {
+        if chat["kind"] == "bot" {
+            return super::Bots::new(self.db).save_record(chat);
+        }
         self.db.execute(
-            if chat["kind"] == "bot" {
-                "INSERT INTO bots VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data"
-            } else {
-                "INSERT INTO chats VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data"
-            },
+            "INSERT INTO chats VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
             params![need(chat, "id")?, chat],
         )?;
         Ok(())
@@ -135,25 +134,27 @@ impl<'db> Chats<'db> {
     }
     pub(crate) fn for_request(&self, params: &Value) -> Result<Option<Value>> {
         if let Some(request_id) = params["requestId"].as_str() {
-            return Ok(self
+            return self.find_request(request_id);
+        }
+        Ok(None)
+    }
+    pub(crate) fn find_request(&self, request_id: &str) -> Result<Option<Value>> {
+        Ok(self
                 .db
                 .query_row(
                     "SELECT c.data FROM requests r JOIN chats c ON c.id=r.chat WHERE r.key=?1 UNION ALL SELECT b.data FROM bot_requests r JOIN bots b ON b.id=r.bot WHERE r.key=?1",
                     [request_id],
                     |row| row.get(0),
                 )
-                .optional()?);
-        }
-        Ok(None)
+                .optional()?)
     }
     pub(crate) fn remember(&self, params: &Value, chat: &Value) -> Result<()> {
         if let Some(request_id) = params["requestId"].as_str() {
+            if chat["kind"] == "bot" {
+                return super::Bots::new(self.db).remember_request(request_id, need(chat, "id")?);
+            }
             self.db.execute(
-                if chat["kind"] == "bot" {
-                    "INSERT INTO bot_requests VALUES(?,?)"
-                } else {
-                    "INSERT INTO requests VALUES(?,?)"
-                },
+                "INSERT INTO requests VALUES(?,?)",
                 params![request_id, need(chat, "id")?],
             )?;
         }

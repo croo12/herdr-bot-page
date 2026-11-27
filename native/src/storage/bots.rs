@@ -1,7 +1,21 @@
-use crate::domain::bot::{AvatarColor, Bot, BotId, PermissionMode, ProviderDraft};
+use crate::domain::bot::{AvatarColor, Bot, BotId, PermissionMode, ProviderDraft, ReasoningEffort};
 use anyhow::{anyhow, Context, Result};
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
+use serde_json::{json, Value};
+
+pub(crate) struct BotRegistrationOptions<'a> {
+    pub avatar_shape: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub reasoning_effort: Option<&'a ReasoningEffort>,
+    pub permission_mode: PermissionMode,
+}
+
+pub(crate) struct BotSession {
+    pub pane_id: Option<String>,
+    pub status: Option<String>,
+    pub adopted: bool,
+}
 
 pub(crate) struct Bots<'db> {
     db: &'db Connection,
@@ -10,6 +24,62 @@ pub(crate) struct Bots<'db> {
 impl<'db> Bots<'db> {
     pub(crate) fn new(db: &'db Connection) -> Self {
         Self { db }
+    }
+
+    pub(crate) fn save(
+        &self,
+        bot: &Bot,
+        session: &BotSession,
+        options: &BotRegistrationOptions,
+        request_id: Option<&str>,
+    ) -> Result<Value> {
+        let bot_id = bot.id.as_str();
+        let mut profile = crate::domain::new_chat(
+            bot_id,
+            "bot",
+            &json!({
+                "name": bot.name,
+                "title": bot.label,
+                "description": bot.instruction,
+                "avatarColor": bot.avatar_color,
+                "avatarShape": options.avatar_shape,
+            }),
+        );
+        profile["bot"] = json!({
+            "provider": bot.provider.name(),
+            "model": options.model,
+            "reasoningEffort": options.reasoning_effort,
+            "permissionMode": options.permission_mode,
+            "cwd": bot.working_directory,
+            "adopted": session.adopted,
+            "paneId": session.pane_id,
+            "status": session.status,
+            "pendingPrompt": null,
+            "onboarding": null,
+        });
+        self.save_record(&profile)?;
+        if let Some(key) = request_id {
+            self.remember_request(key, bot_id)?;
+        }
+        Ok(profile)
+    }
+
+    pub(super) fn remember_request(&self, key: &str, bot_id: &str) -> Result<()> {
+        self.db.execute(
+            "INSERT INTO bot_requests(key, bot) VALUES(?, ?)",
+            params![key, bot_id],
+        )?;
+        Ok(())
+    }
+
+    pub(super) fn save_record(&self, bot_record: &Value) -> Result<()> {
+        anyhow::ensure!(bot_record["kind"] == "bot", "expected a bot profile");
+        let bot_id = crate::domain::need(bot_record, "id")?;
+        self.db.execute(
+            "INSERT INTO bots(id, data) VALUES(?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
+            params![bot_id, bot_record],
+        )?;
+        Ok(())
     }
 
     pub(crate) fn last_working_directory(&self) -> Result<Option<std::path::PathBuf>> {

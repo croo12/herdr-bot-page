@@ -1,7 +1,8 @@
-use super::{AvatarColor, Bot, BotId, PermissionMode, ProviderDraft, SelectionFor};
+use super::{AvatarColor, Bot, BotId, PermissionMode, Provider};
 use anyhow::{bail, Result};
 use serde::Deserialize;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,49 +41,21 @@ impl BotDefaults {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub(crate) struct BotDraft {
-    id: Option<String>,
-    name: Option<String>,
-    title: Option<String>,
-    description: Option<String>,
-    avatar_color: Option<AvatarColor>,
-    #[serde(flatten)]
-    provider: ProviderDraft,
-    cwd: Option<PathBuf>,
-}
-
-pub(crate) enum BotOrigin {
-    New,
-    Adopted,
+    pub id: Option<String>,
+    pub name: String,
+    pub label: String,
+    pub instruction: String,
+    pub avatar_color: Option<AvatarColor>,
+    pub provider: Provider,
+    pub working_directory: Option<PathBuf>,
 }
 
 impl Bot {
-    pub fn new(
-        draft: BotDraft,
-        defaults: &BotDefaults,
-        quick: bool,
-        origin: BotOrigin,
-    ) -> Result<Self> {
-        let (working_directory, provider) = match origin {
-            BotOrigin::New => (
-                Some(
-                    draft
-                        .cwd
-                        .unwrap_or_else(|| defaults.working_directory.clone()),
-                ),
-                draft
-                    .provider
-                    .select(SelectionFor::NewBot, defaults.permission_mode)?,
-            ),
-            BotOrigin::Adopted => (draft.cwd, draft.provider.existing(defaults.permission_mode)),
-        };
-        let name = match draft.name {
-            Some(name) if !name.trim().is_empty() => name,
-            _ if quick => provider.name().to_owned(),
-            _ => bail!("invalid_args: missing name"),
-        };
+    pub fn new(draft: BotDraft, id_seed: Uuid) -> Result<Self> {
+        if draft.name.trim().is_empty() {
+            bail!("invalid_args: missing name");
+        }
         let id = match draft.id {
             Some(id) => {
                 if !id.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
@@ -98,21 +71,21 @@ impl Bot {
                 }
                 id
             }
-            None => generated_id(&name),
+            None => generated_id(&draft.name, id_seed),
         };
         Ok(Self {
             id: BotId::from(id.as_str()),
-            name,
-            label: draft.title.unwrap_or_default(),
-            instruction: draft.description.unwrap_or_default(),
+            name: draft.name,
+            label: draft.label,
+            instruction: draft.instruction,
             avatar_color: draft.avatar_color,
-            working_directory,
-            provider,
+            working_directory: draft.working_directory,
+            provider: draft.provider,
         })
     }
 }
 
-fn generated_id(name: &str) -> String {
+fn generated_id(name: &str, id_seed: Uuid) -> String {
     let slug: String = name
         .to_lowercase()
         .chars()
@@ -133,16 +106,15 @@ fn generated_id(name: &str) -> String {
     } else {
         "bot"
     };
-    format!("{prefix}-{}", &crate::domain::id()[..6])
+    format!("{prefix}-{}", &id_seed.simple().to_string()[..6])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::bot::{CodexModelId, CodexPermissionMode, Provider};
 
     #[test]
-    fn explicit_settings_override_the_defaults_shown_before_creation() -> Result<()> {
+    fn resolves_environment_and_preference_defaults() {
         let defaults = BotDefaults::resolve(
             BotPreferences {
                 default_working_folder: Some("configured".into()),
@@ -155,21 +127,28 @@ mod tests {
         );
         assert_eq!(defaults.working_directory, PathBuf::from("environment"));
         assert_eq!(defaults.provider, "claude");
-        let draft: BotDraft = serde_json::from_value(serde_json::json!({
-            "provider":"codex", "cwd":"explicit", "permissionMode":"ask", "model":"selected-model", "reasoningEffort":"high"
-        }))?;
-        let bot = Bot::new(draft, &defaults, true, BotOrigin::New)?;
-        assert_eq!(bot.name, "codex");
-        assert!(bot.id.as_str().starts_with("codex-"));
-        assert_eq!(bot.working_directory, Some(PathBuf::from("explicit")));
-        assert_eq!(
-            bot.provider,
-            Provider::Codex {
-                model: Some(CodexModelId("selected-model".into())),
-                reasoning_effort: Some(crate::domain::bot::ReasoningEffort::High),
-                permission_mode: CodexPermissionMode::Default,
-            }
-        );
+    }
+
+    #[test]
+    fn constructs_a_bot_from_resolved_values() -> Result<()> {
+        let draft = BotDraft {
+            id: None,
+            name: "Reviewer".into(),
+            label: "Backend".into(),
+            instruction: "Review the diff".into(),
+            avatar_color: Some(AvatarColor::Violet),
+            provider: Provider::Other("pi".into()),
+            working_directory: None,
+        };
+        let seed = Uuid::from_u128(0xabcdef00_0000_0000_0000_000000000000);
+        let bot = Bot::new(draft, seed)?;
+        assert_eq!(bot.id.as_str(), "reviewer-abcdef");
+        assert_eq!(bot.name, "Reviewer");
+        assert_eq!(bot.label, "Backend");
+        assert_eq!(bot.instruction, "Review the diff");
+        assert_eq!(bot.avatar_color, Some(AvatarColor::Violet));
+        assert_eq!(bot.provider, Provider::Other("pi".into()));
+        assert_eq!(bot.working_directory, None);
         Ok(())
     }
 }

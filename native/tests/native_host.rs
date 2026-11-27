@@ -123,6 +123,20 @@ fn quick_create_registers_an_existing_agent_and_greets_in_its_direct_chat() {
     assert_eq!(defaults["provider"], "codex");
     assert_eq!(defaults["permissionMode"], "ask");
     for method in ["bot.create", "bot.quickCreate"] {
+        for (field, value) in [
+            ("adoptPaneId", json!(123)),
+            ("requestId", json!(false)),
+            ("allowHomeCwd", json!("true")),
+            ("permissionMode", json!("invalid")),
+        ] {
+            let mut request = json!({"provider":"pi", "name":"Reviewer", "cwd":home});
+            request[field] = value;
+            let error = ipc::request(home, method, request).unwrap_err();
+            assert!(
+                error.to_string().contains("invalid_args"),
+                "{field}: {error}"
+            );
+        }
         for provider in [None, Some(Value::Null), Some(json!("")), Some(json!("  "))] {
             let mut request = json!({"name":"Missing provider", "cwd":home});
             if let Some(value) = provider {
@@ -132,8 +146,10 @@ fn quick_create_registers_an_existing_agent_and_greets_in_its_direct_chat() {
             assert!(error.to_string().contains("missing provider"), "{error}");
         }
     }
-    let params = json!({"id":"tester","adoptPaneId":"w1:p1","requestId":"quick","locale":"en",
-        "title":"Reviewer","description":"Review changes","avatarColor":"violet"});
+    let params = json!({"id":"tester","adoptPaneId":"w1:p1","provider":"codex","cwd":"ignored","requestId":"quick","locale":"en",
+        "title":"Reviewer","description":"Review changes","avatarColor":"violet","avatarShape":"circle"});
+    let error = ipc::request(home, "bot.create", params.clone()).unwrap_err();
+    assert!(error.to_string().contains("missing name"), "{error}");
     let call = || ipc::request(home, "bot.quickCreate", params.clone()).unwrap();
     let profile = call()["chat"].clone();
     assert_eq!(profile["id"], "tester");
@@ -141,18 +157,41 @@ fn quick_create_registers_an_existing_agent_and_greets_in_its_direct_chat() {
     assert_eq!(profile["bot"]["provider"], "pi");
     assert_eq!(profile["bot"]["cwd"], ".");
     assert_eq!(profile["bot"]["adopted"], true);
+    assert_eq!(profile["bot"]["paneId"], "w1:p1");
+    assert_eq!(profile["bot"]["permissionMode"], "ask");
     assert_eq!(profile["title"], "Reviewer");
     assert_eq!(profile["description"], "Review changes");
     assert_eq!(profile["avatarColor"], "violet");
+    assert_eq!(profile["avatarShape"], "circle");
     assert_eq!(call()["chat"]["id"], profile["id"]);
     let direct = ipc::request(home, "chat.openDirect", json!({"botId":"tester"})).unwrap();
+    // A later delivery to the same bot runs after every greeting queued by the two calls.
+    ipc::request(
+        home,
+        "message.send",
+        json!({"chatId":direct["id"],"text":"After the greeting"}),
+    )
+    .unwrap();
     wait(|| {
         let page = ipc::request(home, "transcript.page", json!({"chatId":direct["id"]})).unwrap();
-        page["entries"]
+        let replies: Vec<_> = page["entries"]
             .as_array()
             .unwrap()
             .iter()
-            .any(|entry| entry["author"]["id"] == "tester")
+            .filter(|entry| entry["kind"] == "send-message" && entry["author"]["id"] == "tester")
+            .map(|entry| &entry["message"]["content"])
+            .collect();
+        if !replies
+            .iter()
+            .any(|content| **content == "Follow-up received")
+        {
+            return false;
+        }
+        assert_eq!(
+            replies,
+            [&json!("Hello from tester"), &json!("Follow-up received")]
+        );
+        true
     });
 }
 

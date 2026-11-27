@@ -15,6 +15,13 @@ use std::{
 };
 use wait_timeout::ChildExt;
 
+fn parse_agent_list(mut response: Value) -> Result<Vec<Value>> {
+    match response.get_mut("agents").map(Value::take) {
+        Some(Value::Array(agents)) => Ok(agents),
+        _ => bail!("herdr_error: agent list has no agents array"),
+    }
+}
+
 fn launch_options(provider: &Provider) -> Vec<String> {
     let mut options = Vec::new();
     let (model, effort_option) = match provider {
@@ -249,11 +256,13 @@ impl Herdr {
         }
         bail!("herdr_error: session {} did not start", self.session)
     }
+    pub fn ensure_and_list_agents(&self) -> Result<Vec<Value>> {
+        self.ensure()?;
+        self.agents()
+    }
+
     pub fn agents(&self) -> Result<Vec<Value>> {
-        self.run(&["agent", "list"])?["agents"]
-            .as_array()
-            .cloned()
-            .context("herdr_error: agent list has no agents array")
+        parse_agent_list(self.run(&["agent", "list"])?)
     }
     pub fn launch(&self, id: &str, directory: &Path, provider: &Provider) -> Result<Value> {
         let cwd = directory

@@ -109,6 +109,10 @@ fn main() {
                 invoke
                     .args(report.split_whitespace().take(4))
                     .args(["continue", "Build fixed; verify on Windows"]);
+            } else if prompt.contains("Current request:\nIntroduce yourself in en in one sentence.\n") {
+                invoke.args(["say", target, "Hello from tester"]);
+            } else if prompt.contains("Current request:\nAfter the greeting\n") {
+                invoke.args(["say", target, "Follow-up received"]);
             } else if prompt.contains("Current request:\nconfirm queue order\n")
                 && !prompt.contains("queue order confirmed")
             {
