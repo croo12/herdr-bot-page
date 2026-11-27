@@ -69,22 +69,23 @@ fn prepare(
         if !member {
             bail!("The assigned bot is no longer in this room.");
         }
+        let bot_id = crate::domain::bot::BotId::from(bot);
         let live = if resume {
             let pane = need(execution, "paneId")?;
-            let profile = store.tx(|repos, _| repos.chats.get(bot))?;
-            if profile["bot"]["paneId"] != pane {
+            let registered = store.tx(|repos, _| repos.bots.registration(&bot_id))?;
+            if registered.session.pane_id.as_deref() != Some(pane) {
                 bail!("The assigned pane changed.");
             }
-            let live = sessions.herdr.run(&["agent", "get", pane])?;
-            if live["agent"]["name"] != bot || live["agent"]["pane_id"] != pane {
+            let live = sessions.herdr.get_agent(pane)?;
+            if live.name() != Some(bot) || live.pane_id() != Some(pane) {
                 bail!("The assigned pane changed.");
             }
-            live["agent"].clone()
+            live
         } else {
-            bots::connect_for_turn(store, &sessions.herdr, bot)?
+            bots::connect_for_turn(store, &sessions.herdr, &bot_id)?
         };
-        let pane = need(&live, "pane_id")?;
-        match string_field(&live, "agent_status") {
+        let pane = live.required_pane()?;
+        match live.status().unwrap_or_default() {
             "idle" | "done" => {}
             "working" | "blocked" if resume => {}
             "working" | "blocked" => return Ok(None),

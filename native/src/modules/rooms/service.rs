@@ -1,5 +1,5 @@
 use crate::{
-    domain::{id, need, new_chat, strings},
+    domain::{bot::BotId, id, need, new_chat, strings},
     storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
@@ -57,7 +57,7 @@ fn checked_members(repos: &Repositories, params: &Value) -> Result<Vec<String>> 
     }
     let mut seen = std::collections::HashSet::new();
     for member in &members {
-        if repos.chats.get(member)?["kind"] != "bot" || !seen.insert(member) {
+        if !repos.bots.contains(&BotId::from(member.as_str()))? || !seen.insert(member) {
             bail!("invalid_args: invalid room member {member}")
         }
     }

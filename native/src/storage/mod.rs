@@ -11,7 +11,7 @@ mod transcript;
 use crate::domain::Events;
 use anyhow::Result;
 use bots::Bots;
-pub(crate) use bots::{BotRegistrationOptions, BotSession};
+pub(crate) use bots::{BotSession, RegisteredBot};
 pub(crate) use chats::Chats;
 use inbox::Inbox;
 use prompts::Prompts;
@@ -152,6 +152,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::MessageSource;
     use serde_json::json;
 
     #[test]
@@ -233,7 +234,7 @@ mod tests {
             repos.chats.save(&room)?;
             let rich=json!({"content":[{"content":[{"type":"mention","attrs":{"id":"b","label":"같은 이름"}}]}]});
             let message=repos.append_entry("r",json!({"kind":"message","content":"@같은이름","richText":rich.to_string()}),events)?;
-            repos.inbox.deliver(&room,&message,None,0,false)?;
+            repos.inbox.deliver(&room,&message,MessageSource::User,0)?;
             assert!(repos.inbox.list("a")?.is_empty());
             assert_eq!(repos.inbox.list("b")?[0]["messageId"],message["id"]);
             room["memberIds"]=json!(["a"]);
@@ -256,7 +257,7 @@ mod tests {
             let question = repos.append_entry("room",json!({"kind":"send-message","author":{"id":"alice"}}),events)?;
             let mut post = |room: &Value, parent: &Value, text: &str| -> Result<usize> {
                 let reply = repos.append_entry("room",json!({"kind":"send-message","author":{"id":"bob"},"replyTo":parent,"message":{"type":"text","content":text}}),events)?;
-                Ok(repos.inbox.deliver(room,&reply,Some("bob"),2,false)?.len())
+                Ok(repos.inbox.deliver(room,&reply,MessageSource::Bot("bob"),2)?.len())
             };
             assert_eq!(post(&room,&question["id"],"@alice the build passed")?,1);
             assert_eq!(post(&room,&question["id"],"@carol please review")?,2);
@@ -285,7 +286,7 @@ mod tests {
             let request = repos.append_entry("room", json!({"kind":"send-message","delegation":{"state":"queued"}}), events)?;
             let tracking_id = request["id"].as_str().unwrap();
             let link = DelegationRef {chat_id:"room".into(),entry_id:tracking_id.into(),root_id:tracking_id.into()};
-            repos.inbox.deliver(&room,&request,None,0,false)?;
+            repos.inbox.deliver(&room,&request,MessageSource::User,0)?;
             let start = |bot| -> Result<_> {
                 let (_,job) = repos.inbox.reserve_next(bot)?.unwrap();
                 let delivery = job.delivery.unwrap();

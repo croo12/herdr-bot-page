@@ -1,15 +1,10 @@
+use super::DelegationRef;
+
 #[derive(Clone)]
 pub(crate) struct Delivery {
     pub chat: String,
     pub bot: String,
     pub seq: i64,
-}
-
-#[derive(Clone)]
-pub(crate) struct DelegationRef {
-    pub chat_id: String,
-    pub entry_id: String,
-    pub root_id: String,
 }
 
 #[derive(Clone, Default)]

@@ -11,7 +11,7 @@ pub(crate) struct ProviderDraft {
     pub options: ProviderOptions,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProviderOptions {
     pub model: Option<String>,
@@ -37,7 +37,7 @@ impl ProviderDraft {
             .as_ref()
             .is_some_and(|model| !model.trim().is_empty());
         let effort_selected = self.options.reasoning_effort.is_some();
-        let provider = self.existing(default_permission);
+        let provider = self.existing(Some(default_permission));
         let name = provider.name();
         let (supports_model, supports_effort) = match &provider {
             Provider::Claude { .. } | Provider::Codex { .. } | Provider::Grok { .. } => {
@@ -66,8 +66,8 @@ impl ProviderDraft {
     }
 
     /// An existing external agent may not report its model or reasoning effort.
-    pub fn existing(self, default_permission: PermissionMode) -> Provider {
-        let permission = self.options.permission_mode.unwrap_or(default_permission);
+    pub fn existing(self, default_permission: Option<PermissionMode>) -> Provider {
+        let permission = self.options.permission_mode.or(default_permission);
         let model = self.options.model;
         let reasoning_effort = self.options.reasoning_effort;
         match self.provider.as_str() {
@@ -75,16 +75,18 @@ impl ProviderDraft {
                 model: model.map(ClaudeModelId),
                 reasoning_effort,
                 permission_mode: match permission {
-                    PermissionMode::Ask => ClaudePermissionMode::Default,
-                    PermissionMode::Auto => ClaudePermissionMode::BypassPermissions,
+                    None => ClaudePermissionMode::Inherit,
+                    Some(PermissionMode::Ask) => ClaudePermissionMode::Default,
+                    Some(PermissionMode::Auto) => ClaudePermissionMode::BypassPermissions,
                 },
             },
             "codex" => Provider::Codex {
                 model: model.map(CodexModelId),
                 reasoning_effort,
                 permission_mode: match permission {
-                    PermissionMode::Ask => CodexPermissionMode::Default,
-                    PermissionMode::Auto => CodexPermissionMode::WorkspaceWriteOnRequest,
+                    None => CodexPermissionMode::Inherit,
+                    Some(PermissionMode::Ask) => CodexPermissionMode::Default,
+                    Some(PermissionMode::Auto) => CodexPermissionMode::WorkspaceWriteOnRequest,
                 },
             },
             "grok" => Provider::Grok {
@@ -102,5 +104,106 @@ impl ProviderDraft {
             },
             _ => Provider::Other(self.provider),
         }
+    }
+}
+
+impl Provider {
+    pub fn options(&self) -> ProviderOptions {
+        let (model, effort, permission) = match self {
+            Self::Claude {
+                model,
+                reasoning_effort,
+                permission_mode,
+            } => (
+                model.as_ref().map(|model| &model.0),
+                reasoning_effort.as_ref(),
+                match permission_mode {
+                    ClaudePermissionMode::Inherit => None,
+                    ClaudePermissionMode::Default => Some(PermissionMode::Ask),
+                    ClaudePermissionMode::BypassPermissions => Some(PermissionMode::Auto),
+                },
+            ),
+            Self::Codex {
+                model,
+                reasoning_effort,
+                permission_mode,
+            } => (
+                model.as_ref().map(|model| &model.0),
+                reasoning_effort.as_ref(),
+                match permission_mode {
+                    CodexPermissionMode::Inherit => None,
+                    CodexPermissionMode::Default => Some(PermissionMode::Ask),
+                    CodexPermissionMode::WorkspaceWriteOnRequest => Some(PermissionMode::Auto),
+                },
+            ),
+            Self::Grok {
+                model,
+                reasoning_effort,
+            } => (
+                model.as_ref().map(|model| &model.0),
+                reasoning_effort.as_ref(),
+                None,
+            ),
+            Self::Gemini { model } => (model.as_ref().map(|model| &model.0), None, None),
+            Self::Antigravity { model } => (model.as_ref().map(|model| &model.0), None, None),
+            Self::OpenCode { model } => (model.as_ref().map(|model| &model.0), None, None),
+            Self::Other(_) => (None, None, None),
+        };
+        ProviderOptions {
+            model: model.cloned(),
+            reasoning_effort: effort.cloned(),
+            permission_mode: permission,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn saved_settings_round_trip_only_the_fields_the_provider_uses() -> Result<()> {
+        for (name, model, effort, permission) in [
+            (
+                "claude",
+                Some("custom"),
+                Some(ReasoningEffort::High),
+                Some(PermissionMode::Auto),
+            ),
+            (
+                "codex",
+                Some("custom"),
+                Some(ReasoningEffort::High),
+                Some(PermissionMode::Auto),
+            ),
+            ("grok", Some("custom"), Some(ReasoningEffort::High), None),
+            ("gemini", Some("custom"), None, None),
+            ("agy", Some("custom"), None, None),
+            ("opencode", Some("custom"), None, None),
+            ("pi", None, None, None),
+        ] {
+            let draft: ProviderDraft = serde_json::from_value(json!({
+                "provider": name, "model": "custom", "reasoningEffort": "high", "permissionMode": "auto",
+            }))?;
+            let provider = draft.existing(None);
+            let options = provider.options();
+            assert_eq!(options.model.as_deref(), model);
+            assert_eq!(options.reasoning_effort, effort);
+            assert_eq!(options.permission_mode, permission);
+            assert_eq!(
+                ProviderDraft {
+                    provider: name.into(),
+                    options
+                }
+                .existing(None),
+                provider
+            );
+        }
+        for name in ["claude", "codex"] {
+            let legacy: ProviderDraft = serde_json::from_value(json!({"provider":name}))?;
+            assert_eq!(legacy.existing(None).options().permission_mode, None);
+        }
+        Ok(())
     }
 }

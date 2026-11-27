@@ -1,8 +1,11 @@
 use super::screen::{parse_screen, select_menu_option};
 use crate::{
-    domain::{need, permission_reply, string_field},
-    infrastructure::{herdr::Herdr, AgentSessions},
-    storage::Store,
+    domain::{bot::BotId, need, permission_reply, string_field, DelegationUpdate},
+    infrastructure::{
+        herdr::{Herdr, HerdrAgent},
+        AgentSessions,
+    },
+    storage::{RegisteredBot, Store},
 };
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
@@ -27,22 +30,22 @@ fn read_prompt(herdr: &Herdr, pane: &str, provider: &str) -> Result<Value> {
 pub(crate) fn refresh_status(
     store: &Store,
     sessions: &AgentSessions,
-    chats: &[Value],
-    agents: &[Value],
+    bots: &[RegisteredBot],
+    agents: &[HerdrAgent],
 ) -> Result<()> {
-    for chat in chats.iter().filter(|chat| chat["kind"] == "bot") {
-        let id = need(chat, "id")?;
-        let live = agents
-            .iter()
-            .find(|agent| agent["name"] == id && agent["pane_id"] == chat["bot"]["paneId"]);
-        let status = live
-            .and_then(|agent| agent["agent_status"].as_str())
-            .unwrap_or("offline");
+    for RegisteredBot { bot, session } in bots {
+        let id = bot.id.as_str();
+        let live = agents.iter().find(|agent| {
+            agent.name() == Some(id)
+                && agent.pane_id().is_some()
+                && agent.pane_id() == session.pane_id.as_deref()
+        });
+        let status = live.and_then(HerdrAgent::status).unwrap_or("offline");
         let prompt = if status == "blocked" {
             read_prompt(
                 &sessions.herdr,
-                need(&chat["bot"], "paneId")?,
-                string_field(&chat["bot"], "provider"),
+                session.required_pane()?,
+                bot.provider.name(),
             )
             .unwrap_or(Value::Null)
         } else {
@@ -57,13 +60,12 @@ pub(crate) fn refresh_status(
         let active_chat = active_turn.as_ref().map(|(chat, _)| chat.as_str());
         let delegation = active_turn.as_ref().and_then(|(_, link)| link.as_ref());
         store.tx(|repos, events| {
-            let mut row = repos.chats.get(id)?;
-            if row["bot"]["status"] == status && row["bot"]["pendingPrompt"] == prompt {
+            if session.status.as_deref() == Some(status) && session.pending_prompt == prompt {
                 return Ok(());
             }
             let pending = repos.prompts.pending(id)?;
             // Herdr can display an already answered menu for one more refresh.
-            if pending.is_none() && !prompt.is_null() && row["bot"]["pendingPrompt"]["signature"] == prompt["signature"] {
+            if pending.is_none() && !prompt.is_null() && session.pending_prompt["signature"] == prompt["signature"] {
                 return Ok(());
             }
             let target = active_chat.map(str::to_owned).or_else(|| pending.as_ref().map(|(chat, _)| chat.clone()));
@@ -73,11 +75,12 @@ pub(crate) fn refresh_status(
                 if same_prompt { entry["prompt"] = prompt.clone(); } else { entry["status"] = "resolved".into(); }
                 repos.update_entry(&previous_chat, &entry, events)?;
                 if let Some(link) = delegation {
-                    if same_prompt {
-                        repos.set_delegation_state(link, "waiting", Some((&previous_chat, need(&entry,"id")?)), None, events)?;
+                    let update = if same_prompt {
+                        DelegationUpdate::Waiting { chat_id: previous_chat, prompt_id: need(&entry, "id")?.into() }
                     } else {
-                        repos.set_delegation_state(link, "running", None, None, events)?;
-                    }
+                        DelegationUpdate::Running { last_error: None }
+                    };
+                    repos.set_delegation_state(link, update, events)?;
                 }
             }
             if !same_prompt && !prompt.is_null() {
@@ -87,24 +90,15 @@ pub(crate) fn refresh_status(
                     Some(chat) if crate::domain::visible_to(&repos.chats.get(chat)?,None)=>chat.to_owned(),
                     _=>need(&repos.chats.open_direct(id,None,events)?,"id")?.to_owned(),
                 };
-                let mut entry = json!({"kind": "prompt", "prompt": prompt, "status": "pending", "originChatId":origin, "author": {"id": id, "name": row["name"]}});
+                let mut entry = json!({"kind": "prompt", "prompt": prompt, "status": "pending", "originChatId":origin, "author": {"id": id, "name": bot.name}});
                 if let Some(link) = delegation { entry["delegationId"] = json!(link.entry_id); }
                 let entry = repos.append_entry(&target, entry, events)?;
                 if let Some(link) = delegation {
-                    repos.set_delegation_state(link, "waiting", Some((&target, need(&entry,"id")?)), None, events)?;
+                    let update = DelegationUpdate::Waiting { chat_id: target, prompt_id: need(&entry, "id")?.into() };
+                    repos.set_delegation_state(link, update, events)?;
                 }
-                row = repos.chats.get(id)?;
             }
-            row["bot"]["status"] = status.into();
-            row["bot"]["pendingPrompt"] = prompt;
-            row["isRunning"] = (status == "working").into();
-            row["currentActivity"] = if status == "working" { json!({"verb":"working"}) } else { Value::Null };
-            row["awaitingUserResponse"] = match status {
-                "blocked" => json!({"reason": "approval"}),
-                "offline" => json!({"reason": "offline"}),
-                _ => Value::Null,
-            };
-            repos.chats.save_changed(&row, events)
+            repos.update_bot_status(&bot.id, status, prompt, events)
         })?;
     }
     Ok(())
@@ -126,13 +120,13 @@ pub(crate) fn answer_locked(
     review: Option<&Value>,
 ) -> Result<Value> {
     let id = need(params, "botId")?;
-    let row = store.tx(|repos, _| repos.chats.get(id))?;
-    let pane = need(&row["bot"], "paneId")?;
-    let live = sessions.herdr.run(&["agent", "get", pane])?;
-    if live["agent"]["agent_status"] != "blocked" || live["agent"]["name"] != id {
+    let registered = store.tx(|repos, _| repos.bots.registration(&BotId::from(id)))?;
+    let pane = registered.session.required_pane()?;
+    let live = sessions.herdr.get_agent(pane)?;
+    if live.status() != Some("blocked") || live.name() != Some(id) || live.pane_id() != Some(pane) {
         bail!("not_blocked: agent is no longer waiting")
     }
-    let provider = need(&row["bot"], "provider")?;
+    let provider = registered.bot.provider.name();
     let prompt = read_prompt(&sessions.herdr, pane, provider)?;
     if prompt["signature"] != params["signature"] {
         bail!("prompt_changed: form changed")
@@ -229,7 +223,11 @@ pub(crate) fn answer_locked(
                     repos.append_entry(&target, reply, events)?;
                 }
                 if let Some(link) = &delegation {
-                    repos.set_delegation_state(link, "running", None, None, events)?;
+                    repos.set_delegation_state(
+                        link,
+                        DelegationUpdate::Running { last_error: None },
+                        events,
+                    )?;
                 }
                 answered_chat = Some(entry["originChatId"].as_str().unwrap_or(&target).to_owned());
             }

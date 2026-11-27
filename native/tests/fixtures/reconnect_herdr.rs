@@ -42,7 +42,7 @@ fn main() {
         }
         ("agent", "start") if args[6] == "w9:p1" => {
             assert_eq!(args[4], "claude");
-            assert!(!args.iter().any(|arg| arg == "--model" || arg == "--effort"));
+            fs::write(home.join("last-launch-options"), args[9..].join(" ")).unwrap();
             format!(r#""agent":{}"#, agent("external", "w9:p1"))
         }
         ("agent", "start") => {
@@ -52,6 +52,23 @@ fn main() {
             assert_eq!(&args[9..], ["--", "-s", "workspace-write", "-a", "on-request", "--model", "test-model", "--config", "model_reasoning_effort=\"high\""]);
             fs::File::create_new(home.join(managed.replace(':', "-"))).unwrap();
             format!(r#""agent":{}"#, agent("managed", managed))
+        }
+        ("agent", "rename") if home.join("fail-replacement").exists() => {
+            match (args[2].as_str(), args[3].as_str()) {
+                ("w5:p3", "--clear") => fs::write(home.join("name-cleared"), "").unwrap(),
+                ("w9:p1", "external") => {
+                    assert!(home.join("name-cleared").exists());
+                    eprintln!("simulated rename failure");
+                    std::process::exit(1);
+                }
+                ("w5:p3", "external") => fs::write(home.join("name-restored"), "").unwrap(),
+                _ => panic!("unexpected rename {:?}", args),
+            }
+            String::new()
+        }
+        ("pane", "close") if args[2] == "w9:p1" => {
+            fs::write(home.join("replacement-closed"), "").unwrap();
+            String::new()
         }
         ("agent", "rename") => String::new(),
         ("agent", "prompt") => {

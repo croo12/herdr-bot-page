@@ -158,12 +158,23 @@ fn quick_create_registers_an_existing_agent_and_greets_in_its_direct_chat() {
     assert_eq!(profile["bot"]["cwd"], ".");
     assert_eq!(profile["bot"]["adopted"], true);
     assert_eq!(profile["bot"]["paneId"], "w1:p1");
-    assert_eq!(profile["bot"]["permissionMode"], "ask");
+    assert_eq!(profile["bot"]["permissionMode"], Value::Null);
     assert_eq!(profile["title"], "Reviewer");
     assert_eq!(profile["description"], "Review changes");
     assert_eq!(profile["avatarColor"], "violet");
     assert_eq!(profile["avatarShape"], "circle");
     assert_eq!(call()["chat"]["id"], profile["id"]);
+    let edited = ipc::request(
+        home,
+        "cli.profileUpdate",
+        json!({"paneId":"w1:p1","title":"Lead","avatarShape":null}),
+    )
+    .unwrap();
+    assert_eq!(edited["title"], "Lead");
+    assert_eq!(edited["description"], "Review changes");
+    assert_eq!(edited["avatarShape"], Value::Null);
+    assert_eq!(edited["avatarColor"], "violet");
+    assert_eq!(edited["bot"]["paneId"], "w1:p1");
     let direct = ipc::request(home, "chat.openDirect", json!({"botId":"tester"})).unwrap();
     // A later delivery to the same bot runs after every greeting queued by the two calls.
     ipc::request(

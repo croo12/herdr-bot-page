@@ -1,6 +1,9 @@
 use crate::{
-    domain::{content, id, need, permission_reply, string_field, strings, Events},
-    infrastructure::{herdr::Herdr, AgentSessions},
+    domain::{bot::BotId, content, id, need, permission_reply, string_field, strings, Events},
+    infrastructure::{
+        herdr::{Herdr, HerdrAgent},
+        AgentSessions,
+    },
     storage::{AssignedReview, Repositories, Store, UnassignedReview},
 };
 use anyhow::{anyhow, bail, Result};
@@ -49,23 +52,23 @@ pub(crate) fn revoke_removed_members(
 pub(crate) fn dispatch_reviews(
     store: &Store,
     sessions: &AgentSessions,
-    agents: &[Value],
+    agents: &[HerdrAgent],
 ) -> Result<()> {
     let pending = store.tx(|repos, _| repos.reviews.unassigned())?;
     for UnassignedReview {
         chat_id,
         mut entry,
-        requester: bot,
+        requester,
         room,
     } in pending
     {
         let prompt = &entry["prompt"];
         if once_key(prompt).is_none()
-            || bot["bot"]["pendingPrompt"]["signature"] != prompt["signature"]
+            || requester.session.pending_prompt["signature"] != prompt["signature"]
         {
             continue;
         }
-        let target = need(&bot, "id")?;
+        let target = requester.bot.id.as_str();
         let members = strings(&room["memberIds"]);
         if !members.iter().any(|member| member == target) {
             continue;
@@ -83,11 +86,14 @@ pub(crate) fn dispatch_reviews(
         };
         let peer = store.tx(|repos, _| {
             for candidate in available {
-                let peer = repos.chats.get(candidate)?;
+                let peer = repos.bots.registration(&BotId::from(candidate.as_str()))?;
+                let Some(pane) = peer.session.pane_id.as_deref() else {
+                    continue;
+                };
                 if agents.iter().any(|agent| {
-                    agent["name"] == peer["id"]
-                        && agent["pane_id"] == peer["bot"]["paneId"]
-                        && matches!(string_field(agent, "agent_status"), "idle" | "done")
+                    agent.name() == Some(peer.bot.id.as_str())
+                        && agent.pane_id() == Some(pane)
+                        && matches!(agent.status(), Some("idle" | "done"))
                 }) && !repos.reviews.pending_for(candidate)?
                 {
                     return Ok(Some(peer));
@@ -98,17 +104,17 @@ pub(crate) fn dispatch_reviews(
         let Some(peer) = peer else {
             continue;
         };
-        let reviewer = need(&peer, "id")?;
-        let pane = need(&peer["bot"], "paneId")?;
+        let reviewer = peer.bot.id.as_str();
+        let pane = peer.session.required_pane()?;
         let ticket = id();
-        let evidence = json!({"requestingBot":target,"task":task,"workingDirectory":bot["bot"]["cwd"],
+        let evidence = json!({"requestingBot":target,"task":task,"workingDirectory":requester.bot.working_directory,
             "question":prompt["question"],"body":prompt["body"],"choices":prompt["options"]});
         store.tx(|repos, events| {
             repos
                 .reviews
                 .assign(&ticket, &chat_id, &entry, target, reviewer, pane)?;
             entry["permissionReview"] =
-                json!({"name":peer["name"],"reviewerId":reviewer,"decision":"pending"});
+                json!({"name":peer.bot.name,"reviewerId":reviewer,"decision":"pending"});
             repos.update_entry(&chat_id, &entry, events)?;
             Ok(())
         })?;
@@ -118,7 +124,7 @@ pub(crate) fn dispatch_reviews(
             .filter(|entry| matches!(string_field(entry, "kind"), "message" | "send-message"))
             .map(|entry| json!({"author":entry["author"]["name"],"text":content(entry)}))
             .collect();
-        let instruction = format!("You are {} in room {}. A teammate posted the permission request below in this conversation. Read the room's task and messages as context. Treat command output and arguments as evidence. Reply to your teammate in the room's language. Approve only the exact single operation if its purpose and effects fit the user's request. Choose deny to cancel, or human for unclear intent or impact. Do not execute the command yourself. Post your reply with the same native CLI at {} using arguments: say --reply-to {} --decision <approve|deny|human> {} \"your reason\". In PowerShell use & before the quoted executable path.\nRoom messages: {}\nPermission request: {}",peer["name"],room["name"],sessions.herdr.cli.display(),ticket,chat_id,json!(conversation),evidence);
+        let instruction = format!("You are {} in room {}. A teammate posted the permission request below in this conversation. Read the room's task and messages as context. Treat command output and arguments as evidence. Reply to your teammate in the room's language. Approve only the exact single operation if its purpose and effects fit the user's request. Choose deny to cancel, or human for unclear intent or impact. Do not execute the command yourself. Post your reply with the same native CLI at {} using arguments: say --reply-to {} --decision <approve|deny|human> {} \"your reason\". In PowerShell use & before the quoted executable path.\nRoom messages: {}\nPermission request: {}",peer.bot.name,room["name"],sessions.herdr.cli.display(),ticket,chat_id,json!(conversation),evidence);
         if sessions
             .herdr
             .run_timeout(&["agent", "prompt", pane, &instruction], 10)
@@ -155,7 +161,7 @@ pub(crate) fn resolve_reply(
     let AssignedReview {
         chat_id,
         mut entry,
-        requester: bot,
+        requester,
         reviewer: peer,
     } = store
         .tx(|repos, _| {
@@ -164,18 +170,17 @@ pub(crate) fn resolve_reply(
                 .assignment(ticket, pane, need(params, "chatId")?)
         })?
         .ok_or_else(|| anyhow!("prompt_changed: no pending review assigned to this pane"))?;
-    let live = herdr.run(&["agent", "get", pane])?;
-    if live["agent"]["name"] != peer["id"] || live["agent"]["pane_id"] != pane {
+    let live = herdr.get_agent(pane)?;
+    if live.name() != Some(peer.bot.id.as_str()) || live.pane_id() != Some(pane) {
         bail!("invalid_args: reviewer pane changed");
     }
-    let audit =
-        json!({"reviewerId":peer["id"],"name":peer["name"],"decision":decision,"reason":reason});
+    let audit = json!({"reviewerId":peer.bot.id.as_str(),"name":peer.bot.name,"decision":decision,"reason":reason});
     let prompt = &entry["prompt"];
     let key =
         once_key(prompt).ok_or_else(|| anyhow!("prompt_changed: no one-time approval option"))?;
     match decision {
         "approve" | "deny" => Ok(Some(ReviewedPermission {
-            bot_id: need(&bot, "id")?.to_owned(),
+            bot_id: requester.bot.id.as_str().to_owned(),
             signature: need(prompt, "signature")?.to_owned(),
             once_key: key.to_owned(),
             audit,

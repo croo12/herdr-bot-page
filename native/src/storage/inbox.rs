@@ -1,4 +1,6 @@
-use crate::domain::{content, need, now, strings, ChatJob, Delivery, TurnContext};
+use crate::domain::{
+    content, need, now, strings, ChatJob, DelegationUpdate, Delivery, MessageSource, TurnContext,
+};
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
@@ -14,9 +16,8 @@ impl<'db> Inbox<'db> {
         &self,
         chat: &Value,
         entry: &Value,
-        sender: Option<&str>,
+        source: MessageSource<'_>,
         depth: u8,
-        delegate: bool,
     ) -> Result<Vec<String>> {
         let mut recipients = Vec::new();
         let members = strings(&chat["memberIds"]);
@@ -31,32 +32,33 @@ impl<'db> Inbox<'db> {
             .filter(|node| node["type"] == "mention")
             .map(|node| &node["attrs"])
             .collect();
-        let mut mentions: Vec<_> = text
-            .split(|character: char| {
-                !(character.is_ascii_alphanumeric() || matches!(character, '@' | '-' | '_'))
-            })
-            .filter_map(|word| word.strip_prefix('@'))
-            .collect();
-        let all = if chips.is_empty() {
-            mentions
+        let (mentions, all, addressed) = if chips.is_empty() {
+            let mentions: Vec<_> = text
+                .split(|character: char| {
+                    !(character.is_ascii_alphanumeric() || matches!(character, '@' | '-' | '_'))
+                })
+                .filter_map(|word| word.strip_prefix('@'))
+                .collect();
+            let all = mentions
                 .iter()
-                .any(|id| id.eq_ignore_ascii_case("everyone") || id.eq_ignore_ascii_case("all"))
+                .any(|id| id.eq_ignore_ascii_case("everyone") || id.eq_ignore_ascii_case("all"));
+            let addressed = members.iter().any(|id| mentions.contains(&id.as_str()));
+            (mentions, all, addressed)
         } else {
-            chips.iter().any(|attrs| attrs["everyone"] == true)
-        };
-        let addressed = if chips.is_empty() {
-            members.iter().any(|id| mentions.contains(&id.as_str()))
-        } else {
-            mentions = chips
+            let mentions = chips
                 .iter()
                 .filter_map(|attrs| attrs["id"].as_str())
                 .collect();
-            true
+            (
+                mentions,
+                chips.iter().any(|attrs| attrs["everyone"] == true),
+                true,
+            )
         };
         let room = chat["kind"] == "room";
-        let broadcast = all || (!addressed && (sender.is_none() || delegate));
-        let reply_author = match (room, sender, delegate, entry["replyTo"].as_str()) {
-            (true, Some(_), false, Some(parent_id)) => {
+        let broadcast = all || (!addressed && !matches!(source, MessageSource::Bot(_)));
+        let reply_author = match (room, source, entry["replyTo"].as_str()) {
+            (true, MessageSource::Bot(_), Some(parent_id)) => {
                 let parent = super::Transcript::new(self.0).by_id(need(chat, "id")?, parent_id)?;
                 if parent["kind"] == "send-message" {
                     parent["author"]["id"].as_str().map(str::to_owned)
@@ -67,7 +69,7 @@ impl<'db> Inbox<'db> {
             _ => None,
         };
         for bot in members {
-            if sender == Some(bot.as_str()) {
+            if source.bot_id() == Some(bot.as_str()) {
                 continue;
             }
             if room
@@ -177,12 +179,23 @@ impl<'db> Inbox<'db> {
             .optional()?
             .ok_or_else(|| anyhow::anyhow!("invalid_args: no matching inactive delivery"))
     }
-    pub fn remaining(&self, delivery: &Delivery) -> Result<(usize, bool, Option<String>)> {
+    pub fn delegation_progress(&self, delivery: &Delivery) -> Result<DelegationUpdate> {
         Ok(self.0.query_row(
             "SELECT count(*),count(*) FILTER (WHERE state='working')>0,
              max(CASE WHEN state='unconfirmed' THEN coalesce(last_error,'Delivery was not confirmed') ELSE last_error END)
              FROM inbox WHERE chat=? AND seq=?",
-            params![delivery.chat,delivery.seq], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))
+            params![delivery.chat, delivery.seq],
+            |row| {
+                let remaining: usize = row.get(0)?;
+                let working: bool = row.get(1)?;
+                let last_error: Option<String> = row.get(2)?;
+                Ok(match (working, last_error, remaining) {
+                    (true, last_error, _) => DelegationUpdate::Running { last_error },
+                    (false, Some(error), _) => DelegationUpdate::Failed(error),
+                    (false, None, 0) => DelegationUpdate::Completed,
+                    (false, None, _) => DelegationUpdate::Queued,
+                })
+            },
         )?)
     }
 

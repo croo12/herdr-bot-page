@@ -1,5 +1,7 @@
 use super::{Repositories, Store};
-use crate::domain::{id, now, record_latest_entry, DelegationRef, Delivery, Events, TurnContext};
+use crate::domain::{
+    id, now, record_latest_entry, DelegationRef, DelegationUpdate, Delivery, Events, TurnContext,
+};
 use anyhow::Result;
 use serde_json::{json, Value};
 
@@ -57,26 +59,15 @@ impl Repositories<'_> {
         events: &mut Events,
     ) -> Result<()> {
         if let Some(link) = link {
-            let (remaining, working, error) = self.inbox.remaining(delivery)?;
-            let state = if working {
-                "running"
-            } else if error.is_some() {
-                "failed"
-            } else if remaining == 0 {
-                "completed"
-            } else {
-                "queued"
-            };
-            self.set_delegation_state(link, state, None, error.as_deref(), events)?;
+            let update = self.inbox.delegation_progress(delivery)?;
+            self.set_delegation_state(link, update, events)?;
         }
         Ok(())
     }
     pub(crate) fn set_delegation_state(
         &self,
         link: &DelegationRef,
-        state: &str,
-        prompt: Option<(&str, &str)>,
-        detail: Option<&str>,
+        update: DelegationUpdate,
         events: &mut Events,
     ) -> Result<()> {
         // The source conversation can be deleted while its worker finishes in another chat.
@@ -86,23 +77,33 @@ impl Repositories<'_> {
         let mut entry = self.transcript.by_id(&link.chat_id, &link.entry_id)?;
         let tracking = &mut entry["delegation"];
         // The bot can acknowledge its delivery while a prompt refresh is still in flight.
-        if tracking["state"] == "completed" && matches!(state, "running" | "waiting") {
+        if tracking["state"] == "completed"
+            && matches!(
+                update,
+                DelegationUpdate::Running { .. } | DelegationUpdate::Waiting { .. }
+            )
+        {
             return Ok(());
         }
         // Another recipient of the same room delegation can still be waiting for an answer.
-        let pending = if prompt.is_none() && state != "completed" {
-            self.prompts.pending_for_delegation(&link.entry_id)?
-        } else {
-            None
+        let prompt = match &update {
+            DelegationUpdate::Waiting { chat_id, prompt_id } => {
+                Some((chat_id.clone(), prompt_id.clone()))
+            }
+            DelegationUpdate::Completed => None,
+            _ => self.prompts.pending_for_delegation(&link.entry_id)?,
         };
-        let prompt = prompt.or_else(|| {
-            pending
-                .as_ref()
-                .map(|(chat, id)| (chat.as_str(), id.as_str()))
-        });
+        let (state, detail) = match update {
+            DelegationUpdate::Queued => ("queued", None),
+            DelegationUpdate::Running { last_error } => ("running", last_error),
+            DelegationUpdate::Waiting { .. } => ("waiting", None),
+            DelegationUpdate::Completed => ("completed", None),
+            DelegationUpdate::Failed(error) => ("failed", Some(error)),
+        };
         tracking["state"] = if prompt.is_some() { "waiting" } else { state }.into();
-        tracking["promptId"] = json!(prompt.map(|(_, id)| id));
-        tracking["promptChatId"] = json!(prompt.map(|(chat, _)| chat));
+        let (prompt_chat, prompt_id) = prompt.unzip();
+        tracking["promptId"] = json!(prompt_id);
+        tracking["promptChatId"] = json!(prompt_chat);
         tracking["detail"] = json!(detail);
         self.update_entry(&link.chat_id, &entry, events)
     }

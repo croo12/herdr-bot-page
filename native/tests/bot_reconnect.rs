@@ -46,6 +46,13 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
         )
         .unwrap();
     assert_eq!(managed["chat"]["bot"]["adopted"], false);
+    let available = engine.call("bot.listAdoptable", Value::Null).unwrap();
+    assert_eq!(available.as_array().unwrap().len(), 2);
+    assert!(available
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|agent| agent["paneId"] == "w5:p3" && agent["provider"] == "claude"));
     for (bot, pane) in [("moved", "w5:p2"), ("external", "w5:p3")] {
         let adopted = engine
             .call(
@@ -56,6 +63,27 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
         assert_eq!(adopted["chat"]["bot"]["paneId"], pane);
         assert_eq!(adopted["chat"]["bot"]["adopted"], true);
     }
+    let directory = home.join("relaunch");
+    std::fs::create_dir(&directory).unwrap();
+    std::fs::write(home.join("fail-replacement"), "").unwrap();
+    assert!(engine
+        .call(
+            "bot.updateLaunchSettings",
+            json!({"botId":"external","cwd":directory})
+        )
+        .is_err());
+    assert!(home.join("name-restored").exists());
+    assert!(home.join("replacement-closed").exists());
+    std::fs::remove_file(home.join("fail-replacement")).unwrap();
+    let after_failure = engine.call("chat.list", Value::Null).unwrap();
+    let external = after_failure
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|profile| profile["id"] == "external")
+        .unwrap();
+    assert_eq!(external["bot"]["paneId"], "w5:p3");
+    assert_eq!(external["bot"]["adopted"], true);
     let room = engine
         .call(
             "room.create",
@@ -102,8 +130,6 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
         );
     }
     // The adopted Claude agent never reported a model. Relaunch must keep its CLI default.
-    let directory = home.join("relaunch");
-    std::fs::create_dir(&directory).unwrap();
     let relaunched = engine
         .call(
             "bot.updateLaunchSettings",
@@ -112,4 +138,27 @@ fn a_room_recovers_missing_managed_and_relocated_agents_before_sending() {
         .unwrap();
     assert_eq!(relaunched["chat"]["bot"]["paneId"], "w9:p1");
     assert_eq!(relaunched["chat"]["bot"]["model"], Value::Null);
+    let cli_options = || std::fs::read_to_string(home.join("last-launch-options")).unwrap();
+    assert!(cli_options().is_empty());
+    engine
+        .call(
+            "bot.updateLaunchSettings",
+            json!({"botId":"external","model":"custom","reasoningEffort":"high"}),
+        )
+        .unwrap();
+    let retried = engine
+        .call("bot.retrySetup", json!({"botId":"external"}))
+        .unwrap();
+    assert_eq!(retried["chat"]["bot"]["model"], "custom");
+    assert!(cli_options().contains("--model custom"));
+    let cleared = engine
+        .call(
+            "bot.updateLaunchSettings",
+            json!({"botId":"external","model":null}),
+        )
+        .unwrap();
+    assert_eq!(cleared["chat"]["bot"]["model"], Value::Null);
+    assert_eq!(cleared["chat"]["bot"]["reasoningEffort"], "high");
+    assert!(!cli_options().contains("--model"));
+    assert!(cli_options().contains("--effort high"));
 }

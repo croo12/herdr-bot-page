@@ -40,3 +40,7 @@ export type {
 export { AppApiError, isAppApiError, toAppApiError } from "./protocol/errors.tsx";
 export { createAppClient } from "./protocol/client.tsx";
 export type { AppApiClient, AppApiClientOptions, AppApiTransport } from "./protocol/client.tsx";
+
+export function providerSupportsPermissionMode(provider: string | null): boolean {
+  return provider === "claude" || provider === "codex";
+}

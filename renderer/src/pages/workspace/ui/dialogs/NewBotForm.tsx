@@ -6,7 +6,7 @@ import { useStoreContext } from "../../model/store/StoreProvider.tsx";
 import { useDialogHost } from "#shared/ui/DialogHost.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
 import { Button, Select, TextArea, TextField } from "#shared/ui/index.tsx";
-import { toAppApiError } from "#shared/api/index.tsx";
+import { providerSupportsPermissionMode, toAppApiError } from "#shared/api/index.tsx";
 import { AdoptAgentSection } from "./AdoptAgentSection.tsx";
 import { emptyBotFormState, isAdopting, validateBotForm } from "../../model/dialogs/bot-form.tsx";
 import type { BotFormState, DirectoryCheck } from "../../model/dialogs/bot-form.tsx";
@@ -64,7 +64,10 @@ export function NewBotForm() {
           ? { adoptPaneId: state.adoptPaneId }
           : { provider: state.provider }),
         cwd: adopting ? undefined : state.cwd,
-        permissionMode: adopting || state.permissionMode == null ? undefined : state.permissionMode,
+        permissionMode:
+          !adopting && providerSupportsPermissionMode(state.provider)
+            ? (state.permissionMode ?? undefined)
+            : undefined,
         model: adopting || state.model == null ? undefined : state.model,
         reasoningEffort:
           adopting || state.reasoningEffort == null ? undefined : state.reasoningEffort,
@@ -127,19 +130,21 @@ export function NewBotForm() {
         </div>
       )}
 
-      <Select
-        label={t("dialogs.new.permissions")}
-        value={state.permissionMode ?? ""}
-        disabled={adopting}
-        onChange={(value) =>
-          patch({ permissionMode: value.length === 0 ? null : (value as "ask" | "auto") })
-        }
-        options={[
-          { value: "", label: t("dialogs.new.permissions.agentDefault") },
-          { value: "ask", label: t("dialogs.new.permissions.ask") },
-          { value: "auto", label: t("dialogs.new.permissions.auto") },
-        ]}
-      />
+      {providerSupportsPermissionMode(state.provider) && (
+        <Select
+          label={t("dialogs.new.permissions")}
+          value={state.permissionMode ?? ""}
+          disabled={adopting}
+          onChange={(value) =>
+            patch({ permissionMode: value.length === 0 ? null : (value as "ask" | "auto") })
+          }
+          options={[
+            { value: "", label: t("dialogs.new.permissions.agentDefault") },
+            { value: "ask", label: t("dialogs.new.permissions.ask") },
+            { value: "auto", label: t("dialogs.new.permissions.auto") },
+          ]}
+        />
+      )}
 
       <AdoptAgentSection
         adoptPaneId={state.adoptPaneId}

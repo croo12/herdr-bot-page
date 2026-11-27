@@ -52,6 +52,7 @@ impl CreateBotRequest {
                 title: self.title,
                 description: self.description,
                 avatar_color: self.avatar_color,
+                avatar_shape: self.avatar_shape,
             },
             options: ProviderOptions {
                 model: self.model,
@@ -59,7 +60,6 @@ impl CreateBotRequest {
                 permission_mode: self.permission_mode,
             },
             target,
-            avatar_shape: self.avatar_shape,
             request_id: self.request_id,
         })
     }

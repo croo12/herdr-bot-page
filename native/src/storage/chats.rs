@@ -103,6 +103,12 @@ impl<'db> Chats<'db> {
             )
             .optional()?)
     }
+    pub(crate) fn contains_id(&self, id: &str) -> Result<bool> {
+        Ok(self.db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM bots WHERE id=?1 UNION ALL SELECT 1 FROM chats WHERE id=?1)",
+            [id], |row| row.get(0),
+        )?)
+    }
     pub(crate) fn save(&self, chat: &Value) -> Result<()> {
         if chat["kind"] == "bot" {
             return super::Bots::new(self.db).save_record(chat);
@@ -126,11 +132,8 @@ impl<'db> Chats<'db> {
     }
 
     pub(crate) fn by_pane(&self, pane: &str) -> Result<Value> {
-        self.pane_owner(pane)?
-            .ok_or_else(|| anyhow!("unknown_bot: pane {pane}"))
-    }
-    pub(crate) fn pane_owner(&self, pane: &str) -> Result<Option<Value>> {
-        Ok(self.db.query_row("SELECT data FROM bots WHERE json_extract(data, '$.bot.paneId') = ? ORDER BY rowid LIMIT 1", [pane], |row| row.get(0)).optional()?)
+        let owner = super::Bots::new(self.db).require_pane_owner(pane)?;
+        self.get(owner.as_str())
     }
     pub(crate) fn for_request(&self, params: &Value) -> Result<Option<Value>> {
         if let Some(request_id) = params["requestId"].as_str() {

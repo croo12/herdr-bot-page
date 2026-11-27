@@ -1,4 +1,5 @@
+mod profile;
 mod service;
-pub(crate) use service::{
-    edit_chat, find_chats, profile_for_pane, update_profile_for_pane, ChatEdit,
-};
+
+pub(crate) use profile::{profile_for_pane, update_profile, ProfileTarget, ProfileUpdate};
+pub(crate) use service::{edit_chat, find_chats, ChatEdit};

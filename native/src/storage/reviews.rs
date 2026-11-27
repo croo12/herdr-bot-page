@@ -1,3 +1,4 @@
+use super::RegisteredBot;
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
@@ -5,15 +6,15 @@ use serde_json::Value;
 pub(crate) struct UnassignedReview {
     pub chat_id: String,
     pub entry: Value,
-    pub requester: Value,
+    pub requester: RegisteredBot,
     pub room: Value,
 }
 
 pub(crate) struct AssignedReview {
     pub chat_id: String,
     pub entry: Value,
-    pub requester: Value,
-    pub reviewer: Value,
+    pub requester: RegisteredBot,
+    pub reviewer: RegisteredBot,
 }
 
 pub(crate) struct Reviews<'db> {

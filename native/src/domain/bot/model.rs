@@ -23,6 +23,7 @@ pub(crate) struct Bot {
     pub label: String,
     pub instruction: String,
     pub avatar_color: Option<AvatarColor>,
+    pub avatar_shape: Option<String>,
     pub working_directory: Option<PathBuf>,
     pub provider: Provider,
 }
@@ -123,12 +124,14 @@ impl ReasoningEffort {
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ClaudePermissionMode {
+    Inherit,
     Default,
     BypassPermissions,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CodexPermissionMode {
+    Inherit,
     Default,
     WorkspaceWriteOnRequest,
 }

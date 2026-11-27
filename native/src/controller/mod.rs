@@ -1,8 +1,10 @@
 mod create_bot;
 pub mod ipc;
+mod profile;
+mod relaunch_bot;
 use crate::modules::{bots, chats, prompts, rooms, settings, tasks, transcript, turns};
 use crate::{
-    domain::{need, string_field, ChatJob},
+    domain::{bot::BotId, need, string_field, ChatJob},
     infrastructure::{paths, request_log::RequestLog, AgentSessions},
     modules::{chats::ChatEdit, turns::AgentAction},
     storage::Store,
@@ -77,19 +79,19 @@ impl Controller<'_> {
                     .as_str()
                     .filter(|pane_id| !pane_id.is_empty())
                 {
-                    Some(repos.chats.by_pane(pane)?)
+                    Some(repos.bots.require_pane_owner(pane)?)
                 } else {
                     None
                 };
                 repos.chats.open_direct(
                     need(&params, "botId")?,
-                    peer.as_ref().and_then(|bot| bot["id"].as_str()),
+                    peer.as_ref().map(BotId::as_str),
                     events,
                 )
             }),
             "cli.inbox" => self.store.tx(|repos, events| {
-                let bot = repos.chats.by_pane(need(&params, "paneId")?)?;
-                let id = need(&bot, "id")?;
+                let bot = repos.bots.require_pane_owner(need(&params, "paneId")?)?;
+                let id = bot.as_str();
                 if let Some(message) = params["ack"].as_str() {
                     repos.resolve_delivery(id, message, false, events)?;
                 }
@@ -101,7 +103,11 @@ impl Controller<'_> {
             "chat.list" | "chat.search" => {
                 chats::find_chats(self.store, string_field(&params, "query"))
             }
-            "chat.updateProfile" => chats::edit_chat(self.store, ChatEdit::Profile, &params),
+            "chat.updateProfile" => chats::update_profile(
+                self.store,
+                chats::ProfileTarget::Chat(need(&params, "chatId")?),
+                profile::input(&params)?,
+            ),
             "chat.setHidden" => chats::edit_chat(self.store, ChatEdit::Hidden, &params),
             "chat.setNotifyOnUpdates" => {
                 chats::edit_chat(self.store, ChatEdit::Notifications, &params)
@@ -146,11 +152,22 @@ impl Controller<'_> {
                 }
             }
             "bot.retrySetup" | "bot.updateLaunchSettings" => {
-                bots::relaunch_bot(self.store, self.sessions, &params)
+                bots::relaunch_bot(self.store, self.sessions, relaunch_bot::input(&params)?)
             }
             "bot.listAdoptable" => bots::adoptable_bots(self.store, self.sessions),
-            "bot.focus" => bots::focus_bot(self.store, &self.sessions.herdr, &params),
-            "bot.connect" => bots::connect_bot(self.store, self.sessions, &params),
+            "bot.focus" => {
+                bots::focus_bot(
+                    self.store,
+                    &self.sessions.herdr,
+                    &BotId::from(need(&params, "botId")?),
+                )?;
+                Ok(Value::Null)
+            }
+            "bot.connect" => bots::connect_bot(
+                self.store,
+                self.sessions,
+                &BotId::from(need(&params, "botId")?),
+            ),
             "prompt.answer" => prompts::answer(self.store, self.sessions, self.user, &params),
             "cli.say" => crate::application::post_reply(
                 self.store,
@@ -163,7 +180,11 @@ impl Controller<'_> {
             "cli.message" => self.agent_action(AgentAction::Delegate, params),
             "cli.dm" => self.agent_action(AgentAction::Direct, params),
             "cli.whoami" | "cli.profile" => chats::profile_for_pane(self.store, &params),
-            "cli.profileUpdate" => chats::update_profile_for_pane(self.store, params),
+            "cli.profileUpdate" => chats::update_profile(
+                self.store,
+                chats::ProfileTarget::Pane(need(&params, "paneId")?),
+                profile::input(&params)?,
+            ),
             _ => bail!("unknown_method: {method}"),
         }
     }

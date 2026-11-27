@@ -1,5 +1,5 @@
 use crate::{
-    domain::{need, strings, DelegationRef},
+    domain::{bot::Bot, need, strings, DelegationRef, DelegationUpdate, MessageSource},
     infrastructure::AgentSessions,
     storage::{Repositories, Store},
 };
@@ -13,9 +13,9 @@ pub(crate) enum AgentAction {
     Direct,
 }
 
-fn message_entry(repos: &Repositories, chat: &Value, bot: &Value, params: &Value) -> Result<Value> {
+fn message_entry(repos: &Repositories, chat: &Value, bot: &Bot, params: &Value) -> Result<Value> {
     let chat_id = need(chat, "id")?;
-    let bot_id = need(bot, "id")?;
+    let bot_id = bot.id.as_str();
     let text = need(params, "text")?;
     anyhow::ensure!(
         chat["archived"] != true && strings(&chat["memberIds"]).iter().any(|id| id == bot_id),
@@ -23,7 +23,7 @@ fn message_entry(repos: &Repositories, chat: &Value, bot: &Value, params: &Value
     );
     let mut entry = json!({
         "kind":"send-message",
-        "author":{"id":bot_id,"name":bot["name"]},
+        "author":{"id":bot_id,"name":bot.name},
         "message":{"type":"text","content":text}
     });
     if let Some(parent) = params["replyTo"].as_str() {
@@ -43,8 +43,8 @@ pub(crate) fn agent_action(
     params: Value,
 ) -> Result<Value> {
     let pane = need(&params, "paneId")?;
-    let bot = store.tx(|repos, _| repos.chats.by_pane(pane))?;
-    let bot_id = need(&bot, "id")?;
+    let bot = store.tx(|repos, _| repos.bots.get(&repos.bots.require_pane_owner(pane)?))?;
+    let bot_id = bot.id.as_str();
     let requested = need(&params, "chatId")?;
     let mut active = sessions.active.lock().unwrap();
     if action == AgentAction::Direct && !active.contains_key(bot_id) {
@@ -52,7 +52,9 @@ pub(crate) fn agent_action(
             let dm = repos.chats.open_direct(requested, Some(bot_id), events)?;
             let entry = message_entry(repos, &dm, &bot, &params)?;
             let entry = repos.append_entry(need(&dm, "id")?, entry, events)?;
-            let recipients = repos.inbox.deliver(&dm, &entry, Some(bot_id), 0, false)?;
+            let recipients = repos
+                .inbox
+                .deliver(&dm, &entry, MessageSource::Bot(bot_id), 0)?;
             Ok((json!({"chatId":dm["id"],"entryId":entry["id"]}), recipients))
         })?;
         drop(active);
@@ -142,16 +144,16 @@ pub(crate) fn agent_action(
                     json!({"chatId":link.chat_id,"entryId":link.entry_id,"rootId":link.root_id});
                 repos.append_entry(target, entry, events)?
             };
-            let recipients =
-                repos
-                    .inbox
-                    .deliver(&chat, &posted, Some(bot_id), turn.depth + 1, true)?;
+            let recipients = repos.inbox.deliver(
+                &chat,
+                &posted,
+                MessageSource::Delegation(bot_id),
+                turn.depth + 1,
+            )?;
             if recipients.is_empty() {
                 repos.set_delegation_state(
                     &link,
-                    "failed",
-                    None,
-                    Some("No recipient for this delegation."),
+                    DelegationUpdate::Failed("No recipient for this delegation.".into()),
                     events,
                 )?;
             }
@@ -167,7 +169,7 @@ pub(crate) fn agent_action(
             let recipients =
                 repos
                     .inbox
-                    .deliver(&chat, &posted, Some(bot_id), turn.depth + 1, false)?;
+                    .deliver(&chat, &posted, MessageSource::Bot(bot_id), turn.depth + 1)?;
             if let Some(link) = parent.filter(|link| link.chat_id != target) {
                 if repos.transcript.contains(&link.chat_id, &link.entry_id)? {
                     repos.append_entry(&link.chat_id, json!({

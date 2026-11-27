@@ -1,5 +1,5 @@
 use crate::{
-    domain::{need, string_field, strings, ChatJob, Turn},
+    domain::{bot::BotId, strings, ChatJob, DelegationUpdate, Turn},
     infrastructure::AgentSessions,
     modules::{bots, turns},
     storage::Store,
@@ -31,11 +31,11 @@ pub(crate) fn run_chat(
         {
             return Ok(());
         }
-        let live = bots::connect_for_turn(store, &sessions.herdr, &bot)?;
-        if matches!(string_field(&live, "agent_status"), "working" | "blocked") {
+        let live = bots::connect_for_turn(store, &sessions.herdr, &BotId::from(bot.as_str()))?;
+        if matches!(live.status(), Some("working" | "blocked")) {
             return Ok(());
         }
-        let pane = need(&live, "pane_id")?.to_owned();
+        let pane = live.required_pane()?.to_owned();
         if let Some(delivery) = &job.delivery {
             if !store.tx(|repos, _| repos.inbox.start(delivery))? {
                 return Ok(());
@@ -43,7 +43,11 @@ pub(crate) fn run_chat(
         }
         if let Some(link) = &job.context.delegation {
             store.tx(|repos, events| {
-                repos.set_delegation_state(link, "running", None, None, events)
+                repos.set_delegation_state(
+                    link,
+                    DelegationUpdate::Running { last_error: None },
+                    events,
+                )
             })?;
         }
         let mut turn = Turn::new(target, &job.seed, job.depth, job.context.clone());

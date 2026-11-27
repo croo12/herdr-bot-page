@@ -8,7 +8,7 @@ import type { PersonaColor } from "#shared/ui/avatar-colors.tsx";
 import { useInfoPanel } from "#shared/ui/PanelHost.tsx";
 import { useDialogHost } from "#shared/ui/DialogHost.tsx";
 import { useT } from "#shared/i18n/TranslationProvider.tsx";
-import { toAppApiError } from "#shared/api/index.tsx";
+import { providerSupportsPermissionMode, toAppApiError } from "#shared/api/index.tsx";
 import type { ModelEntry, ReasoningEffort } from "#shared/api/index.tsx";
 import { Avatar, Button, IconButton, TextArea, TextField, Select } from "#shared/ui/index.tsx";
 import { BotOnboardingBanner } from "./BotOnboardingBanner.tsx";
@@ -245,21 +245,23 @@ export function BotInfoPanel({ botId, standalone }: BotInfoPanelProps) {
               onCheckChange={setCwdCheck}
               invalidMessage={null}
             />
-            <Select
-              label={t("dialogs.new.permissions")}
-              value={launch.permissionMode ?? ""}
-              onChange={(value) =>
-                setLaunch({
-                  ...launch,
-                  permissionMode: value.length === 0 ? null : (value as "ask" | "auto"),
-                })
-              }
-              options={[
-                { value: "", label: t("dialogs.new.permissions.agentDefault") },
-                { value: "ask", label: t("dialogs.new.permissions.ask") },
-                { value: "auto", label: t("dialogs.new.permissions.auto") },
-              ]}
-            />
+            {providerSupportsPermissionMode(bot.provider) && (
+              <Select
+                label={t("dialogs.new.permissions")}
+                value={launch.permissionMode ?? ""}
+                onChange={(value) =>
+                  setLaunch({
+                    ...launch,
+                    permissionMode: value.length === 0 ? null : (value as "ask" | "auto"),
+                  })
+                }
+                options={[
+                  { value: "", label: t("dialogs.new.permissions.agentDefault") },
+                  { value: "ask", label: t("dialogs.new.permissions.ask") },
+                  { value: "auto", label: t("dialogs.new.permissions.auto") },
+                ]}
+              />
+            )}
             <Select
               label={t("dialogs.new.model")}
               helperText={t("dialogs.botInfo.modelHelp")}

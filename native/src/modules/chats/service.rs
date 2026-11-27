@@ -1,5 +1,5 @@
 use crate::{
-    domain::{need, now, patch, string_field},
+    domain::{need, now, string_field},
     storage::{Repositories, Store},
 };
 use anyhow::Result;
@@ -7,7 +7,6 @@ use serde_json::{json, Value};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChatEdit {
-    Profile,
     Hidden,
     Notifications,
     Read,
@@ -41,16 +40,6 @@ pub(crate) fn edit_chat(store: &Store, edit: ChatEdit, params: &Value) -> Result
             "invalid_args: not a participant"
         );
         match edit {
-            ChatEdit::Profile => {
-                if params.get("name").is_some() {
-                    need(params, "name")?;
-                }
-                patch(
-                    &mut row,
-                    params,
-                    &["name", "description", "title", "avatarColor", "avatarShape"],
-                );
-            }
             ChatEdit::Hidden => row["isHiddenFromSidebar"] = bool_field(params, "isHidden")?.into(),
             ChatEdit::Notifications => {
                 row["notifyOnUpdatesEnabled"] = bool_field(params, "isEnabled")?.into()
@@ -91,15 +80,4 @@ fn mark_read(repos: &Repositories, row: &mut Value, edit: ChatEdit, params: &Val
     row["hasUnread"] = (unread || unread_count > 0).into();
     row["unreadCount"] = unread_count.max(i64::from(unread)).into();
     Ok(())
-}
-
-pub(crate) fn profile_for_pane(store: &Store, params: &Value) -> Result<Value> {
-    let pane = need(params, "paneId")?;
-    store.tx(|repos, _| repos.chats.by_pane(pane))
-}
-
-pub(crate) fn update_profile_for_pane(store: &Store, mut params: Value) -> Result<Value> {
-    let bot = profile_for_pane(store, &params)?;
-    params["chatId"] = need(&bot, "id")?.into();
-    edit_chat(store, ChatEdit::Profile, &params)
 }

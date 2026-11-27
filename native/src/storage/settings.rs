@@ -1,3 +1,4 @@
+use crate::domain::bot::BotPreferences;
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::Value;
@@ -23,5 +24,12 @@ impl<'db> Settings<'db> {
             [value],
         )?;
         Ok(())
+    }
+    pub(crate) fn bot_preferences(&self) -> Result<BotPreferences> {
+        Ok(self
+            .get()?
+            .map(serde_json::from_value)
+            .transpose()?
+            .unwrap_or_default())
     }
 }

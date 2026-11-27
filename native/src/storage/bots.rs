@@ -1,20 +1,35 @@
-use crate::domain::bot::{AvatarColor, Bot, BotId, PermissionMode, ProviderDraft, ReasoningEffort};
+use crate::domain::{
+    bot::{AvatarColor, Bot, BotId, ProviderDraft},
+    Events,
+};
 use anyhow::{anyhow, Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::collections::HashSet;
 
-pub(crate) struct BotRegistrationOptions<'a> {
-    pub avatar_shape: Option<&'a str>,
-    pub model: Option<&'a str>,
-    pub reasoning_effort: Option<&'a ReasoningEffort>,
-    pub permission_mode: PermissionMode,
+pub(crate) struct RegisteredBot {
+    pub bot: Bot,
+    pub session: BotSession,
 }
 
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct BotSession {
     pub pane_id: Option<String>,
     pub status: Option<String>,
-    pub adopted: bool,
+    pub adopted: Option<bool>,
+    #[serde(default)]
+    pub pending_prompt: Value,
+}
+
+impl BotSession {
+    pub fn required_pane(&self) -> Result<&str> {
+        self.pane_id
+            .as_deref()
+            .filter(|pane| !pane.trim().is_empty())
+            .context("invalid_args: missing paneId")
+    }
 }
 
 pub(crate) struct Bots<'db> {
@@ -30,33 +45,13 @@ impl<'db> Bots<'db> {
         &self,
         bot: &Bot,
         session: &BotSession,
-        options: &BotRegistrationOptions,
         request_id: Option<&str>,
     ) -> Result<Value> {
         let bot_id = bot.id.as_str();
-        let mut profile = crate::domain::new_chat(
-            bot_id,
-            "bot",
-            &json!({
-                "name": bot.name,
-                "title": bot.label,
-                "description": bot.instruction,
-                "avatarColor": bot.avatar_color,
-                "avatarShape": options.avatar_shape,
-            }),
-        );
-        profile["bot"] = json!({
-            "provider": bot.provider.name(),
-            "model": options.model,
-            "reasoningEffort": options.reasoning_effort,
-            "permissionMode": options.permission_mode,
-            "cwd": bot.working_directory,
-            "adopted": session.adopted,
-            "paneId": session.pane_id,
-            "status": session.status,
-            "pendingPrompt": null,
-            "onboarding": null,
-        });
+        let mut profile = crate::domain::new_chat(bot_id, "bot", &Value::Null);
+        write_profile(&mut profile, bot);
+        profile["bot"] = json!({"onboarding": null});
+        write_launch_settings(&mut profile["bot"], bot, session);
         self.save_record(&profile)?;
         if let Some(key) = request_id {
             self.remember_request(key, bot_id)?;
@@ -96,15 +91,63 @@ impl<'db> Bots<'db> {
     }
 
     pub(crate) fn get(&self, id: &BotId) -> Result<Bot> {
+        Ok(self.registration(id)?.bot)
+    }
+
+    pub(crate) fn registration(&self, id: &BotId) -> Result<RegisteredBot> {
         let key = id.as_str();
-        let data: String = self
-            .db
+        self.db
             .query_row("SELECT data FROM bots WHERE id=?", [key], |row| row.get(0))
-            .optional()?
-            .ok_or_else(|| anyhow!("unknown_bot: {key}"))?;
-        let stored: StoredBot =
-            serde_json::from_str(&data).with_context(|| format!("invalid bot record: {key}"))?;
-        Ok(stored.into())
+            .optional()
+            .with_context(|| format!("invalid bot record: {key}"))?
+            .ok_or_else(|| anyhow!("unknown_bot: {key}"))
+    }
+
+    pub(crate) fn session(&self, id: &BotId) -> Result<BotSession> {
+        let data: String = self.db.query_row(
+            "SELECT COALESCE(json_extract(data,'$.bot'), '{}') FROM bots WHERE id=?",
+            [id.as_str()],
+            |row| row.get(0),
+        )?;
+        Ok(serde_json::from_str(&data)?)
+    }
+
+    pub(crate) fn registrations(&self) -> Result<Vec<RegisteredBot>> {
+        // Profiles imported without launch information have no agent to poll.
+        let mut query = self
+            .db
+            .prepare("SELECT data FROM bots WHERE json_type(data,'$.bot.provider')='text'")?;
+        let rows = query.query_map([], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub(crate) fn pane_owner(&self, pane: &str) -> Result<Option<BotId>> {
+        let owner: Option<String> = self.db.query_row(
+            "SELECT id FROM bots WHERE json_extract(data,'$.bot.paneId')=? ORDER BY rowid LIMIT 1",
+            [pane], |row| row.get(0),
+        ).optional()?;
+        Ok(owner.as_deref().map(BotId::from))
+    }
+
+    pub(crate) fn require_pane_owner(&self, pane: &str) -> Result<BotId> {
+        self.pane_owner(pane)?
+            .ok_or_else(|| anyhow!("unknown_bot: pane {pane}"))
+    }
+
+    pub(crate) fn bound_panes(&self) -> Result<HashSet<String>> {
+        let mut statement = self.db.prepare(
+            "SELECT json_extract(data,'$.bot.paneId') FROM bots WHERE json_type(data,'$.bot.paneId')='text'",
+        )?;
+        let panes = statement.query_map([], |row| row.get(0))?;
+        Ok(panes.collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub(crate) fn contains(&self, id: &BotId) -> Result<bool> {
+        Ok(self.db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM bots WHERE id=?)",
+            [id.as_str()],
+            |row| row.get(0),
+        )?)
     }
 }
 
@@ -116,6 +159,7 @@ struct StoredBot {
     title: Option<String>,
     description: Option<String>,
     avatar_color: Option<AvatarColor>,
+    avatar_shape: Option<String>,
     bot: StoredBotFacts,
 }
 
@@ -123,21 +167,127 @@ struct StoredBot {
 struct StoredBotFacts {
     cwd: Option<std::path::PathBuf>,
     #[serde(flatten)]
+    session: BotSession,
+    #[serde(flatten)]
     provider: ProviderDraft,
 }
 
-impl From<StoredBot> for Bot {
+impl rusqlite::types::FromSql for RegisteredBot {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        serde_json::from_str::<StoredBot>(value.as_str()?)
+            .map(Into::into)
+            .map_err(|error| rusqlite::types::FromSqlError::Other(Box::new(error)))
+    }
+}
+
+impl From<StoredBot> for RegisteredBot {
     fn from(stored: StoredBot) -> Self {
-        let provider = stored.bot.provider.existing(PermissionMode::Ask);
-        Self {
+        let bot = Bot {
             id: stored.id,
             name: stored.name,
             label: stored.title.unwrap_or_default(),
             instruction: stored.description.unwrap_or_default(),
             avatar_color: stored.avatar_color,
+            avatar_shape: stored.avatar_shape,
             working_directory: stored.bot.cwd,
-            provider,
+            provider: stored.bot.provider.existing(None),
+        };
+        Self {
+            bot,
+            session: stored.bot.session,
         }
+    }
+}
+
+fn write_profile(profile: &mut Value, bot: &Bot) {
+    profile["name"] = json!(bot.name);
+    profile["title"] = json!(bot.label);
+    profile["description"] = json!(bot.instruction);
+    profile["avatarColor"] = json!(bot.avatar_color);
+    profile["avatarShape"] = json!(bot.avatar_shape);
+}
+
+fn write_launch_settings(facts: &mut Value, bot: &Bot, session: &BotSession) {
+    let options = bot.provider.options();
+    facts["provider"] = json!(bot.provider.name());
+    facts["model"] = json!(options.model);
+    facts["reasoningEffort"] = json!(options.reasoning_effort);
+    facts["permissionMode"] = json!(options.permission_mode);
+    facts["cwd"] = json!(bot.working_directory);
+    facts["paneId"] = json!(session.pane_id);
+    facts["status"] = json!(session.status);
+    facts["adopted"] = json!(session.adopted);
+    facts["pendingPrompt"] = session.pending_prompt.clone();
+}
+
+impl super::Repositories<'_> {
+    pub(crate) fn update_bot_profile(&self, bot: &Bot, events: &mut Events) -> Result<Value> {
+        let mut profile = self.chats.get(bot.id.as_str())?;
+        write_profile(&mut profile, bot);
+        self.chats.save_changed(&profile, events)?;
+        Ok(profile)
+    }
+
+    pub(crate) fn update_bot_status(
+        &self,
+        id: &BotId,
+        status: &str,
+        prompt: Value,
+        events: &mut Events,
+    ) -> Result<()> {
+        let mut row = self.chats.get(id.as_str())?;
+        row["bot"]["status"] = status.into();
+        row["bot"]["pendingPrompt"] = prompt;
+        row["isRunning"] = (status == "working").into();
+        row["currentActivity"] = if status == "working" {
+            json!({"verb":"working"})
+        } else {
+            Value::Null
+        };
+        row["awaitingUserResponse"] = match status {
+            "blocked" => json!({"reason":"approval"}),
+            "offline" => json!({"reason":"offline"}),
+            _ => Value::Null,
+        };
+        self.chats.save_changed(&row, events)
+    }
+
+    pub(crate) fn rebind_bot_pane(
+        &self,
+        id: &BotId,
+        pane: &str,
+        events: &mut Events,
+    ) -> Result<()> {
+        let owners = {
+            let mut statement = self.bots.db.prepare(
+                "SELECT id FROM bots WHERE id=?1 OR json_extract(data,'$.bot.paneId')=?2",
+            )?;
+            let rows = statement.query_map(params![id.as_str(), pane], |row| row.get(0))?;
+            rows.collect::<rusqlite::Result<Vec<String>>>()?
+        };
+        for owner in owners {
+            if let Some((room, mut prompt)) = self.prompts.pending(&owner)? {
+                prompt["status"] = "resolved".into();
+                self.update_entry(&room, &prompt, events)?;
+            }
+            let mut profile = self.chats.get(&owner)?;
+            profile["bot"]["paneId"] = json!((owner == id.as_str()).then_some(pane));
+            profile["bot"]["pendingPrompt"] = Value::Null;
+            self.chats.save_changed(&profile, events)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn save_relaunch(
+        &self,
+        bot: &Bot,
+        session: &BotSession,
+        events: &mut Events,
+    ) -> Result<Value> {
+        let mut profile = self.chats.get(bot.id.as_str())?;
+        write_launch_settings(&mut profile["bot"], bot, session);
+        self.chats.save_changed(&profile, events)?;
+        Ok(profile)
     }
 }
 
@@ -151,6 +301,29 @@ mod tests {
     use crate::storage::Store;
     use serde_json::{json, Value};
     use std::path::PathBuf;
+
+    #[test]
+    fn rebinding_a_reused_pane_clears_only_the_affected_sessions() -> Result<()> {
+        let home = tempfile::tempdir()?;
+        let store = Store::open(home.path(), |_| {})?;
+        store.tx(|repos, events| {
+            for (owner, pane) in [("reviewer","p1"), ("previous","p2"), ("other","p3")] {
+                let mut profile = new_chat(owner, "bot", &json!({"name":owner}));
+                profile["bot"] = json!({"provider":"pi", "paneId":pane, "pendingPrompt":{"signature":owner}, "extra":"preserve"});
+                repos.bots.save_record(&profile)?;
+            }
+            repos.rebind_bot_pane(&BotId::from("reviewer"), "p2", events)?;
+            let owner = repos.chats.by_pane("p2")?;
+            assert_eq!(owner["id"], "reviewer");
+            assert!(owner["bot"]["pendingPrompt"].is_null());
+            assert_eq!(owner["bot"]["extra"], "preserve");
+            let previous = repos.chats.get("previous")?;
+            assert!(previous["bot"]["paneId"].is_null());
+            assert!(previous["bot"]["pendingPrompt"].is_null());
+            assert_eq!(repos.chats.by_pane("p3")?["bot"]["pendingPrompt"]["signature"], "other");
+            Ok(())
+        })
+    }
 
     #[test]
     fn reads_the_existing_profile_without_changing_runtime_state() -> Result<()> {
@@ -178,6 +351,7 @@ mod tests {
                     label: "Backend".into(),
                     instruction: "Review every diff.".into(),
                     avatar_color: Some(AvatarColor::Violet),
+                    avatar_shape: None,
                     working_directory: Some(PathBuf::from(".")),
                     provider: Provider::Codex {
                         model: Some(CodexModelId("retired-model".into())),

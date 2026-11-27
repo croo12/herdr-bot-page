@@ -1,5 +1,5 @@
 /** In-memory API transport for the browser demo dataset. */
-import { AppApiError } from "#shared/api/index.tsx";
+import { AppApiError, providerSupportsPermissionMode } from "#shared/api/index.tsx";
 import type {
   AppApiEvent,
   AppApiEventType,
@@ -353,7 +353,9 @@ export function createFakeAppApi(): AppApiTransport {
           paneId: null,
           cwd: params.cwd ?? null,
           adopted: false,
-          permissionMode: params.permissionMode ?? "ask",
+          permissionMode: providerSupportsPermissionMode(params.provider)
+            ? (params.permissionMode ?? "ask")
+            : null,
           model: params.model ?? null,
           reasoningEffort: params.reasoningEffort ?? null,
           onboarding: null,
@@ -392,8 +394,11 @@ export function createFakeAppApi(): AppApiTransport {
             cwd: params.cwd ?? bot.cwd,
             // Mirrors the real host: an absent `permissionMode` keeps the bot's own mode, an explicit
             // `null` resets to the (fake) effective default ("ask", same as `bot.defaults()` below).
-            permissionMode:
-              "permissionMode" in params ? (params.permissionMode ?? "ask") : bot.permissionMode,
+            permissionMode: !providerSupportsPermissionMode(bot.provider)
+              ? null
+              : "permissionMode" in params
+                ? (params.permissionMode ?? "ask")
+                : bot.permissionMode,
             model: "model" in params ? (params.model ?? null) : bot.model,
             reasoningEffort:
               "reasoningEffort" in params ? (params.reasoningEffort ?? null) : bot.reasoningEffort,

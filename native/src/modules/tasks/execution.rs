@@ -1,5 +1,5 @@
 use crate::{
-    domain::{id, need, now, strings, Events},
+    domain::{bot::BotId, id, need, now, strings, Events},
     storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
@@ -72,10 +72,10 @@ pub(crate) fn report(store: &Store, params: &Value) -> Result<Value> {
         let mut entry = repos.transcript.by_id(room, entry_id)?;
         let task = &mut entry["task"];
         let assignee = need(task, "assigneeId")?.to_owned();
-        let bot = repos.chats.get(&assignee)?;
+        let registered = repos.bots.registration(&BotId::from(assignee.as_str()))?;
         let execution = &mut task["execution"];
         if execution["paneId"] != pane
-            || bot["bot"]["paneId"] != pane
+            || registered.session.pane_id.as_deref() != Some(pane)
             || !strings(&repos.chats.get(room)?["memberIds"]).contains(&assignee)
         {
             bail!("invalid_args: only the assigned room bot can report this step");
@@ -112,7 +112,7 @@ pub(crate) fn report(store: &Store, params: &Value) -> Result<Value> {
             room,
             json!({
                 "kind":"send-message", "message":{"type":"text","content":summary},
-                "author":{"id":assignee,"name":bot["name"]}, "replyTo":entry_id
+                "author":{"id":assignee,"name":registered.bot.name}, "replyTo":entry_id
             }),
             events,
         )?;

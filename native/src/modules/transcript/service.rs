@@ -1,5 +1,5 @@
 use crate::{
-    domain::{content, need, patch, string_field, strings},
+    domain::{content, need, patch, string_field, strings, MessageSource},
     storage::{Repositories, Store},
 };
 use anyhow::{bail, Result};
@@ -8,11 +8,11 @@ fn readable_chat(repos: &Repositories, params: &Value) -> Result<Value> {
     let chat_id = need(params, "chatId")?;
     let chat = repos.chats.get(chat_id)?;
     let caller = if let Some(pane) = params["paneId"].as_str().filter(|pane| !pane.is_empty()) {
-        repos.chats.pane_owner(pane)?
+        repos.bots.pane_owner(pane)?
     } else {
         None
     };
-    let bot = caller.as_ref().and_then(|row| row["id"].as_str());
+    let bot = caller.as_ref().map(crate::domain::bot::BotId::as_str);
     // The legacy bot destination resolves to the caller's conversation with that bot.
     let direct = if chat["kind"] == "bot" {
         repos
@@ -134,7 +134,7 @@ pub(crate) fn send(
         });
         patch(&mut entry, params, &["clientNonce", "replyTo", "richText"]);
         let entry = repos.append_entry(chat_id, entry, events)?;
-        let recipients = repos.inbox.deliver(&chat, &entry, None, 0, false)?;
+        let recipients = repos.inbox.deliver(&chat, &entry, MessageSource::User, 0)?;
         Ok((entry, recipients))
     })?;
     for bot in recipients {

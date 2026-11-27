@@ -52,7 +52,7 @@ export interface BotFacts {
   readonly paneId: string | null;
   readonly cwd: string | null;
   readonly adopted: boolean;
-  readonly permissionMode: PermissionMode;
+  readonly permissionMode: PermissionMode | null;
   readonly model: string | null;
   readonly reasoningEffort: ReasoningEffort | null;
   readonly onboarding: BotOnboardingState | null;

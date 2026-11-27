@@ -1,4 +1,21 @@
 use serde_json::Value;
+
+#[derive(Clone, Copy)]
+pub(crate) enum MessageSource<'a> {
+    User,
+    Bot(&'a str),
+    Delegation(&'a str),
+}
+
+impl<'a> MessageSource<'a> {
+    pub(crate) fn bot_id(self) -> Option<&'a str> {
+        match self {
+            Self::User => None,
+            Self::Bot(id) | Self::Delegation(id) => Some(id),
+        }
+    }
+}
+
 pub(crate) fn content(entry: &Value) -> &str {
     entry["content"]
         .as_str()

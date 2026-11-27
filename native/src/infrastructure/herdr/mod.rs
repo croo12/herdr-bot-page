@@ -1,7 +1,9 @@
+mod agent;
 use crate::domain::{
     bot::{ClaudePermissionMode, CodexPermissionMode, Provider},
     need,
 };
+pub(crate) use agent::HerdrAgent;
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 use std::{
@@ -256,15 +258,23 @@ impl Herdr {
         }
         bail!("herdr_error: session {} did not start", self.session)
     }
-    pub fn ensure_and_list_agents(&self) -> Result<Vec<Value>> {
+    pub fn ensure_and_list_agents(&self) -> Result<Vec<HerdrAgent>> {
         self.ensure()?;
-        self.agents()
+        self.list_agents()
     }
 
+    pub fn list_agents(&self) -> Result<Vec<HerdrAgent>> {
+        Ok(self.agents()?.into_iter().map(HerdrAgent::new).collect())
+    }
+    pub fn get_agent(&self, pane: &str) -> Result<HerdrAgent> {
+        Ok(HerdrAgent::new(
+            self.run(&["agent", "get", pane])?["agent"].clone(),
+        ))
+    }
     pub fn agents(&self) -> Result<Vec<Value>> {
         parse_agent_list(self.run(&["agent", "list"])?)
     }
-    pub fn launch(&self, id: &str, directory: &Path, provider: &Provider) -> Result<Value> {
+    pub fn launch(&self, id: &str, directory: &Path, provider: &Provider) -> Result<HerdrAgent> {
         let cwd = directory
             .to_str()
             .filter(|cwd| !cwd.trim().is_empty())
@@ -318,7 +328,7 @@ impl Herdr {
             args.extend(opts.iter().map(String::as_str));
         }
         match self.run(&args) {
-            Ok(response) => Ok(response["agent"].clone()),
+            Ok(response) => Ok(HerdrAgent::new(response["agent"].clone())),
             Err(error) => {
                 // First launch can stop at a provider's sign-in or trust screen.
                 // Keep that pane reachable from the UI so the user can finish setup.
@@ -331,7 +341,7 @@ impl Herdr {
                         if agent["name"] != id {
                             self.run(&["agent", "rename", pane, id])?;
                         }
-                        return Ok(agent.clone());
+                        return Ok(HerdrAgent::new(agent.clone()));
                     }
                 }
                 let _ = self.run(&["pane", "close", pane]);

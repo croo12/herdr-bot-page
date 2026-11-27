@@ -2,7 +2,7 @@ use crate::infrastructure::paths::expand;
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 
-pub(super) fn resolve_working_directory(
+pub(in crate::modules::bots) fn resolve_working_directory(
     directory: Option<&Path>,
     allow_home: bool,
 ) -> Result<PathBuf> {

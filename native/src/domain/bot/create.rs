@@ -47,6 +47,7 @@ pub(crate) struct BotDraft {
     pub label: String,
     pub instruction: String,
     pub avatar_color: Option<AvatarColor>,
+    pub avatar_shape: Option<String>,
     pub provider: Provider,
     pub working_directory: Option<PathBuf>,
 }
@@ -79,6 +80,7 @@ impl Bot {
             label: draft.label,
             instruction: draft.instruction,
             avatar_color: draft.avatar_color,
+            avatar_shape: draft.avatar_shape,
             working_directory: draft.working_directory,
             provider: draft.provider,
         })
@@ -137,6 +139,7 @@ mod tests {
             label: "Backend".into(),
             instruction: "Review the diff".into(),
             avatar_color: Some(AvatarColor::Violet),
+            avatar_shape: None,
             provider: Provider::Other("pi".into()),
             working_directory: None,
         };

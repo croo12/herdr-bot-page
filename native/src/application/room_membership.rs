@@ -1,5 +1,5 @@
 use crate::{
-    domain::{need, strings, Events},
+    domain::{bot::BotId, strings, Events},
     infrastructure::AgentSessions,
     modules::{reviews, rooms, tasks},
     storage::{Repositories, Store},
@@ -37,13 +37,14 @@ pub(crate) fn delete_chats(
             bail!("bot_not_ready: {id} has an active turn")
         }
         if chat["kind"] == "bot" {
-            let agents = sessions.herdr.agents()?;
-            if agents
-                .iter()
-                .any(|agent| agent["name"] == id && agent["pane_id"] == chat["bot"]["paneId"])
-            {
-                let pane = need(&chat["bot"], "paneId")?;
-                if chat["bot"]["adopted"] == true {
+            let session = store.tx(|repos, _| repos.bots.session(&BotId::from(id.as_str())))?;
+            let agents = sessions.herdr.list_agents()?;
+            if let Some(pane) = session.pane_id.as_deref().filter(|pane| {
+                agents.iter().any(|agent| {
+                    agent.name() == Some(id.as_str()) && agent.pane_id() == Some(*pane)
+                })
+            }) {
+                if session.adopted == Some(true) {
                     sessions.herdr.run(&["agent", "rename", pane, "--clear"])?;
                 } else {
                     sessions.herdr.run(&["pane", "close", pane])?;
