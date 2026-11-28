@@ -71,6 +71,14 @@ impl<'db> Chats<'db> {
         }
         Ok(row)
     }
+    pub(crate) fn open_user_direct_id(
+        &self,
+        bot: &crate::domain::bot::BotId,
+        events: &mut Events,
+    ) -> Result<String> {
+        let direct = self.open_direct(bot.as_str(), None, events)?;
+        Ok(need(&direct, "id")?.to_owned())
+    }
     pub(crate) fn new(db: &'db Connection) -> Self {
         Self { db }
     }
@@ -136,26 +144,20 @@ impl<'db> Chats<'db> {
         self.get(owner.as_str())
     }
     pub(crate) fn for_request(&self, params: &Value) -> Result<Option<Value>> {
-        if let Some(request_id) = params["requestId"].as_str() {
-            return self.find_request(request_id);
-        }
-        Ok(None)
-    }
-    pub(crate) fn find_request(&self, request_id: &str) -> Result<Option<Value>> {
+        let Some(request_id) = params["requestId"].as_str() else {
+            return Ok(None);
+        };
         Ok(self
-                .db
-                .query_row(
-                    "SELECT c.data FROM requests r JOIN chats c ON c.id=r.chat WHERE r.key=?1 UNION ALL SELECT b.data FROM bot_requests r JOIN bots b ON b.id=r.bot WHERE r.key=?1",
-                    [request_id],
-                    |row| row.get(0),
-                )
-                .optional()?)
+            .db
+            .query_row(
+                "SELECT c.data FROM requests r JOIN chats c ON c.id=r.chat WHERE r.key=?",
+                [request_id],
+                |row| row.get(0),
+            )
+            .optional()?)
     }
     pub(crate) fn remember(&self, params: &Value, chat: &Value) -> Result<()> {
         if let Some(request_id) = params["requestId"].as_str() {
-            if chat["kind"] == "bot" {
-                return super::Bots::new(self.db).remember_request(request_id, need(chat, "id")?);
-            }
             self.db.execute(
                 "INSERT INTO requests VALUES(?,?)",
                 params![request_id, need(chat, "id")?],

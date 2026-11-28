@@ -5,7 +5,7 @@ mod relaunch_bot;
 use crate::modules::{bots, chats, prompts, rooms, settings, tasks, transcript, turns};
 use crate::{
     domain::{bot::BotId, need, string_field, ChatJob},
-    infrastructure::{paths, request_log::RequestLog, AgentSessions},
+    infrastructure::{herdr, paths, request_log::RequestLog, AgentSessions},
     modules::{chats::ChatEdit, turns::AgentAction},
     storage::Store,
 };
@@ -53,6 +53,11 @@ impl Controller<'_> {
         turns::agent_action(self.store, self.sessions, self.wake_bot, action, params)
     }
 
+    fn bot_profile_response(&self, bot_id: &BotId) -> Result<Value> {
+        let profile = self.store.tx(|repos, _| repos.chats.get(bot_id.as_str()))?;
+        Ok(json!({"chat": profile}))
+    }
+
     fn dispatch(&self, source: Source, method: &str, params: Value) -> Result<Value> {
         if matches!(source, Source::Ipc)
             && matches!(
@@ -73,7 +78,15 @@ impl Controller<'_> {
             "directory.list" => paths::directory(string_field(&params, "path")),
             "settings.get" => settings::get_settings(self.store),
             "settings.update" => settings::update_settings(self.store, &params),
-            "bot.defaults" => bots::bot_defaults(self.store),
+            "bot.defaults" => {
+                let defaults = bots::load_defaults(self.store)?;
+                Ok(json!({
+                    "cwd": defaults.working_directory,
+                    "provider": defaults.provider,
+                    "permissionMode": defaults.permission_mode,
+                    "homeDir": dirs::home_dir(),
+                }))
+            }
             "chat.openDirect" => self.store.tx(|repos, events| {
                 let peer = if let Some(pane) = params["paneId"]
                     .as_str()
@@ -134,27 +147,40 @@ impl Controller<'_> {
             }
             "cli.taskReport" => tasks::report(self.store, &params),
             "message.send" => transcript::send(self.store, self.user, self.wake_bot, &params),
-            "bot.listModels" => bots::list_models(need(&params, "provider")?),
+            "bot.listModels" => match herdr::models(need(&params, "provider")?) {
+                Ok(catalog) => Ok(serde_json::to_value(catalog)?),
+                Err(error) => Ok(json!({
+                    "source": "unavailable", "models": [], "error": format!("{error:#}"),
+                })),
+            },
             "bot.create" | "bot.quickCreate" => {
                 let mut request: create_bot::CreateBotRequest = serde_json::from_value(params)
                     .context("invalid_args: invalid bot creation request")?;
-                if method == "bot.quickCreate" {
+                let _roster = self.sessions.roster.lock().unwrap();
+                let bot_id = if method == "bot.quickCreate" {
                     let locale = request.locale.take().unwrap_or_default();
                     bots::quick_create_bot(
                         self.store,
-                        self.sessions,
+                        &self.sessions.herdr,
                         request.into_input()?,
                         &locale,
                         self.enqueue_greeting,
                     )
                 } else {
-                    bots::create_bot(self.store, self.sessions, request.into_input()?)
-                }
+                    bots::create_bot(self.store, &self.sessions.herdr, request.into_input()?)
+                }?;
+                self.bot_profile_response(&bot_id)
             }
             "bot.retrySetup" | "bot.updateLaunchSettings" => {
-                bots::relaunch_bot(self.store, self.sessions, relaunch_bot::input(&params)?)
+                let _roster = self.sessions.roster.lock().unwrap();
+                let bot_id =
+                    bots::relaunch_bot(self.store, self.sessions, relaunch_bot::input(&params)?)?;
+                self.bot_profile_response(&bot_id)
             }
-            "bot.listAdoptable" => bots::adoptable_bots(self.store, self.sessions),
+            "bot.listAdoptable" => {
+                let candidates = bots::get_adoption_candidates(self.store, self.sessions)?;
+                Ok(serde_json::to_value(candidates)?)
+            }
             "bot.focus" => {
                 bots::focus_bot(
                     self.store,

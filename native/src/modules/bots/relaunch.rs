@@ -11,7 +11,6 @@ use crate::{
     storage::{BotSession, Store},
 };
 use anyhow::{bail, Result};
-use serde_json::{json, Value};
 use std::path::PathBuf;
 
 pub(crate) struct RelaunchBotInput {
@@ -50,8 +49,7 @@ pub(crate) fn relaunch_bot(
     store: &Store,
     sessions: &AgentSessions,
     input: RelaunchBotInput,
-) -> Result<Value> {
-    let _guard = sessions.roster.lock().unwrap();
+) -> Result<BotId> {
     let registered = store.tx(|repos, _| repos.bots.registration(&input.bot_id))?;
     let mut bot = registered.bot;
     let bot_id = bot.id.as_str();
@@ -87,17 +85,14 @@ pub(crate) fn relaunch_bot(
         adopted: Some(false),
         ..Default::default()
     };
-    let profile = match store.tx(|repos, events| repos.save_relaunch(&bot, &session, events)) {
-        Ok(profile) => profile,
-        Err(error) => {
-            restore_pane(herdr, bot_id, new_pane, old_pane);
-            return Err(error);
-        }
-    };
+    if let Err(error) = store.tx(|repos, events| repos.save_relaunch(&bot, &session, events)) {
+        restore_pane(herdr, bot_id, new_pane, old_pane);
+        return Err(error);
+    }
     if let Some(pane) = old_pane.filter(|_| registered.session.adopted != Some(true)) {
         herdr.run(&["pane", "close", pane])?;
     }
-    Ok(json!({"chat":profile}))
+    Ok(bot.id)
 }
 
 fn transfer_name(

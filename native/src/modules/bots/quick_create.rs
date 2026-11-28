@@ -1,44 +1,40 @@
 use super::lib::{register_bot, BotName, CreateBotInput, Registration};
 use crate::{
-    domain::{need, ChatJob},
-    infrastructure::AgentSessions,
+    domain::{bot::BotId, ChatJob},
+    infrastructure::herdr::Herdr,
     storage::Store,
 };
 use anyhow::Result;
-use serde_json::{json, Value};
 
 pub(crate) fn quick_create_bot(
     store: &Store,
-    sessions: &AgentSessions,
+    herdr: &Herdr,
     mut input: CreateBotInput,
     locale: &str,
     enqueue_greeting: &dyn Fn(&str, &str, ChatJob),
-) -> Result<Value> {
-    let _guard = sessions.roster.lock().unwrap();
+) -> Result<BotId> {
     if matches!(&input.profile.name, BotName::Explicit(name) if name.trim().is_empty()) {
         input.profile.name = BotName::Provider;
     }
-    let profile = match register_bot(store, &sessions.herdr, input)? {
-        Registration::Created(bot_id, profile) => {
+    match register_bot(store, herdr, input)? {
+        Registration::Created(bot_id) => {
             start_conversation(store, &bot_id, locale, enqueue_greeting)?;
-            profile
+            Ok(bot_id)
         }
-        Registration::AlreadyCreated(profile) => profile,
-    };
-    Ok(json!({"chat": profile}))
+        Registration::AlreadyCreated(bot_id) => Ok(bot_id),
+    }
 }
 
 fn start_conversation(
     store: &Store,
-    bot_id: &crate::domain::bot::BotId,
+    bot_id: &BotId,
     locale: &str,
     enqueue_greeting: &dyn Fn(&str, &str, ChatJob),
 ) -> Result<()> {
-    let bot_id = bot_id.as_str();
-    let dm = store.tx(|repos, events| repos.chats.open_direct(bot_id, None, events))?;
+    let chat_id = store.tx(|repos, events| repos.chats.open_user_direct_id(bot_id, events))?;
     enqueue_greeting(
-        bot_id,
-        need(&dm, "id")?,
+        bot_id.as_str(),
+        &chat_id,
         ChatJob {
             delivery: None,
             context: Default::default(),

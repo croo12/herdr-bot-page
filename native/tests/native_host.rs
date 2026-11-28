@@ -61,6 +61,23 @@ fn compile_herdr_fixture(directory: &Path) -> PathBuf {
 }
 
 #[test]
+fn model_catalog_preserves_the_ipc_shape_for_aliases_and_empty_results() {
+    let directory = tempfile::tempdir().unwrap();
+    let home = directory.path();
+    let fake = compile_herdr_fixture(home);
+    let _host = start(home, &fake);
+    let catalog =
+        |provider| ipc::request(home, "bot.listModels", json!({"provider":provider})).unwrap();
+    let aliases = catalog("claude");
+    assert_eq!(aliases["source"], "latest-alias");
+    assert!(aliases["models"]
+        .as_array()
+        .unwrap()
+        .contains(&json!({"id":"sonnet", "label":"sonnet"})));
+    assert_eq!(catalog("pi"), json!({"source":"unavailable", "models":[]}));
+}
+
+#[test]
 fn managed_creation_requires_the_models_and_effort_supported_by_each_provider() {
     let directory = tempfile::tempdir().unwrap();
     let home = directory.path();
@@ -146,6 +163,9 @@ fn quick_create_registers_an_existing_agent_and_greets_in_its_direct_chat() {
             assert!(error.to_string().contains("missing provider"), "{error}");
         }
     }
+    let room_request = json!({"name":"Team","memberIds":[],"requestId":"quick"});
+    let room = ipc::request(home, "room.create", room_request.clone()).unwrap();
+    assert_eq!(room["chat"]["kind"], "room");
     let params = json!({"id":"tester","adoptPaneId":"w1:p1","provider":"codex","cwd":"ignored","requestId":"quick","locale":"en",
         "title":"Reviewer","description":"Review changes","avatarColor":"violet","avatarShape":"circle"});
     let error = ipc::request(home, "bot.create", params.clone()).unwrap_err();
@@ -164,6 +184,10 @@ fn quick_create_registers_an_existing_agent_and_greets_in_its_direct_chat() {
     assert_eq!(profile["avatarColor"], "violet");
     assert_eq!(profile["avatarShape"], "circle");
     assert_eq!(call()["chat"]["id"], profile["id"]);
+    assert_eq!(
+        ipc::request(home, "room.create", room_request).unwrap(),
+        room
+    );
     let edited = ipc::request(
         home,
         "cli.profileUpdate",

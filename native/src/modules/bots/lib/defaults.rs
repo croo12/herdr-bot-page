@@ -2,7 +2,7 @@ use crate::{domain::bot::BotDefaults, storage::Store};
 use anyhow::Result;
 use std::path::PathBuf;
 
-pub(in crate::modules::bots) fn load_defaults(store: &Store) -> Result<BotDefaults> {
+pub(crate) fn load_defaults(store: &Store) -> Result<BotDefaults> {
     store.tx(|repos, _| {
         Ok(BotDefaults::resolve(
             repos.settings.bot_preferences()?,

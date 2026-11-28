@@ -1,5 +1,6 @@
 use super::{capture, command};
 use anyhow::{bail, Context, Result};
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use std::{
@@ -49,24 +50,59 @@ fn codex_catalog() -> Result<Value> {
     result.context("Codex model query timed out")?
 }
 
-pub fn models(provider: &str) -> Result<Value> {
+#[derive(Serialize)]
+pub(crate) struct ModelCatalog {
+    source: CatalogSource,
+    models: Vec<ModelEntry>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum CatalogSource {
+    LatestAlias,
+    InstalledCli,
+    Unavailable,
+}
+
+#[derive(Serialize)]
+struct ModelEntry {
+    id: String,
+    label: String,
+}
+
+impl ModelEntry {
+    fn new(id: &str, label: &str) -> Self {
+        Self {
+            id: id.to_owned(),
+            label: label.to_owned(),
+        }
+    }
+}
+
+pub(crate) fn models(provider: &str) -> Result<ModelCatalog> {
     let aliases = match provider {
         "claude" => vec!["fable", "opus", "sonnet", "haiku"],
         "gemini" => vec!["auto", "pro", "flash", "flash-lite"],
         _ => vec![],
     };
-    let entry = |id: &str, label: &str| json!({"id":id,"label":label});
     if !aliases.is_empty() {
-        return Ok(
-            json!({"source":"latest-alias","models":aliases.into_iter().map(|alias|entry(alias,alias)).collect::<Vec<_>>()}),
-        );
+        return Ok(ModelCatalog {
+            source: CatalogSource::LatestAlias,
+            models: aliases
+                .into_iter()
+                .map(|alias| ModelEntry::new(alias, alias))
+                .collect(),
+        });
     }
     let mut items = Vec::new();
     if provider == "codex" {
         let catalog = codex_catalog()?;
         for model in catalog["data"].as_array().into_iter().flatten() {
             if let Some(id) = model["model"].as_str().or(model["id"].as_str()) {
-                items.push(entry(id, model["displayName"].as_str().unwrap_or(id)));
+                items.push(ModelEntry::new(
+                    id,
+                    model["displayName"].as_str().unwrap_or(id),
+                ));
             }
         }
     } else if matches!(provider, "grok" | "agy" | "opencode") {
@@ -83,19 +119,27 @@ pub fn models(provider: &str) -> Result<Value> {
                         .or(line.strip_prefix("* "))
                         .and_then(|text| text.split_whitespace().next())
                     {
-                        items.push(entry(id, id));
+                        items.push(ModelEntry::new(id, id));
                     }
                 }
                 "agy" => {
                     if let Some((id, label)) = line.split_once('\t') {
-                        items.push(entry(id, label));
+                        items.push(ModelEntry::new(id, label));
                     }
                 }
-                _ => items.push(entry(line, line)),
+                _ => items.push(ModelEntry::new(line, line)),
             }
         }
     }
-    Ok(json!({"models":items,"source":if items.is_empty(){"unavailable"}else{"installed-cli"}}))
+    let source = if items.is_empty() {
+        CatalogSource::Unavailable
+    } else {
+        CatalogSource::InstalledCli
+    };
+    Ok(ModelCatalog {
+        source,
+        models: items,
+    })
 }
 // npm-based agent installations on Windows can expose a .cmd instead of an .exe.
 // These programs and arguments are fixed by models(), never user-entered shell text.

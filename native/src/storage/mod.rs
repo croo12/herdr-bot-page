@@ -200,11 +200,8 @@ mod tests {
                     assert!(repos.transcript.contains("history:b", "original")?);
                     assert!(repos.reviews.ticket_exists("t")?);
                     assert_eq!(
-                        repos
-                            .chats
-                            .for_request(&json!({"requestId":"create-a"}))?
-                            .unwrap()["id"],
-                        "a"
+                        repos.bots.id_for_request("create-a")?,
+                        Some(crate::domain::bot::BotId::from("a"))
                     );
                     assert!(repos.inbox.list("a")?.is_empty());
                     Ok(())

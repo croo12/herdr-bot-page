@@ -41,25 +41,19 @@ impl<'db> Bots<'db> {
         Self { db }
     }
 
-    pub(crate) fn save(
-        &self,
-        bot: &Bot,
-        session: &BotSession,
-        request_id: Option<&str>,
-    ) -> Result<Value> {
-        let bot_id = bot.id.as_str();
-        let mut profile = crate::domain::new_chat(bot_id, "bot", &Value::Null);
-        write_profile(&mut profile, bot);
-        profile["bot"] = json!({"onboarding": null});
-        write_launch_settings(&mut profile["bot"], bot, session);
-        self.save_record(&profile)?;
-        if let Some(key) = request_id {
-            self.remember_request(key, bot_id)?;
-        }
-        Ok(profile)
+    pub(crate) fn id_for_request(&self, request_id: &str) -> Result<Option<BotId>> {
+        let id: Option<String> = self
+            .db
+            .query_row(
+                "SELECT bot FROM bot_requests WHERE key=?",
+                [request_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(id.as_deref().map(BotId::from))
     }
 
-    pub(super) fn remember_request(&self, key: &str, bot_id: &str) -> Result<()> {
+    fn remember_request(&self, key: &str, bot_id: &str) -> Result<()> {
         self.db.execute(
             "INSERT INTO bot_requests(key, bot) VALUES(?, ?)",
             params![key, bot_id],
@@ -221,6 +215,26 @@ fn write_launch_settings(facts: &mut Value, bot: &Bot, session: &BotSession) {
 }
 
 impl super::Repositories<'_> {
+    pub(crate) fn save_new_bot(
+        &self,
+        bot: &Bot,
+        session: &BotSession,
+        request_id: Option<&str>,
+        events: &mut Events,
+    ) -> Result<()> {
+        let bot_id = bot.id.as_str();
+        let mut profile = crate::domain::new_chat(bot_id, "bot", &Value::Null);
+        write_profile(&mut profile, bot);
+        profile["bot"] = json!({"onboarding": null});
+        write_launch_settings(&mut profile["bot"], bot, session);
+        self.bots.save_record(&profile)?;
+        if let Some(key) = request_id {
+            self.bots.remember_request(key, bot_id)?;
+        }
+        events.push(("chat.listChanged", json!(self.chats.visible_list()?)));
+        Ok(())
+    }
+
     pub(crate) fn update_bot_profile(&self, bot: &Bot, events: &mut Events) -> Result<Value> {
         let mut profile = self.chats.get(bot.id.as_str())?;
         write_profile(&mut profile, bot);
@@ -283,11 +297,10 @@ impl super::Repositories<'_> {
         bot: &Bot,
         session: &BotSession,
         events: &mut Events,
-    ) -> Result<Value> {
+    ) -> Result<()> {
         let mut profile = self.chats.get(bot.id.as_str())?;
         write_launch_settings(&mut profile["bot"], bot, session);
-        self.chats.save_changed(&profile, events)?;
-        Ok(profile)
+        self.chats.save_changed(&profile, events)
     }
 }
 

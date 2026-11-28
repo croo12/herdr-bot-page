@@ -8,7 +8,6 @@ use crate::{
     storage::{BotSession, Store},
 };
 use anyhow::{bail, Context, Result};
-use serde_json::{json, Value};
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -64,8 +63,8 @@ pub(crate) enum BotName {
 }
 
 pub(in crate::modules::bots) enum Registration {
-    Created(BotId, Value),
-    AlreadyCreated(Value),
+    Created(BotId),
+    AlreadyCreated(BotId),
 }
 
 pub(in crate::modules::bots) fn register_bot(
@@ -74,8 +73,8 @@ pub(in crate::modules::bots) fn register_bot(
     input: CreateBotInput,
 ) -> Result<Registration> {
     if let Some(request_id) = input.request_id.as_deref() {
-        if let Some(previous_result) = store.tx(|repos, _| repos.chats.find_request(request_id))? {
-            return Ok(Registration::AlreadyCreated(previous_result));
+        if let Some(bot_id) = store.tx(|repos, _| repos.bots.id_for_request(request_id))? {
+            return Ok(Registration::AlreadyCreated(bot_id));
         }
     }
 
@@ -96,12 +95,9 @@ pub(in crate::modules::bots) fn register_bot(
     };
 
     store.tx(|repos, events| {
-        let saved_profile = repos
-            .bots
-            .save(&bot, &session, input.request_id.as_deref())?;
-        events.push(("chat.listChanged", json!(repos.chats.visible_list()?)));
-        Ok(Registration::Created(bot.id, saved_profile))
-    })
+        repos.save_new_bot(&bot, &session, input.request_id.as_deref(), events)
+    })?;
+    Ok(Registration::Created(bot.id))
 }
 
 struct BotSetup<'a> {
